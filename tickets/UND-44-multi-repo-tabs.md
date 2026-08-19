@@ -1,6 +1,6 @@
 # [UND-44] 다중 저장소 탭
 
-> wave 8 · 사이즈 L · 의존 UND-02, UND-12 · 소유 `presentation/tabs/` · `presentation/shell/`
+> wave 8 · 사이즈 L · 의존 UND-02, UND-12 · 소유 `presentation/tabs/` · `presentation/shell/` · `application/session/`
 
 ## 작업 내용 (설계 의도)
 여러 저장소를 탭으로 동시에 열어 오간다. 저장소를 자주 오가는 사용자에게는 가장 체감이 큰 기능이다.
@@ -8,10 +8,16 @@
 **UND-12 가 세운 "저장소 하나" 전제를 확장**한다. 셸 파일을 수정하므로 wave 를 분리했다
 (Single Writer per File — 1차 UI 티켓들과 같은 wave 에 두지 않는다).
 
-핵심은 **자원 관리**다. 탭마다 `Repository` 핸들이 열리므로 무한정 열면 파일 핸들이 고갈된다.
+핵심은 **자원 관리**이고, 그 소유가 어디에 있느냐가 이 티켓의 설계 판단이다.
+탭마다 `Repository` 핸들이 열리므로 무한정 열면 파일 핸들이 고갈된다.
+
+**자원 수명은 presentation 이 소유하지 않는다.** UND-02 가 세운 "저장소 핸들은 하나만 연다" 전제를
+**다중 세션**으로 확장하되, 그 확장은 infrastructure 의 홀더에서 하고 열기·직렬화·해제 정책은
+`application/session` 의 UseCase 가 갖는다. presentation 은 탭 상태와 UseCase 호출만 담당한다
+([`architecture-layers`](../.agent/rules/architecture-layers.md) 규칙 3).
 
 1. **활성 탭만 완전 로드.** 비활성 탭은 상태를 유지하되 무거운 자원(`Repository`·캐시)을 놓는다.
-2. **탭 상한**을 두고 초과 시 가장 오래 안 쓴 탭의 자원을 회수한다.
+2. **탭 상한**을 두고 초과 시 가장 오래 안 쓴 탭의 자원을 회수한다 (LRU 정책은 application 소관).
 3. **탭을 닫으면 자원을 즉시 해제**한다.
 
 각 탭은 **독립 상태**를 갖는다 — 선택된 커밋·스크롤 위치·필터가 탭마다 유지돼야 오가는 의미가 있다.
@@ -31,18 +37,18 @@
 sequenceDiagram
     participant User as 사용자
     participant Tabs as RepositoryTabs
-    participant Res as ResourceManager
+    participant UC as RepositorySessionUseCase
     User->>Tabs: 새 저장소 열기
-    Tabs->>Res: 탭 추가 · 자원 할당
-    Res->>Res: 상한 초과 시 LRU 탭 자원 회수
+    Tabs->>UC: 세션 열기 요청
+    UC->>UC: 상한 초과 시 LRU 세션 자원 회수
     User->>Tabs: 탭 전환
-    Tabs->>Res: 이전 탭 자원 완화 · 새 탭 완전 로드
+    Tabs->>UC: 활성 세션 전환 (이전 세션 자원 완화)
     Note over Tabs: 탭별 선택·스크롤·필터는 유지
     User->>Tabs: 탭 닫기
     alt 원격 작업 진행 중
         Tabs-->>User: 확인 요청
     else
-        Tabs->>Res: 자원 즉시 해제
+        Tabs->>UC: 세션 종료 — 자원 즉시 해제
     end
 ```
 
@@ -53,17 +59,24 @@ flowchart LR
     subgraph tabs["presentation/tabs"]
         TabBar[RepositoryTabs]
         TabState[TabState]
-        Res[ResourceManager]
         Restore[세션 복원]
     end
     subgraph shell["presentation/shell"]
         AppShell[AppShell]
     end
+    subgraph app["application/session"]
+        SessionUC[RepositorySessionUseCase]
+        Lru[LRU 해제 정책]
+    end
+    subgraph infra["infrastructure — UND-02 확장"]
+        Holder[다중 세션 RepositoryHolder]
+    end
     TabBar --> TabState
-    TabBar --> Res
     TabBar --> Restore
+    TabBar --> SessionUC
+    SessionUC --> Lru
+    SessionUC --> Holder
     AppShell --> TabBar
-    TabState --> AppShell
 ```
 
 ## 테스트 케이스

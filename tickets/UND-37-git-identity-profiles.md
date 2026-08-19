@@ -1,6 +1,6 @@
 # [UND-37] Git identity 프로필
 
-> wave 7 · 사이즈 S · 의존 UND-06, UND-11 · 소유 `domain/identity/` · `infrastructure/identity/`
+> wave 7 · 사이즈 S · 의존 UND-06, UND-11 · 소유 `domain/identity/` · `application/identity/` · `infrastructure/identity/`
 
 ## 작업 내용 (설계 의도)
 회사 계정과 개인 계정을 오가는 흔한 상황을 다룬다. **잘못된 이메일로 쌓인 커밋은 되돌리는 비용이 크다.**
@@ -47,18 +47,24 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     subgraph domain["domain/identity"]
+        Gateway[IdentityGateway]
         Svc[IdentityService]
         Profile[IdentityProfile]
         Warn[IdentityWarning]
+    end
+    subgraph app["application/identity"]
+        UC[ApplyProfileUseCase]
     end
     subgraph infra["infrastructure/identity"]
         Impl[IdentityGatewayImpl]
         Local[로컬 설정 쓰기]
         Store[프로필 저장소]
     end
+    UC --> Svc
+    Svc --> Gateway
     Svc --> Profile
     Svc --> Warn
-    Impl --> Svc
+    Impl -.->|implements| Gateway
     Impl --> Local
     Impl --> Store
 ```

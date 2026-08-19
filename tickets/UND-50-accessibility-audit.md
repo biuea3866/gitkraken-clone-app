@@ -1,10 +1,13 @@
 # [UND-50] 접근성 감사 · 보강
 
-> wave 9 · 사이즈 M · 의존 UND-40, UND-41, UND-42, UND-43, UND-44, UND-45, UND-46, UND-47 · 소유 `presentation/**` (감사 결과 보강)
+> wave 10 · 사이즈 M · 의존 UND-40, UND-41, UND-42, UND-43, UND-44, UND-45, UND-46, UND-47, UND-51 · 소유 `presentation/**` (감사 결과 보강)
 
 ## 작업 내용 (설계 의도)
 전 화면을 접근성 기준으로 감사하고 부족한 곳을 보강한다.
 **새 화면을 만드는 티켓이 아니라 기존 화면을 고치는 티켓**이라 마지막에 둔다.
+와이어업(UND-51) **이후** wave 에 두는 이유는 둘이다 — 조립된 앱을 감사해야 실제 포커스 순서·키보드
+경로를 검증할 수 있고, 같은 wave 에 두면 `App.kt`·`palette/` 소유가 UND-51 과 겹쳐
+Single Writer per File 이 깨진다.
 
 감사 축:
 

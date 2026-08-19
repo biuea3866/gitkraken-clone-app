@@ -65,6 +65,7 @@ flowchart LR
 ## 테스트 케이스
 
 - worktree 목록에 메인 worktree 가 구분되어 표시된다
+- 사용 중이 아닌 브랜치로 worktree 를 추가하면 지정 경로에 생성되고 목록·브랜치 상태에 반영된다
 - 이미 다른 worktree 가 체크아웃한 브랜치로 추가하면 거부된다
 - 더티한 worktree 제거는 기본 거부되고 강제 인자로만 수행된다
 - 메인 worktree 는 제거할 수 없다

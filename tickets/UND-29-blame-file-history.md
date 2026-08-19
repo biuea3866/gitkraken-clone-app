@@ -1,6 +1,6 @@
 # [UND-29] Blame · 파일 이력 조회
 
-> wave 7 · 사이즈 M · 의존 UND-01 · 소유 `infrastructure/git/blame/`
+> wave 7 · 사이즈 M · 의존 UND-01, UND-05 · 소유 `infrastructure/git/blame/`
 
 ## 작업 내용 (설계 의도)
 `BlameGateway` 를 신설한다. 파일의 **라인별 최종 수정 커밋**과 **파일 단위 변경 이력**을 조회한다.

@@ -1,6 +1,6 @@
 # [UND-01] 프로젝트 스캐폴딩 · 공통 계약 정의
 
-> wave 1 · 사이즈 L · 의존 없음 (선행 wave) · 소유 루트 빌드 · `domain/` 전체 계약
+> wave 1 · 사이즈 L · 의존 없음 (선행 wave) · 소유 루트 빌드 · `domain/` 전체 계약 · 최소 `presentation/App.kt`
 
 ## 작업 내용 (설계 의도)
 후행 티켓 **전부**가 import 하는 공통 산출물을 한 티켓에 모은다. 빌드 골격 없이는 어떤 계약도
@@ -27,8 +27,12 @@
 | 설정 | `SettingsGateway` (최근 저장소·환경 설정 영속화 계약) |
 | 예외 | `UndineException` sealed 계층 (인증 실패·충돌·상태 위반·더티 워킹트리) |
 
+여기서 닫는 것은 **wave 2 가 구현할 계약**이다. 자기 domain 패키지를 새로 여는 후행 티켓
+(UND-21 `domain/merge`, UND-28 `domain/cherrypick`, UND-35 `domain/bisect`, UND-37 `domain/identity`)은
+**자기 Gateway interface 를 자기 패키지에 정의**한다 — 그래야 그 티켓만으로 레이어가 닫힌다.
+
 마지막으로 **빈 창 하나가 뜨는 최소 `main`** 을 둔다 — 후행 UI 티켓이 붙일 자리이자, 패키징 티켓이
-포장할 대상이다.
+포장할 대상이다. `presentation/App.kt` 의 **최종 형태는 UND-26 이 소유**한다.
 
 ## 다이어그램
 

@@ -1,6 +1,6 @@
 # [UND-21] 병합 · 리베이스 실행
 
-> wave 3 · 사이즈 L · 의존 UND-07 · 소유 `domain/merge/` · `application/merge/`
+> wave 3 · 사이즈 L · 의존 UND-07 · 소유 `domain/merge/` · `application/merge/` · `infrastructure/git/merge/`
 
 ## 작업 내용 (설계 의도)
 병합과 리베이스의 **실행·중단·계속**을 담당한다. UI 는 UND-23·24 가 맡고, 여기서는 도메인과 응용 계층이다.
@@ -59,6 +59,7 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     subgraph domain["domain/merge"]
+        Gateway[MergeGateway]
         Svc[MergeService]
         Result[MergeResult]
         State[OperationState]
@@ -68,11 +69,16 @@ flowchart LR
         RebaseUC[RebaseUseCase]
         ControlUC[ContinueAbortUseCase]
     end
+    subgraph infra["infrastructure/git/merge"]
+        Impl[MergeGatewayImpl]
+    end
     MergeUC --> Svc
     RebaseUC --> Svc
     ControlUC --> Svc
+    Svc --> Gateway
     Svc --> Result
     Svc --> State
+    Impl -.->|implements| Gateway
 ```
 
 ## 테스트 케이스
