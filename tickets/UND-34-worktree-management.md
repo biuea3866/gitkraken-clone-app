@@ -1,6 +1,6 @@
 # [UND-34] Worktree 관리
 
-> wave 7 · 사이즈 M · 의존 UND-02 · 소유 `infrastructure/git/worktree/`
+> wave 7 · 사이즈 M · 의존 UND-02 · 소유 `domain/worktree/` · `infrastructure/git/worktree/`
 
 ## 작업 내용 (설계 의도)
 `WorktreeGateway` 를 신설한다. 하나의 저장소를 **여러 디렉토리에 동시 체크아웃**하는 git worktree 를 다룬다.
@@ -65,6 +65,7 @@ flowchart LR
 ## 테스트 케이스
 
 - worktree 목록에 메인 worktree 가 구분되어 표시된다
+- 사용 중이 아닌 브랜치로 worktree 를 추가하면 지정 경로에 생성되고 목록·브랜치 상태에 반영된다
 - 이미 다른 worktree 가 체크아웃한 브랜치로 추가하면 거부된다
 - 더티한 worktree 제거는 기본 거부되고 강제 인자로만 수행된다
 - 메인 worktree 는 제거할 수 없다

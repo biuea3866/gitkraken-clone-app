@@ -1,9 +1,13 @@
 # [UND-48] 자동 업데이트
 
-> wave 8 · 사이즈 M · 의존 UND-25 · 소유 `infrastructure/update/` · `build.gradle.kts`
+> wave 8 · 사이즈 M · 의존 UND-25 · 소유 `domain/update/` · `application/update/` · `infrastructure/update/` · `build.gradle.kts`
 
 ## 작업 내용 (설계 의도)
 새 버전을 확인하고 사용자 동의 하에 설치한다. 개인 도구라도 직접 받아 설치하게 두면 사실상 갱신되지 않는다.
+
+확인·다운로드·설치는 **infrastructure Gateway** 가 수행하고, application UseCase 가 그 결과를
+상태로 반환하며, presentation 이 그 상태를 읽어 안내·동의 UI 를 그린다 — infrastructure 가
+화면을 직접 호출하지 않는다 ([`architecture-layers`](../.agent/rules/architecture-layers.md)).
 
 **릴리즈 확인**은 GitHub Releases 를 조회한다 (UND-25 가 만든 산출물이 태그에 붙어 있다).
 확인 주기는 설정으로 조절하고, **끌 수 있어야 한다**.
@@ -54,21 +58,29 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    subgraph update["infrastructure/update"]
-        Svc[UpdateService]
-        Check[릴리즈 확인]
+    subgraph domain
+        Gateway[UpdateGateway]
+        State[UpdateState]
+    end
+    subgraph app["application/update"]
+        CheckUC[CheckUpdateUseCase]
+        InstallUC[InstallUpdateUseCase]
+    end
+    subgraph infra["infrastructure/update"]
+        Impl[UpdateGatewayImpl]
         Verify[체크섬 검증]
         Install[설치·세대 보관]
     end
-    subgraph pres
+    subgraph pres["presentation"]
         Notice[업데이트 안내]
-        Notes[릴리즈 노트]
     end
-    Svc --> Check
-    Svc --> Verify
-    Verify --> Install
-    Svc --> Notice
-    Notice --> Notes
+    CheckUC --> Gateway
+    InstallUC --> Gateway
+    CheckUC --> State
+    Impl -.->|implements| Gateway
+    Impl --> Verify
+    Impl --> Install
+    Notice --> CheckUC
 ```
 
 ## 테스트 케이스

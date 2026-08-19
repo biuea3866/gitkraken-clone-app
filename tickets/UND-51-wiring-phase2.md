@@ -1,6 +1,6 @@
 # [UND-51] 2차 통합 와이어업
 
-> wave 9 · 사이즈 M · 의존 UND-40, UND-41, UND-42, UND-43, UND-44, UND-45, UND-46, UND-47, UND-48 · 소유 `presentation/App.kt` · `di/` · `presentation/palette/` (등록)
+> wave 9 · 사이즈 M · 의존 UND-22, UND-26, UND-38, UND-40, UND-41, UND-42, UND-43, UND-44, UND-45, UND-46, UND-47, UND-48 · 소유 `presentation/App.kt` · `di/` · `presentation/palette/` (등록)
 
 ## 작업 내용 (설계 의도)
 2차 기능들을 하나의 앱으로 연결한다. UND-26 이 1차에 한 일을 2차 범위에 대해 반복한다.

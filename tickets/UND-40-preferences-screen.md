@@ -1,6 +1,6 @@
 # [UND-40] 설정 화면
 
-> wave 8 · 사이즈 M · 의존 UND-10, UND-11, UND-37, UND-39 · 소유 `presentation/preferences/`
+> wave 8 · 사이즈 M · 의존 UND-10, UND-11, UND-22, UND-37, UND-39 · 소유 `presentation/preferences/`
 
 ## 작업 내용 (설계 의도)
 UND-11 이 만든 설정 저장소를 **사용자가 실제로 조작할 수 있는 화면**을 만든다.

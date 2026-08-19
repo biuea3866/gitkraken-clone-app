@@ -1,6 +1,6 @@
 # [UND-35] Bisect 세션
 
-> wave 7 · 사이즈 M · 의존 UND-03 · 소유 `domain/bisect/` · `infrastructure/git/bisect/`
+> wave 7 · 사이즈 M · 의존 UND-03 · 소유 `domain/bisect/` · `application/bisect/` · `infrastructure/git/bisect/`
 
 ## 작업 내용 (설계 의도)
 버그가 처음 들어온 커밋을 이분 탐색으로 찾는다. 세션이 여러 단계에 걸치므로 **상태 관리**가 본체다.
@@ -47,17 +47,23 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     subgraph domain["domain/bisect"]
+        Gateway[BisectGateway]
         Svc[BisectService]
         Range[CandidateRange]
         Result[BisectResult]
+    end
+    subgraph app["application/bisect"]
+        UC[BisectUseCase]
     end
     subgraph infra["infrastructure/git/bisect"]
         Impl[BisectGatewayImpl]
         Restore[세션 복원]
     end
+    UC --> Svc
+    Svc --> Gateway
     Svc --> Range
     Svc --> Result
-    Impl --> Svc
+    Impl -.->|implements| Gateway
     Impl --> Restore
 ```
 

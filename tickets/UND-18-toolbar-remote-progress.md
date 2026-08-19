@@ -19,6 +19,8 @@ push 는 되돌릴 수 없으므로 force push 는 툴바 기본 버튼에 두�
 
 현재 브랜치의 ahead/behind 를 버튼 옆에 표시해 pull/push 필요 여부를 한눈에 보이게 한다.
 
+**롤백**: fetch·pull 은 이전 ref 로 되돌린다 — push 는 되돌릴 수 없으므로 force push 는 별도 메뉴에서 확인 절차를 거친다.
+
 ## 다이어그램
 
 ### 처리 흐름

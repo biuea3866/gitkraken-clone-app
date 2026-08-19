@@ -1,6 +1,6 @@
 # [UND-32] Submodule 관리
 
-> wave 7 · 사이즈 M · 의존 UND-02 · 소유 `infrastructure/git/submodule/`
+> wave 7 · 사이즈 M · 의존 UND-02 · 소유 `domain/submodule/` · `infrastructure/git/submodule/`
 
 ## 작업 내용 (설계 의도)
 `SubmoduleGateway` 를 신설한다. 서브모듈 목록·상태 조회, 초기화, 업데이트, 추가, 제거다.

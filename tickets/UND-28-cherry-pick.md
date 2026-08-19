@@ -1,6 +1,6 @@
 # [UND-28] Cherry-pick 실행
 
-> wave 7 · 사이즈 M · 의존 UND-21 · 소유 `domain/cherrypick/` · `infrastructure/git/cherrypick/`
+> wave 7 · 사이즈 M · 의존 UND-21 · 소유 `domain/cherrypick/` · `application/cherrypick/` · `infrastructure/git/cherrypick/`
 
 ## 작업 내용 (설계 의도)
 특정 커밋의 변경만 현재 브랜치로 가져온다. 병합·리베이스와 **충돌 처리 구조를 공유**하므로
@@ -49,6 +49,7 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     subgraph domain["domain/cherrypick"]
+        Gateway[CherryPickGateway]
         Svc[CherryPickService]
         Result[CherryPickResult]
     end
@@ -56,13 +57,18 @@ flowchart LR
         OpState[OperationState]
         MergeRes[MergeResult]
     end
-    subgraph infra["infrastructure"]
+    subgraph app["application/cherrypick"]
+        UC[CherryPickUseCase]
+    end
+    subgraph infra["infrastructure/git/cherrypick"]
         Impl[CherryPickGatewayImpl]
     end
+    UC --> Svc
+    Svc --> Gateway
     Svc --> Result
     Svc --> OpState
     Result --> MergeRes
-    Impl --> Svc
+    Impl -.->|implements| Gateway
 ```
 
 ## 테스트 케이스

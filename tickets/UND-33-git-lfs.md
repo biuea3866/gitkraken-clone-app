@@ -1,6 +1,6 @@
 # [UND-33] Git LFS 연동
 
-> wave 7 · 사이즈 M · 의존 UND-08 · 소유 `infrastructure/git/lfs/`
+> wave 7 · 사이즈 M · 의존 UND-08 · 소유 `domain/lfs/` · `infrastructure/git/lfs/`
 
 ## 작업 내용 (설계 의도)
 `LfsGateway` 를 신설한다. 대용량 파일을 포인터로 대체하는 Git LFS 를 다룬다.

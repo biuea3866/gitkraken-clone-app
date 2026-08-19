@@ -1,6 +1,6 @@
 # [UND-36] 커밋 서명 (GPG / SSH)
 
-> wave 7 · 사이즈 M · 의존 UND-06 · 소유 `infrastructure/git/signing/`
+> wave 7 · 사이즈 M · 의존 UND-06 · 소유 `domain/signing/` · `infrastructure/git/signing/`
 
 ## 작업 내용 (설계 의도)
 커밋과 태그에 서명하고, 기존 커밋의 서명을 검증한다. GPG 와 SSH 서명 두 방식을 모두 지원한다.
