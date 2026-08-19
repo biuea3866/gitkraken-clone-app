@@ -36,7 +36,7 @@ sequenceDiagram
     UC->>GW: checkout(branch, force=false)
     GW->>Repo: 워킹트리 더티 여부 확인
     alt 더티 + force=false
-        GW-->>UC: DirtyWorkingTreeException
+        GW-->>UC: UndineException.DirtyWorkingTree
     else 원격 브랜치
         GW->>Repo: 로컬 추적 브랜치 생성 후 체크아웃
     else
@@ -71,10 +71,10 @@ flowchart LR
 
 - 로컬·원격 브랜치 목록이 업스트림 추적 정보와 함께 반환된다
 - 업스트림보다 2 커밋 앞선 브랜치의 ahead 가 2, behind 가 0 으로 계산된다
-- 워킹트리가 더티하면 체크아웃이 `DirtyWorkingTreeException` 으로 거부된다
+- 워킹트리가 더티하면 체크아웃이 `UndineException.DirtyWorkingTree` 로 거부된다
 - `force=true` 를 명시하면 더티 상태에서도 체크아웃된다
 - 원격 브랜치를 체크아웃하면 로컬 추적 브랜치가 생성되고 detached HEAD 가 되지 않는다
-- 미병합 브랜치 삭제는 기본 거부되고 미병합 사실이 결과에 담긴다
+- 미병합 브랜치 삭제는 `DeleteBranchResult.REFUSED_UNMERGED` 를 반환한다 (성공은 `DELETED`)
 - 이미 존재하는 이름으로 브랜치를 만들면 거부된다
 - 현재 체크아웃된 브랜치는 삭제할 수 없다
 - 커밋이 0건인 저장소에서 브랜치 목록은 빈 리스트를 반환한다

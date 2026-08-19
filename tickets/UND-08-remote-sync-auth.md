@@ -50,11 +50,11 @@ sequenceDiagram
         GW-->>UC: AuthenticationFailed (URL 마스킹)
     else non-fast-forward
         Remote-->>GW: 거절
-        GW-->>UC: Rejected(pull 필요) — 예외 아님
+        GW-->>UC: PushResult.Rejected(NON_FAST_FORWARD) — 예외 아님
     else 취소됨
         GW-->>UC: 취소 전파
     else 성공
-        GW-->>UC: 갱신된 ref 목록
+        GW-->>UC: PushResult.Accepted
     end
 ```
 
@@ -85,7 +85,7 @@ flowchart LR
 
 - 로컬 파일 경로를 원격으로 등록해 clone 하면 커밋 이력이 그대로 복제된다
 - fetch 후 원격 추적 ref 가 갱신되고 로컬 브랜치는 변경되지 않는다
-- non-fast-forward push 는 예외가 아니라 `Rejected` 결과로 반환된다
+- non-fast-forward push 는 예외가 아니라 `PushResult.Rejected(NON_FAST_FORWARD)` 로 반환된다 (원격 거절은 `REMOTE_REJECTED`)
 - 인증 실패 예외 메시지에 토큰·자격증명 문자열이 포함되지 않는다 (마스킹 검증)
 - 진행 중 코루틴을 취소하면 전송이 중단되고 `CancellationException` 이 전파된다
 - force push 는 명시적 인자 없이는 수행되지 않는다

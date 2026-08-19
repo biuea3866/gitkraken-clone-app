@@ -3,8 +3,17 @@
 > wave 2 · 사이즈 S · 의존 UND-01 · 소유 `infrastructure/settings/`
 
 ## 작업 내용 (설계 의도)
-`SettingsGateway` 를 구현한다. 최근 연 저장소 목록, 테마 선택, 창 크기·위치 같은 사용자 설정을
-로컬 파일에 영속화한다.
+`SettingsGateway` 를 구현한다. UND-01 이 확정한 1차 계약은 다음과 같다.
+
+```
+Settings(recentRepositories: List<RepositoryPath>, theme: ThemeMode, window: WindowBounds)
+ThemeMode   = LIGHT · DARK · SYSTEM
+WindowBounds(width: Int, height: Int, maximized: Boolean)
+```
+
+**이 스키마의 확장은 이 티켓이 소유한다.** 최근 저장소의 마지막 접근 시각, 창 위치(x·y),
+분할 비율(UND-12) 같은 필드가 필요하면 여기서 `Settings` 를 넓힌다 — UND-01 은 wave 1 이라
+교차 wave 재수정으로 충돌하지 않는다.
 
 **설정 파일은 앱과 함께 진화한다.** 새 버전이 필드를 추가했을 때 구버전이 그 파일을 읽어도
 크래시하지 않아야 하고, 그 반대도 마찬가지다. 그래서 세 가지를 지킨다.
@@ -52,7 +61,8 @@ flowchart LR
     subgraph domain
         SG[SettingsGateway]
         Settings[Settings]
-        Recent[RecentRepository]
+        Theme[ThemeMode]
+        Bounds[WindowBounds]
     end
     subgraph infra["infrastructure/settings"]
         Impl[SettingsGatewayImpl]
@@ -63,7 +73,8 @@ flowchart LR
     Impl --> Codec
     Impl --> Recover
     Codec --> Settings
-    Settings --> Recent
+    Settings --> Theme
+    Settings --> Bounds
 ```
 
 ## 테스트 케이스
