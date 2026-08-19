@@ -1,6 +1,6 @@
 # [UND-30] Reflog 조회 · 복구
 
-> wave 7 · 사이즈 M · 의존 UND-01 · 소유 `infrastructure/git/reflog/`
+> wave 7 · 사이즈 M · 의존 UND-01 · 소유 `domain/reflog/` · `infrastructure/git/reflog/`
 
 ## 작업 내용 (설계 의도)
 `ReflogGateway` 를 신설한다. **잘못된 reset·rebase·브랜치 삭제로 잃어버린 커밋을 되찾는 경로**다.

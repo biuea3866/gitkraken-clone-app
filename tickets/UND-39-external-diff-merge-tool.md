@@ -1,6 +1,6 @@
 # [UND-39] 외부 diff/merge 도구 연동
 
-> wave 7 · 사이즈 S · 의존 UND-05, UND-11 · 소유 `infrastructure/externaltool/`
+> wave 7 · 사이즈 S · 의존 UND-05, UND-11 · 소유 `domain/externaltool/` · `infrastructure/externaltool/`
 
 ## 작업 내용 (설계 의도)
 사용자가 이미 쓰는 외부 도구로 diff·병합을 열 수 있게 한다. 내장 뷰어가 모든 상황을 대체하지는

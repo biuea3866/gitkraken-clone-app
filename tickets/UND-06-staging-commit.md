@@ -67,6 +67,7 @@ flowchart LR
 ## 테스트 케이스
 
 - 파일을 stage 하면 staged 목록에 나타나고 unstaged 목록에서 사라진다
+- 변경을 stage 한 뒤 커밋하면 새 CommitId 가 반환되고 이력에 반영되며 원격 존재 여부가 함께 돌아온다
 - hunk 1개만 stage 하면 인덱스에는 반영되고 **워킹트리 파일은 변경되지 않는다**
 - 작성자 설정이 없으면 커밋하지 않고 `AuthorNotConfiguredException` 을 던진다
 - 스테이징이 비어 있으면 커밋을 거부한다

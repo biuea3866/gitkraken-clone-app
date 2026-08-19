@@ -59,26 +59,26 @@ Undine 구현을 **52개 티켓 / 10개 wave** 로 분해한 결과다.
 | ID | 제목 | 사이즈 | wave | 의존 | 소유 패키지 |
 |---|---|---|---|---|---|
 | [UND-28](UND-28-cherry-pick.md) | Cherry-pick 실행 | M | 7 | UND-21 | `domain/cherrypick/` · `application/cherrypick/` · `infrastructure/git/cherrypick/` |
-| [UND-29](UND-29-blame-file-history.md) | Blame · 파일 이력 조회 | M | 7 | UND-01 · UND-05 | `infrastructure/git/blame/` |
-| [UND-30](UND-30-reflog-recovery.md) | Reflog 조회 · 복구 | M | 7 | UND-01 | `infrastructure/git/reflog/` |
-| [UND-31](UND-31-patch-create-apply.md) | Patch 생성 · 적용 | M | 7 | UND-05 | `infrastructure/git/patch/` |
-| [UND-32](UND-32-submodule-management.md) | Submodule 관리 | M | 7 | UND-02 | `infrastructure/git/submodule/` |
-| [UND-33](UND-33-git-lfs.md) | Git LFS 연동 | M | 7 | UND-08 | `infrastructure/git/lfs/` |
-| [UND-34](UND-34-worktree-management.md) | Worktree 관리 | M | 7 | UND-02 | `infrastructure/git/worktree/` |
+| [UND-29](UND-29-blame-file-history.md) | Blame · 파일 이력 조회 | M | 7 | UND-01 · UND-05 | `domain/blame/` · `infrastructure/git/blame/` |
+| [UND-30](UND-30-reflog-recovery.md) | Reflog 조회 · 복구 | M | 7 | UND-01 | `domain/reflog/` · `infrastructure/git/reflog/` |
+| [UND-31](UND-31-patch-create-apply.md) | Patch 생성 · 적용 | M | 7 | UND-05 | `domain/patch/` · `infrastructure/git/patch/` |
+| [UND-32](UND-32-submodule-management.md) | Submodule 관리 | M | 7 | UND-02 | `domain/submodule/` · `infrastructure/git/submodule/` |
+| [UND-33](UND-33-git-lfs.md) | Git LFS 연동 | M | 7 | UND-08 | `domain/lfs/` · `infrastructure/git/lfs/` |
+| [UND-34](UND-34-worktree-management.md) | Worktree 관리 | M | 7 | UND-02 | `domain/worktree/` · `infrastructure/git/worktree/` |
 | [UND-35](UND-35-bisect-session.md) | Bisect 세션 | M | 7 | UND-03 | `domain/bisect/` · `application/bisect/` · `infrastructure/git/bisect/` |
-| [UND-36](UND-36-commit-signing.md) | 커밋 서명 (GPG / SSH) | M | 7 | UND-06 | `infrastructure/git/signing/` |
+| [UND-36](UND-36-commit-signing.md) | 커밋 서명 (GPG / SSH) | M | 7 | UND-06 | `domain/signing/` · `infrastructure/git/signing/` |
 | [UND-37](UND-37-git-identity-profiles.md) | Git identity 프로필 | S | 7 | UND-06 · UND-11 | `domain/identity/` · `application/identity/` · `infrastructure/identity/` |
 | [UND-38](UND-38-operation-history-undo.md) | 실행 이력 · Undo 스택 | L | 7 | UND-09 · UND-21 | `domain/undo/` · `application/undo/` |
-| [UND-39](UND-39-external-diff-merge-tool.md) | 외부 diff/merge 도구 연동 | S | 7 | UND-05 · UND-11 | `infrastructure/externaltool/` |
+| [UND-39](UND-39-external-diff-merge-tool.md) | 외부 diff/merge 도구 연동 | S | 7 | UND-05 · UND-11 | `domain/externaltool/` · `infrastructure/externaltool/` |
 | [UND-40](UND-40-preferences-screen.md) | 설정 화면 | M | 8 | UND-10 · UND-11 · UND-22 · UND-37 · UND-39 | `presentation/preferences/` |
 | [UND-41](UND-41-blame-history-view.md) | Blame 뷰 · 파일 이력 화면 | M | 8 | UND-10 · UND-29 | `presentation/blame/` |
 | [UND-42](UND-42-graph-drag-drop.md) | 그래프 드래그&드롭 조작 | L | 8 | UND-14 · UND-21 · UND-28 · UND-38 | `presentation/graph/` (dnd 확장) |
 | [UND-43](UND-43-undo-history-panel.md) | Undo 버튼 · 실행 이력 패널 | M | 8 | UND-10 · UND-38 | `presentation/undo/` |
-| [UND-44](UND-44-multi-repo-tabs.md) | 다중 저장소 탭 | L | 8 | UND-02 · UND-12 | `presentation/tabs/` · `presentation/shell/` · `application/session/` |
+| [UND-44](UND-44-multi-repo-tabs.md) | 다중 저장소 탭 | L | 8 | UND-02 · UND-12 | `presentation/tabs/` · `presentation/shell/` · `application/session/` · `infrastructure/git/repository/` (다중 세션 확장) |
 | [UND-45](UND-45-submodule-worktree-panel.md) | Submodule · Worktree 패널 | M | 8 | UND-10 · UND-32 · UND-34 | `presentation/submodule/` |
 | [UND-46](UND-46-reflog-bisect-screen.md) | Reflog · Bisect 화면 | M | 8 | UND-10 · UND-30 · UND-35 | `presentation/recovery/` |
 | [UND-47](UND-47-patch-screen.md) | Patch 화면 | M | 8 | UND-10 · UND-31 | `presentation/patch/` |
-| [UND-48](UND-48-auto-update.md) | 자동 업데이트 | M | 8 | UND-25 | `infrastructure/update/` · `application/update/` · `build.gradle.kts` |
+| [UND-48](UND-48-auto-update.md) | 자동 업데이트 | M | 8 | UND-25 | `domain/update/` · `application/update/` · `infrastructure/update/` · `build.gradle.kts` |
 | [UND-50](UND-50-accessibility-audit.md) | 접근성 감사 · 보강 | M | 10 | UND-40 · UND-41 · UND-42 · UND-43 · UND-44 · UND-45 · UND-46 · UND-47 · UND-51 | `presentation/**` (감사 결과 보강) |
 | [UND-51](UND-51-wiring-phase2.md) | 2차 통합 와이어업 | M | 9 | UND-22 · UND-26 · UND-38 · UND-40 · UND-41 · UND-42 · UND-43 · UND-44 · UND-45 · UND-46 · UND-47 · UND-48 | `presentation/App.kt` · `di/` · `presentation/palette/` (등록) |
 | [UND-52](UND-52-e2e-scenario-phase2.md) | 2차 E2E 시나리오 테스트 | M | 10 | UND-51 | `app/src/test/kotlin/.../scenario2/` |
@@ -197,8 +197,8 @@ flowchart LR
 | 4 | 3건 — `presentation/conflict/` · `presentation/rebase/` · `build.gradle.kts` · `packaging/` |
 | 5 | 1건 — `presentation/App.kt` · `di/` |
 | 6 | 1건 — `app/src/test/kotlin/.../scenario/` |
-| 7 | 12건 — `domain/cherrypick/` · `application/cherrypick/` · `infrastructure/git/cherrypick/` · `infrastructure/git/blame/` · `infrastructure/git/reflog/` · `infrastructure/git/patch/` · `infrastructure/git/submodule/` · |
-| 8 | 9건 — `presentation/preferences/` · `presentation/blame/` · `presentation/graph/` (dnd 확장) · `presentation/undo/` · `presentation/tabs/` · `presentation/shell/` · `application/session/` · `presentation/submodule/` ·  |
+| 7 | 12건 — `domain/cherrypick/` · `application/cherrypick/` · `infrastructure/git/cherrypick/` · `domain/blame/` · `infrastructure/git/blame/` · `domain/reflog/` · `infrastructure/git/reflog/` · `domain/patch/` · `infrast |
+| 8 | 9건 — `presentation/preferences/` · `presentation/blame/` · `presentation/graph/` (dnd 확장) · `presentation/undo/` · `presentation/tabs/` · `presentation/shell/` · `application/session/` · `infrastructure/git/reposito |
 | 9 | 1건 — `presentation/App.kt` · `di/` · `presentation/palette/` (등록) |
 | 10 | 2건 — `presentation/**` (감사 결과 보강) · `app/src/test/kotlin/.../scenario2/` |
 
@@ -244,4 +244,5 @@ flowchart LR
 
 | 일자 | 방법 | 결과 |
 |---|---|---|
-| 2026-08-19 | `/custom-orchestrate ticket-review` (5개 렌즈 codex + opus 종합) | REQUEST_CHANGES — p1 12 · p2 15 → 전건 반영 |
+| 2026-08-19 | `/custom-orchestrate ticket-review` 1차 | REQUEST_CHANGES — p1 12 · p2 15 → 전건 반영 |
+| 2026-08-19 | `/custom-orchestrate ticket-review` 2차 (수정본) | REQUEST_CHANGES — p1 3 · p2 6 → 전건 반영 |
