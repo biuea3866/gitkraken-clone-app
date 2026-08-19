@@ -25,6 +25,7 @@
 | `[defaults]` | | 노드가 값을 주지 않았을 때 적용할 기본값 |
 | `[flags]` | ✅ | 노드 키 → argv 조각. **노드에 값이 있을 때만** 붙는다 |
 | `[runtime]` | | 러너가 값을 채우는 슬롯 — `out_file` · `cwd` |
+| `[failover]` | | 이 벤더가 소진됐을 때의 대체 경로 (아래 절 참조) |
 
 ### 자리표시자
 
@@ -41,6 +42,45 @@
 노드에 `output_schema` 를 두면 "벤더 'claude' 는 'output_schema' 를 지원하지 않습니다" 로 멈춘다.
 러너가 직접 해석하는 예약 키(`id` · `vendor` · `type` · `needs` · `prompt` · `role_file` ·
 `cwd` · `timeout_seconds` · `label`)는 이 검사에서 제외된다.
+
+## 벤더 소진 시 failover
+
+한 벤더의 사용량이 바닥나도 워크플로우가 통째로 죽지 않도록, **대체 벤더로 1회 재시도**한다.
+러너에는 벤더 이름 분기가 없다 — 아래 선언만 보고 동작한다.
+
+```toml
+[failover]
+fallback_to = "codex"            # 소진 시 넘어갈 벤더 (자기 자신·미존재 벤더는 실행 전 실패)
+fallback_model = "gpt-5.6-terra" # 대체 벤더의 모델 id (노드의 model 은 벤더 전용이라 못 넘긴다)
+exhaustion_patterns = [          # stdout+stderr 에 대해 대소문자 무시 정규식
+  "usage limit reached",
+  "rate.?limit",
+  "\"status\"\\s*:\\s*429",
+]
+
+# 벤더 전환 시 안전 의미를 잃지 않도록 키·값을 명시 변환한다.
+[failover.translate.permission_mode]
+acceptEdits = { key = "sandbox", value = "workspace-write" }
+```
+
+| 규칙 | 동작 |
+|---|---|
+| **1 hop 제한** | 노드당 재시도 1회. `claude → codex → claude` 순환과 양쪽 소진 시 무한 재시도를 막는다 |
+| **소진일 때만** | `exhaustion_patterns` 에 걸릴 때만 넘어간다. 스키마 오류·타임아웃 같은 일반 실패는 그대로 실패로 남는다 |
+| **미지원 키 제거** | 대체 벤더의 `[flags]` 에 없는 키는 제거된다. **무엇을 버렸는지 로그·`run.json` 에 전부 기록**한다 |
+| **안전 키 변환** | `[failover.translate]` 로 `permission_mode` ↔ `sandbox` 를 매핑해 쓰기 노드가 승인 모드를 잃지 않게 한다 |
+| **끄기** | `--no-failover` |
+
+기록 위치: 터미널 `[failover: a → b]` · `<node>.log` 의 `===== FAILOVER =====` 절 ·
+`run.json` 의 `failover[]`(`from`·`to`·`signal`·`changes`)와 `vendor_requested`.
+
+> ⚠ **감수하는 품질 저하.** 벤더가 바뀌면 그 벤더 전용 기능은 사라진다.
+> `codex → claude` 면 `--output-schema` 가 빠져 구조화 출력 강제가 없어지고(러너가 응답에서 JSON 을
+> 추출한다) 파싱 실패 확률이 오른다. `claude → codex` 면 `mcp_config`·`tools` 가 빠져 MCP 조회가
+> 불가능해진다. **MCP 가 필수인 노드는 failover 로 되살아나지 않는다** — 실패로 두고 사람이 판단하는 편이 낫다.
+
+> ⚠ 일시적 rate limit 도 `exhaustion_patterns` 에 걸린다. 기다렸다 재시도하는 대신 벤더를 바꾸는
+> 선택이며, 그게 싫으면 해당 패턴을 어댑터에서 빼면 된다.
 
 ## 추가 절차
 

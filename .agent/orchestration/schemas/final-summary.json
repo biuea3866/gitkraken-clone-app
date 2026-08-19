@@ -1,11 +1,25 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["verdict", "rounds_run", "remaining_blocking", "ac_results", "pr_ready", "next_steps_ko", "summary_ko"],
+  "required": [
+    "verdict",
+    "rounds_run",
+    "remaining_blocking",
+    "ac_results",
+    "pr_ready",
+    "next_steps_ko",
+    "summary_ko",
+    "advisory",
+    "doc_proposals"
+  ],
   "properties": {
     "verdict": {
       "type": "string",
-      "enum": ["APPROVED", "COMMENT", "REQUEST_CHANGES"],
+      "enum": [
+        "APPROVED",
+        "COMMENT",
+        "REQUEST_CHANGES"
+      ],
       "description": "최종 diff 기준. 산출 규칙은 .agent/docs/review-grading.md"
     },
     "rounds_run": {
@@ -18,13 +32,34 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["level", "file", "line", "problem", "fix"],
+        "required": [
+          "level",
+          "file",
+          "line",
+          "problem",
+          "fix"
+        ],
         "properties": {
-          "level": { "type": "string", "enum": ["p0", "p1", "p2"] },
-          "file": { "type": "string" },
-          "line": { "type": "integer" },
-          "problem": { "type": "string" },
-          "fix": { "type": "string" }
+          "level": {
+            "type": "string",
+            "enum": [
+              "p0",
+              "p1",
+              "p2"
+            ]
+          },
+          "file": {
+            "type": "string"
+          },
+          "line": {
+            "type": "integer"
+          },
+          "problem": {
+            "type": "string"
+          },
+          "fix": {
+            "type": "string"
+          }
         }
       }
     },
@@ -34,12 +69,29 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["level", "file", "line", "problem"],
+        "required": [
+          "level",
+          "file",
+          "line",
+          "problem"
+        ],
         "properties": {
-          "level": { "type": "string", "enum": ["p3", "p4"] },
-          "file": { "type": "string" },
-          "line": { "type": "integer" },
-          "problem": { "type": "string" }
+          "level": {
+            "type": "string",
+            "enum": [
+              "p3",
+              "p4"
+            ]
+          },
+          "file": {
+            "type": "string"
+          },
+          "line": {
+            "type": "integer"
+          },
+          "problem": {
+            "type": "string"
+          }
         }
       }
     },
@@ -49,11 +101,21 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["criterion", "met", "evidence"],
+        "required": [
+          "criterion",
+          "met",
+          "evidence"
+        ],
         "properties": {
-          "criterion": { "type": "string" },
-          "met": { "type": "boolean" },
-          "evidence": { "type": "string" }
+          "criterion": {
+            "type": "string"
+          },
+          "met": {
+            "type": "boolean"
+          },
+          "evidence": {
+            "type": "string"
+          }
         }
       }
     },
@@ -68,8 +130,12 @@
     "next_steps_ko": {
       "type": "array",
       "description": "사람이 게이트에서 할 일. 커밋·Draft PR 은 여기까지만 안내하고 노드가 수행하지 않는다.",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
     },
-    "summary_ko": { "type": "string" }
+    "summary_ko": {
+      "type": "string"
+    }
   }
 }

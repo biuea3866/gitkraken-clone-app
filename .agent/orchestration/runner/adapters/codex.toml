@@ -25,3 +25,25 @@ output_schema = ["--output-schema", "{repo_path}"]
 [runtime]
 out_file = ["-o", "{path}"]
 cwd = ["-C", "{path}"]
+
+# ── 벤더 소진 시 failover ──
+# 상세 규칙은 claude.toml 의 [failover] 주석 참조.
+#
+# ⚠ codex → claude 로 넘어가면 `--output-schema` 를 넘길 수 없다 (claude 에는 스키마 강제 수단이 없다).
+#   러너가 응답에서 JSON 을 추출하는 방식으로 떨어지므로 파싱 실패 확률이 올라간다.
+#   이건 우회가 아니라 감수하는 품질 저하이며, 제거 사실이 로그·run.json 에 기록된다.
+[failover]
+fallback_to = "claude"
+fallback_model = "sonnet"
+exhaustion_patterns = [
+  "usage limit",
+  "rate.?limit",
+  "insufficient_quota",
+  "quota exceeded",
+  "\"status\"\\s*:\\s*429",
+  "429 too many requests",
+]
+
+[failover.translate.sandbox]
+"read-only" = { key = "permission_mode", value = "dontAsk" }
+"workspace-write" = { key = "permission_mode", value = "acceptEdits" }

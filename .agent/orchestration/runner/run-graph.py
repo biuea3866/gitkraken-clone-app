@@ -61,7 +61,66 @@ def load_adapters() -> dict[str, dict]:
         adapters[adapter["id"]] = adapter
     if not adapters:
         fail(f"어댑터가 없습니다 — {ADAPTER_DIR}")
+
+    # failover 선언 검증 — 존재하지 않는 벤더를 가리키면 실행 전에 실패한다.
+    for adapter in adapters.values():
+        target = adapter.get("failover", {}).get("fallback_to")
+        if target and target not in adapters:
+            fail(f"{adapter['id']} 어댑터: failover.fallback_to '{target}' 벤더가 없습니다.")
+        if target == adapter["id"]:
+            fail(f"{adapter['id']} 어댑터: failover.fallback_to 가 자기 자신입니다.")
     return adapters
+
+
+# ---------------------------------------------------------------- 벤더 failover
+
+
+def detect_exhaustion(adapter: dict, text: str) -> str | None:
+    """이 벤더가 소진(usage limit·quota·rate limit)됐다는 신호를 찾는다.
+
+    반환값은 매칭된 패턴 문자열이고, 없으면 None 이다. 판정은 어댑터 선언에만 의존한다 —
+    러너에 벤더 이름 분기를 두지 않는다.
+    """
+    for pattern in adapter.get("failover", {}).get("exhaustion_patterns", []):
+        if re.search(pattern, text, re.IGNORECASE):
+            return pattern
+    return None
+
+
+def adapt_node_for_failover(node: dict, source: dict, target: dict) -> tuple[dict, list[str]]:
+    """노드를 대체 벤더로 실행할 수 있는 형태로 바꾼다.
+
+    벤더마다 지원 키가 다르므로(예: output_schema 는 codex 전용, mcp_config 는 claude 전용)
+    그대로 넘기면 build_command 가 실행 전에 죽는다. 여기서 변환·제거하고 **무엇을 버렸는지
+    전부 기록**한다 — 조용히 사라지면 산출물 품질이 떨어진 이유를 알 수 없다.
+    """
+    translate = source.get("failover", {}).get("translate", {})
+    target_flags = target.get("flags", {})
+    adapted = {key: value for key, value in node.items() if key in RESERVED_NODE_KEYS}
+    adapted["vendor"] = target["id"]
+    notes: list[str] = []
+
+    for key, value in node.items():
+        if key in RESERVED_NODE_KEYS or key == "vendor":
+            continue
+        if key == "model":
+            continue  # 모델은 아래에서 대체 벤더 전용 값으로 다시 정한다.
+        rule = translate.get(key, {}).get(str(value))
+        if rule:
+            adapted[rule["key"]] = rule["value"]
+            notes.append(f"{key}={value} → {rule['key']}={rule['value']} (변환)")
+        elif key in target_flags:
+            adapted[key] = value
+        else:
+            notes.append(f"{key} 제거 — {target['id']} 미지원")
+
+    fallback_model = source.get("failover", {}).get("fallback_model")
+    if fallback_model and "model" in target_flags:
+        adapted["model"] = fallback_model
+        if node.get("model"):
+            notes.append(f"model={node['model']} → {fallback_model}")
+
+    return adapted, notes
 
 
 def render_fragment(
@@ -251,22 +310,25 @@ def extract_json_object(text: str) -> dict:
 # ---------------------------------------------------------------- 노드 실행
 
 
-def run_node(
+def execute_attempt(
     node: dict,
     adapter: dict,
     run_dir: pathlib.Path,
     graph_cwd: pathlib.Path,
-    variables: dict[str, str],
+    prompt: str,
+    attempt: int,
 ) -> dict:
+    """노드를 1회 실행한다. 감지용 원문은 `_scan` 키로 함께 돌려준다 (호출부가 제거한다)."""
     node_id = node["id"]
     out_path = run_dir / f"{node_id}.json"
     log_path = run_dir / f"{node_id}.log"
-    prompt = build_prompt(node, run_dir, node.get("needs", []), variables)
-    (run_dir / f"{node_id}.prompt.txt").write_text(prompt)
-
     cwd = REPO_ROOT / node["cwd"] if node.get("cwd") else graph_cwd
     timeout = node.get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS)
     started = time.monotonic()
+
+    # 이전 시도가 남긴 산출물을 그대로 읽어 성공으로 오판하지 않도록 지운다.
+    if out_path.exists():
+        out_path.unlink()
 
     command = build_command(node, adapter, out_path, cwd)
     if adapter["prompt_delivery"] == "argv":
@@ -274,6 +336,12 @@ def run_node(
         stdin_data = ""
     else:
         stdin_data = prompt
+
+    def append_log(body: str) -> None:
+        with log_path.open("a") as handle:
+            handle.write(f"===== attempt {attempt} · vendor={adapter['id']} =====\n{body}")
+
+    base = {"id": node_id, "vendor": adapter["id"], "attempt": attempt}
 
     try:
         completed = subprocess.run(
@@ -285,32 +353,31 @@ def run_node(
             timeout=timeout,
         )
     except FileNotFoundError:
-        log_path.write_text(f"CLI 없음: {command[0]}\ncommand: {shlex.join(command)}\n")
+        append_log(f"CLI 없음: {command[0]}\ncommand: {shlex.join(command)}\n")
         return {
-            "id": node_id,
-            "vendor": node["vendor"],
+            **base,
             "status": "failed",
             "error": f"CLI 를 찾을 수 없습니다: {command[0]}",
             "duration_s": round(time.monotonic() - started, 1),
+            "_scan": "",
         }
     except subprocess.TimeoutExpired:
-        log_path.write_text(f"TIMEOUT after {timeout}s\ncommand: {shlex.join(command)}\n")
+        append_log(f"TIMEOUT after {timeout}s\ncommand: {shlex.join(command)}\n")
         return {
-            "id": node_id,
-            "vendor": node["vendor"],
+            **base,
             "status": "timeout",
             "duration_s": round(time.monotonic() - started, 1),
+            "_scan": "",
         }
 
     duration = round(time.monotonic() - started, 1)
-    log_path.write_text(
+    append_log(
         f"command: {shlex.join(command)}\n\n--- stdout ---\n{completed.stdout}\n"
         f"--- stderr ---\n{completed.stderr}\n"
     )
 
     result = {
-        "id": node_id,
-        "vendor": node["vendor"],
+        **base,
         "model": node.get("model"),
         "effort": node.get("effort"),
         "exit_code": completed.returncode,
@@ -331,11 +398,81 @@ def run_node(
         if out_path.is_file():
             payload = extract_json_object(out_path.read_text())
         else:
-            payload = {"_parse_error": f"{node['vendor']} 가 출력 파일을 쓰지 않았습니다."}
+            payload = {"_parse_error": f"{adapter['id']} 가 출력 파일을 쓰지 않았습니다."}
         out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
 
     ok = completed.returncode == 0 and "_parse_error" not in payload
     result["status"] = "ok" if ok else "failed"
+    result["_scan"] = f"{completed.stdout}\n{completed.stderr}"
+    return result
+
+
+def run_node(
+    node: dict,
+    adapters: dict[str, dict],
+    run_dir: pathlib.Path,
+    graph_cwd: pathlib.Path,
+    variables: dict[str, str],
+    failover: bool = True,
+) -> dict:
+    """노드를 실행하고, 벤더 소진이 감지되면 대체 벤더로 **1회만** 재시도한다.
+
+    hop 을 1회로 제한하는 이유: claude → codex → claude 순환을 막고, 두 벤더가 모두 소진된
+    상황에서 무한 재시도로 시간을 태우지 않기 위해서다.
+    """
+    node_id = node["id"]
+    prompt = build_prompt(node, run_dir, node.get("needs", []), variables)
+    (run_dir / f"{node_id}.prompt.txt").write_text(prompt)
+
+    log_path = run_dir / f"{node_id}.log"
+    if log_path.exists():
+        log_path.unlink()
+
+    current = node
+    adapter = adapters[node["vendor"]]
+    tried = [node["vendor"]]
+    history: list[dict] = []
+
+    while True:
+        result = execute_attempt(current, adapter, run_dir, graph_cwd, prompt, len(tried))
+        scan = result.pop("_scan", "")
+
+        if result["status"] == "ok" or not failover:
+            break
+
+        target_id = adapter.get("failover", {}).get("fallback_to")
+        signal = detect_exhaustion(adapter, scan)
+        if not signal or not target_id or target_id in tried:
+            break
+
+        target = adapters[target_id]
+        adapted, changes = adapt_node_for_failover(current, adapter, target)
+        history.append(
+            {
+                "from": adapter["id"],
+                "to": target_id,
+                "signal": signal,
+                "failed_status": result["status"],
+                "changes": changes,
+            }
+        )
+        with log_path.open("a") as handle:
+            handle.write(
+                f"\n===== FAILOVER {adapter['id']} → {target_id} =====\n"
+                f"감지 패턴: {signal}\n"
+                + "".join(f"- {change}\n" for change in changes)
+            )
+        print(f"  ↻ {node_id} — {adapter['id']} 소진 감지 → {target_id} 재시도 (패턴: {signal})")
+        for change in changes:
+            print(f"      · {change}")
+
+        current, adapter = adapted, target
+        tried.append(target_id)
+
+    if history:
+        result["failover"] = history
+        result["vendor_requested"] = node["vendor"]
+
     return result
 
 
@@ -379,6 +516,11 @@ def main() -> int:
         help="프롬프트의 {{KEY}} 를 치환한다 (반복 가능)",
     )
     parser.add_argument("--max-parallel", type=int, default=4)
+    parser.add_argument(
+        "--no-failover",
+        action="store_true",
+        help="벤더 소진 시 대체 벤더 재시도를 끈다 (기본은 켜짐 — 어댑터의 [failover] 선언을 따른다)",
+    )
     parser.add_argument("--dry-run", action="store_true", help="wave 계획만 출력")
     args = parser.parse_args()
 
@@ -478,7 +620,13 @@ def main() -> int:
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {
                 pool.submit(
-                    run_node, node, adapters[node["vendor"]], run_dir, graph_cwd, variables
+                    run_node,
+                    node,
+                    adapters,
+                    run_dir,
+                    graph_cwd,
+                    variables,
+                    not args.no_failover,
                 ): node
                 for node in runnable
             }
@@ -489,9 +637,16 @@ def main() -> int:
                     failed.add(result["id"])
                 mark = "✅" if result["status"] == "ok" else "❌"
                 cost = f" ${result['cost_usd']:.4f}" if result.get("cost_usd") else ""
+                # failover 가 발생했으면 어느 벤더로 넘어갔는지 반드시 보인다.
+                switched = ""
+                if result.get("failover"):
+                    hops = " → ".join(
+                        [result["failover"][0]["from"]] + [hop["to"] for hop in result["failover"]]
+                    )
+                    switched = f" [failover: {hops}]"
                 print(
                     f"  {mark} {result['id']} — {result['status']}"
-                    f" ({result['duration_s']}s{cost})"
+                    f" ({result['duration_s']}s{cost}){switched}"
                 )
         print()
 

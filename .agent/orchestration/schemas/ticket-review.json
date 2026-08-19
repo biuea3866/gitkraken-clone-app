@@ -2,27 +2,27 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "axis",
+    "lens",
     "checked",
     "findings",
     "summary_ko",
     "not_checked"
   ],
   "properties": {
-    "axis": {
+    "lens": {
       "type": "string",
       "enum": [
-        "intent_ac",
+        "structure",
         "tests",
-        "side_effects",
-        "deploy",
-        "rollback"
+        "dependency",
+        "feasibility",
+        "diagram"
       ],
-      "description": "담당 축. 자기 축 밖의 지적은 내지 않는다 (중복 집계 방지)"
+      "description": "담당 렌즈. 자기 렌즈 밖의 지적은 내지 않는다 (중복 집계 방지)"
     },
     "checked": {
       "type": "array",
-      "description": "실제로 확인한 항목과 근거. 확인하지 못한 항목은 not_checked 에 남긴다.",
+      "description": "실제로 확인한 항목과 근거. 확인하지 못한 것은 not_checked 에 남긴다.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -34,7 +34,7 @@
         "properties": {
           "item": {
             "type": "string",
-            "description": "점검 항목 (5축 정의의 행)"
+            "description": "점검 항목"
           },
           "result": {
             "type": "string",
@@ -46,31 +46,31 @@
           },
           "evidence": {
             "type": "string",
-            "description": "파일:라인 · 테스트명 · 실행한 명령과 결과. 추측 금지."
+            "description": "파일:라인 또는 실행한 명령과 결과. 추측 금지."
           }
         }
       }
     },
     "not_checked": {
       "type": "array",
-      "description": "확인하지 못한 항목과 이유 (도구 부재·범위 밖 등). 없으면 빈 배열.",
+      "description": "확인하지 못한 항목과 이유. 없으면 빈 배열.",
       "items": {
         "type": "string"
       }
     },
     "findings": {
       "type": "array",
-      "description": "이 축의 지적. 등급 기준은 .agent/docs/review-grading.md. 파일:라인 필수.",
+      "description": "이 렌즈의 지적. 등급 기준은 .agent/docs/review-grading.md. 파일:라인 필수.",
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": [
           "level",
+          "ticket",
           "file",
           "line",
           "problem",
-          "fix",
-          "false_positive_checked"
+          "fix"
         ],
         "properties": {
           "level": {
@@ -83,6 +83,10 @@
               "p4"
             ]
           },
+          "ticket": {
+            "type": "string",
+            "description": "대상 티켓 ID (예: UND-14). 여러 티켓 공통이면 'ALL'"
+          },
           "file": {
             "type": "string"
           },
@@ -93,11 +97,8 @@
             "type": "string"
           },
           "fix": {
-            "type": "string"
-          },
-          "false_positive_checked": {
-            "type": "boolean",
-            "description": "review-false-positives.md 와 대조했는지. false 인 finding 은 요약 노드가 강등한다."
+            "type": "string",
+            "description": "무엇을 어떻게 고칠지 구체적으로"
           }
         }
       }
