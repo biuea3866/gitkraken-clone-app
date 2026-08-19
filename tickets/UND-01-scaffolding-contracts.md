@@ -1,6 +1,6 @@
 # [UND-01] 프로젝트 스캐폴딩 · 공통 계약 정의
 
-> wave 1 · 사이즈 L · 의존 없음 (선행 wave) · 소유 루트 빌드 · `domain/` 전체 계약 · 최소 `presentation/App.kt`
+> wave 1 · 사이즈 L · 의존 없음 (선행 wave) · 소유 루트 Gradle 설정 · `app/build.gradle.kts` · `app/src/main/kotlin/dev/undine/domain/` 전체 계약 · 최소 `app/src/main/kotlin/dev/undine/presentation/App.kt`
 
 ## 작업 내용 (설계 의도)
 후행 티켓 **전부**가 import 하는 공통 산출물을 한 티켓에 모은다. 빌드 골격 없이는 어떤 계약도
@@ -8,8 +8,9 @@
 
 세 가지를 확립한다.
 
-1. **빌드 골격** — Gradle 단일 프로젝트, Compose Desktop 플러그인, JGit 의존성, Kotest + MockK,
-   detekt. 라이브러리 버전은 전부 `gradle/libs.versions.toml` 카탈로그에 핀하고,
+1. **빌드 골격** — 루트 프로젝트 + `:app` 애플리케이션 모듈. 루트는 `settings.gradle.kts`·`gradle.properties`·
+   버전 카탈로그·플러그인 선언만 갖고, Compose Desktop 설정과 진입점(`dev.undine.presentation.AppKt`)은
+   `app/build.gradle.kts` 에 둔다. 라이브러리 버전은 전부 `gradle/libs.versions.toml` 카탈로그에 핀하고,
    JDK 는 `gradle.properties` 의 `undine.jvm` 을 SSOT 로 둔다 (훅 가드가 이 값을 읽는다).
 2. **레이어 패키지 골격** — `domain` / `application` / `infrastructure` / `presentation`.
    `domain` 은 프레임워크(JGit·Compose·코루틴)를 자유롭게 쓸 수 있다 — 다만 **다른 레이어는 import 하지 않는다.**
@@ -24,7 +25,8 @@
 | 모델 | `Commit`, `Branch`, `Tag`, `RemoteRef`, `FileChange`, `DiffHunk`, `StashEntry` |
 | 상태 | `WorkingTreeStatus`, `RepositoryState`(정상/병합중/리베이스중/detached) |
 | Gateway | `RepositoryGateway`, `HistoryGateway`, `DiffGateway`, `StagingGateway`, `RefGateway`, `RemoteGateway`, `WorktreeOpsGateway` |
-| 설정 | `SettingsGateway` (최근 저장소·환경 설정 영속화 계약) |
+| 반환 타입 | `OpenedRepository` · `DiffResult` · `CommitResult` · `DeleteBranchResult` · `PushResult` · `RevertResult` · `ResetMode` · `Progress` |
+| 설정 | `SettingsGateway` · `Settings(recentRepositories, theme, window)` · `ThemeMode` · `WindowBounds(width, height, maximized)` |
 | 예외 | `UndineException` sealed 계층 (인증 실패·충돌·상태 위반·더티 워킹트리) |
 
 여기서 닫는 것은 **wave 2 가 구현할 계약**이다. 자기 domain 패키지를 새로 여는 후행 티켓

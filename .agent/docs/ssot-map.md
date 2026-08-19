@@ -10,15 +10,15 @@
 | 라이브러리 버전 핀 | `gradle/libs.versions.toml` (버전 카탈로그) — `build.gradle.kts` 에 버전 하드코딩 금지 |
 | Gradle 모듈 명세 | `settings.gradle.kts` |
 | 정적 분석 설정 | `config/detekt/detekt.yml` |
-| 패키징(dmg/msi) 설정 | `build.gradle.kts` 의 `compose.desktop.application` 블록 |
+| 패키징(dmg/msi) 설정 | `app/build.gradle.kts` 의 `compose.desktop.application` 블록 |
 
 ## 애플리케이션
 
 | 정보 | SSOT |
 |---|---|
 | 레이어 경계·패키지 배치 | `.agent/rules/architecture-layers.md` |
-| Git 접근 계약 | `domain/**/*Gateway.kt` (interface) — 구현은 `infrastructure/**/*GatewayImpl.kt` |
-| 사용자 설정 파일 스키마 | 설정 모델 data class — 위치·형식 변경 시 하위 호환 확인 필수 |
+| Git 접근 계약 | `app/src/main/kotlin/dev/undine/domain/*Gateway.kt` (interface) — 구현은 `infrastructure/**/*GatewayImpl.kt` |
+| 사용자 설정 파일 스키마 | `app/src/main/kotlin/dev/undine/domain/Settings.kt` — 위치·형식 변경 시 하위 호환 확인 필수 |
 | 디자인 토큰 (색·간격·타이포) | `presentation/design/` — Composable 에 색 하드코딩 금지 |
 | 단축키 매핑 | 단축키 정의 파일 1곳 — 화면별 분산 금지 |
 
