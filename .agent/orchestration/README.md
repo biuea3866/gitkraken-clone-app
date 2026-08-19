@@ -11,7 +11,8 @@
 │   ├── develop-1-spec.toml             # 개발 ①②③ — 요구사항 → 근거 → 스펙 → 승인 게이트
 │   ├── develop-2-implement.toml        # 개발 ④ — 구현 → 1차 5축 병렬 검증 → verdict
 │   ├── develop-3-repair.toml           # 개발 ⑥ REQUEST_CHANGES — 수정 → 2차 6축 → 최종 → 게이트
-│   └── develop-3-approve.toml          # 개발 ⑥ APPROVED·COMMENT — 문서 점검 → 최종 → 게이트
+│   ├── develop-3-approve.toml          # 개발 ⑥ APPROVED·COMMENT — 문서 점검 → 최종 → 게이트
+│   └── ticket-review.toml              # tickets/ 를 5개 렌즈로 병렬 리뷰 → 종합 (읽기 전용)
 ├── runner/
 │   ├── run-graph.py                # DAG 실행기 (서드파티 의존 0, stdlib tomllib)
 │   └── adapters/                   # 벤더 어댑터 — 새 LLM CLI 는 여기 TOML 1개만 추가
@@ -38,6 +39,7 @@ $R $W/harness-audit.toml                      # 실행
 $R $W/harness-audit.toml --dry-run            # wave 계획만 (자리표시자 검증 포함)
 $R $W/<workflow>.toml --only inventory,synthesize   # 부분 실행 (의존 무시)
 $R $W/<workflow>.toml --max-parallel 2        # 동시 실행 상한 (기본 4)
+$R $W/<workflow>.toml --no-failover           # 벤더 소진 시 대체 벤더 재시도 끄기 (기본 켜짐)
 $R $W/<workflow>.toml --set ticket=UND-14      # 프롬프트의 {{ticket}} 치환 (반복 가능)
 ```
 
@@ -71,6 +73,26 @@ $R $W/<workflow>.toml --run-dir <위 run-dir> --start-at <다음 노드>   # 재
 | **코드 리뷰** | `codex` / `gpt-5.6-terra` | 판정 기준이 문서로 고정돼 있고, 스키마 강제(`--output-schema`)로 형식이 안정된다 |
 | **문서 작성·점검** (스펙·드리프트) | `codex` / `gpt-5.6-terra` | 위와 같음. 읽기 전용이라 병렬로 넓게 돌릴 수 있다 |
 | **MCP 가 필요한 조회** (context7 라이브러리 문서 등) | `claude` + `mcp_config` | codex 노드는 프로젝트 MCP 에 접근할 수 없다 |
+
+### 벤더가 소진되면 대체 벤더로 1회 넘어간다
+
+한쪽 사용량이 바닥나도 워크플로우가 통째로 죽지 않도록, 노드 실행이 **소진 신호와 함께** 실패하면
+대체 벤더로 **1회만** 재시도한다. 선언은 어댑터 TOML 의 `[failover]` 에 있고 러너에는 벤더 분기가 없다 —
+규칙과 스키마는 [`runner/adapters/README.md`](runner/adapters/README.md).
+
+```
+claude 소진 → codex 로 재시도    (mcp_config·tools 제거됨)
+codex  소진 → claude 로 재시도   (output_schema 제거됨 — 구조화 출력 강제 사라짐)
+```
+
+- **소진일 때만** 넘어간다. 스키마 오류·타임아웃 같은 일반 실패는 그대로 실패로 남는다.
+- **1 hop 제한** — 순환과 무한 재시도를 막는다.
+- 제거된 키·감지 패턴은 터미널·`<node>.log`·`run.json` 에 전부 남는다. 조용히 넘어가지 않는다.
+- 끄려면 `--no-failover`.
+
+**MCP 가 필수인 노드는 failover 로 되살아나지 않는다.** codex 노드에는 프로젝트 MCP 가 붙지 않으므로
+`mcp_config` 가 제거된 채 실행된다 — 조회 결과가 비면 하위 노드가 그 빈 값을 근거로 삼는다.
+그런 노드는 실패로 두고 사람이 판단하는 편이 낫다.
 
 ### MCP 는 claude 노드만 붙는다
 

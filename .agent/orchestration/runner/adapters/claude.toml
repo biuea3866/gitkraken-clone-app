@@ -33,3 +33,27 @@ tools = ["--allowedTools", "{csv}"]
 # MCP 는 claude 노드만 붙일 수 있다 (codex 는 개인 설정에 별도 등록해야 하고 claude.ai
 # connector 계열은 아예 없다). MCP 가 필요한 단계는 claude 노드로 잡고 결과를 파일로 넘긴다.
 mcp_config = ["--mcp-config", "{repo_path}", "--strict-mcp-config"]
+
+# ── 벤더 소진 시 failover ──
+# 이 벤더가 소진되면 fallback_to 벤더로 **1회만** 재시도한다 (노드당 1 hop — 무한 순환 방지).
+# 러너는 여기 선언만 보고 동작한다. 벤더 분기 코드는 여전히 없다.
+[failover]
+fallback_to = "codex"
+# 대체 벤더의 모델 id. 노드의 model("opus" 등)은 이 벤더 전용이라 그대로 넘길 수 없다.
+fallback_model = "gpt-5.6-terra"
+# stdout+stderr 에 대해 대소문자 무시로 검사한다.
+# 주의: 일시적 rate limit 도 여기에 걸린다 — 기다리는 대신 벤더를 바꾸는 선택이다.
+exhaustion_patterns = [
+  "usage limit reached",
+  "rate.?limit",
+  "credit balance is too low",
+  "insufficient credits",
+  "\"status\"\\s*:\\s*429",
+  "429 too many requests",
+]
+
+# 벤더 전환 시 안전 의미를 잃지 않도록 키·값을 명시 변환한다.
+# 여기 없는 미지원 키는 제거되며, 제거 사실은 로그와 run.json 에 남는다.
+[failover.translate.permission_mode]
+dontAsk = { key = "sandbox", value = "read-only" }
+acceptEdits = { key = "sandbox", value = "workspace-write" }
