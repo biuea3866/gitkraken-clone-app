@@ -32,7 +32,7 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 21)   # gradle.properties 의 undin
 presentation → application → domain ← infrastructure
 ```
 
-- **domain** 은 아무것도 import 하지 않는다. JGit·Compose·코루틴이 domain 에 등장하면 p1 위반이다.
+- **domain** 은 프레임워크(JGit·Compose·코루틴)를 자유롭게 쓴다. 대신 **다른 레이어**(application·infrastructure·presentation)를 import 하면 p1 이다.
 - Git 은 외부 시스템이므로 계약 이름은 `~Gateway.kt`(domain interface) / `~GatewayImpl.kt`(infrastructure) 다.
 - presentation 은 UseCase 만 호출한다. Gateway 직접 주입은 위반이다.
 

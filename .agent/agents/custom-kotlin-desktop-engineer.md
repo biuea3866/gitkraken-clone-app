@@ -52,7 +52,7 @@ Undine 의 Kotlin + Compose Desktop + JGit 코드 specialist. 작성 가이드 +
 
 | # | 항목 | 등급 |
 |---|---|---|
-| 1 | `domain` 이 JGit·Compose·코루틴을 import | p1 |
+| 1 | `domain` 이 **다른 레이어**(application·infrastructure·presentation)를 import | p1 |
 | 2 | presentation 이 Gateway 를 직접 주입 | p1 |
 | 3 | JGit `AutoCloseable` 을 `use {}` 없이 사용 | p1 |
 | 4 | Git I/O 가 `Dispatchers.IO` 밖에서 실행 | p1 |

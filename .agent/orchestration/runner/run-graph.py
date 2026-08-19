@@ -35,6 +35,9 @@ DEFAULT_TIMEOUT_SECONDS = 900
 # 러너가 직접 해석하는 노드 키. 그 외 키는 어댑터 [flags] 에 있어야 한다.
 RESERVED_NODE_KEYS = {
     "id", "vendor", "type", "needs", "prompt", "role_file", "cwd", "timeout_seconds", "label",
+    # 러너 내부용 — --only / --start-at 이 프롬프트 주입용 원본 needs 를 여기 보관한다.
+    # 예약어에 없으면 build_command 가 벤더 플래그로 오인해 "지원하지 않습니다" 로 죽는다.
+    "_upstream",
 }
 
 
@@ -280,6 +283,14 @@ def build_prompt(
     )
 
     if upstream:
+        missing = [d for d in upstream if not (run_dir / f"{d}.json").is_file()]
+        if missing:
+            # 없는 산출물을 근거로 쓰라고 지시하면 노드가 추측으로 채운다 — 실행 전에 멈춘다.
+            fail(
+                f"노드 '{node['id']}': 업스트림 산출물이 없습니다 — "
+                f"{', '.join(f'{run_dir}/{d}.json' for d in missing)}. "
+                "--run-dir 로 이전 실행 디렉토리를 지정했는지 확인하세요."
+            )
         lines = [
             f"- `{dependency}` → `{run_dir / (dependency + '.json')}`"
             for dependency in upstream
@@ -421,7 +432,7 @@ def run_node(
     상황에서 무한 재시도로 시간을 태우지 않기 위해서다.
     """
     node_id = node["id"]
-    prompt = build_prompt(node, run_dir, node.get("needs", []), variables)
+    prompt = build_prompt(node, run_dir, node.get("_upstream", node.get("needs", [])), variables)
     (run_dir / f"{node_id}.prompt.txt").write_text(prompt)
 
     log_path = run_dir / f"{node_id}.log"
@@ -542,6 +553,9 @@ def main() -> int:
         wanted = {value.strip() for value in args.only.split(",")}
         nodes = [node for node in nodes if node["id"] in wanted]
         for node in nodes:
+            # 스케줄링에서는 선택 밖 의존을 끊되, **프롬프트 주입용 업스트림은 원본을 남긴다.**
+            # 남기지 않으면 노드가 업스트림 산출물 없이 돌아 근거 없는 결과를 만든다 (조용한 품질 저하).
+            node["_upstream"] = list(node.get("needs", []))
             node["needs"] = [dep for dep in node.get("needs", []) if dep in wanted]
 
     if args.start_at:
