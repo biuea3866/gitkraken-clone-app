@@ -12,9 +12,9 @@
    detekt. 라이브러리 버전은 전부 `gradle/libs.versions.toml` 카탈로그에 핀하고,
    JDK 는 `gradle.properties` 의 `undine.jvm` 을 SSOT 로 둔다 (훅 가드가 이 값을 읽는다).
 2. **레이어 패키지 골격** — `domain` / `application` / `infrastructure` / `presentation`.
-   `domain` 은 어떤 외부 라이브러리도 import 하지 않는 순수 Kotlin 으로 시작한다.
+   `domain` 은 프레임워크(JGit·Compose·코루틴)를 자유롭게 쓸 수 있다 — 다만 **다른 레이어는 import 하지 않는다.**
 3. **도메인 모델 + Gateway interface 전체** — 후행 티켓이 구현만 채울 수 있도록 **계약 표면을 미리 닫는다**.
-   JGit 타입(`RevCommit`·`ObjectId`)을 도메인에 노출하지 않고 자체 타입으로 감싼다.
+   JGit 타입(`RevCommit`·`ObjectId`)을 도메인에서 직접 써도 된다 — 래핑 의무는 없다.
 
 정의할 계약:
 
@@ -77,7 +77,7 @@ flowchart LR
 ## 테스트 케이스
 
 - `./gradlew build` 가 성공하고 detekt 위반 0건이다
-- `domain` 패키지의 어떤 파일도 JGit·Compose·코루틴을 import 하지 않는다 (import 스캔 테스트)
+- `domain` 패키지의 어떤 파일도 `application`·`infrastructure`·`presentation` 을 import 하지 않는다 (import 스캔 테스트)
 - `gradle.properties` 의 `undine.jvm` 과 다른 JDK 로 실행하면 훅이 빌드를 차단한다
 - `CommitId` 는 40자 hex 가 아닌 문자열로 생성하면 예외를 던진다
 - `RepositoryState` 는 정의된 상태 외 값으로 생성할 수 없다 (sealed/enum 폐쇄성)

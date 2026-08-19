@@ -64,7 +64,7 @@ base 는 **PR `baseRefName` 우선**(`gh pr view --json baseRefName`), 불명 �
 
 | 점검 | 검증 |
 |---|---|
-| 레이어 의존 방향 위반 | `domain` 이 다른 레이어를 import 하는가 |
+| 레이어 의존 방향 위반 | `domain` 이 다른 **레이어**를 import 하는가 (프레임워크 import 는 허용) |
 | 변경 함수의 1-hop 호출 영향 | `custom-pr-call-graph-reviewer` 호출 권장 |
 | JGit 자원 수명 | `Repository`·`RevWalk`·`TreeWalk`·`ObjectReader` 가 `use {}` 로 닫히는가 |
 | UI 스레드 점유 | Git I/O 가 `Dispatchers.IO` 밖에서 실행되는가 (Compose 프레임 드랍) |

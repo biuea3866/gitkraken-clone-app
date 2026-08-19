@@ -152,8 +152,9 @@ prompt = '''
 점검 (서브에이전트를 호출할 수 없으므로 **직접 grep 해서** 판정합니다):
 1. **1-hop 호출 그래프** — 변경된 public 함수·모델을 심볼로 grep 해 호출자를 찾고,
    시그니처 변경이 호출부를 깨뜨리는지 확인합니다.
-2. **레이어 경계** — `domain` 이 JGit·Compose·코루틴을 import 하는지, presentation 이 Gateway 를
-   직접 주입받는지 봅니다 (둘 다 p1).
+2. **레이어 경계** — `domain` 이 다른 레이어(application·infrastructure·presentation)를 import 하는지,
+   presentation 이 Gateway 를 직접 주입받는지 봅니다 (둘 다 p1).
+   **domain 의 프레임워크 import(JGit·Compose·코루틴)는 허용이므로 지적하지 않습니다.**
 3. **interface↔구현 양끝** — `~Gateway.kt` 와 `~GatewayImpl.kt` 중 한쪽만 변경됐으면 비대칭을 지적합니다.
 4. **JGit 자원 수명** — `Repository`·`RevWalk`·`TreeWalk`·`ObjectReader`·`DiffFormatter` 가
    `use {}` 없이 열리는지 봅니다 (p1).
