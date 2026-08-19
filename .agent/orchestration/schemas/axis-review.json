@@ -1,0 +1,55 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["axis", "checked", "findings", "summary_ko"],
+  "properties": {
+    "axis": {
+      "type": "string",
+      "enum": ["intent_ac", "tests", "side_effects", "deploy", "rollback"],
+      "description": "담당 축. 자기 축 밖의 지적은 내지 않는다 (중복 집계 방지)"
+    },
+    "checked": {
+      "type": "array",
+      "description": "실제로 확인한 항목과 근거. 확인하지 못한 항목은 not_checked 에 남긴다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["item", "result", "evidence"],
+        "properties": {
+          "item": { "type": "string", "description": "점검 항목 (5축 정의의 행)" },
+          "result": { "type": "string", "enum": ["pass", "fail", "n/a"] },
+          "evidence": {
+            "type": "string",
+            "description": "파일:라인 · 테스트명 · 실행한 명령과 결과. 추측 금지."
+          }
+        }
+      }
+    },
+    "not_checked": {
+      "type": "array",
+      "description": "확인하지 못한 항목과 이유 (도구 부재·범위 밖 등). 없으면 빈 배열.",
+      "items": { "type": "string" }
+    },
+    "findings": {
+      "type": "array",
+      "description": "이 축의 지적. 등급 기준은 .agent/docs/review-grading.md. 파일:라인 필수.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["level", "file", "line", "problem", "fix"],
+        "properties": {
+          "level": { "type": "string", "enum": ["p0", "p1", "p2", "p3", "p4"] },
+          "file": { "type": "string" },
+          "line": { "type": "integer" },
+          "problem": { "type": "string" },
+          "fix": { "type": "string" },
+          "false_positive_checked": {
+            "type": "boolean",
+            "description": "review-false-positives.md 와 대조했는지. false 인 finding 은 요약 노드가 강등한다."
+          }
+        }
+      }
+    },
+    "summary_ko": { "type": "string" }
+  }
+}

@@ -1,0 +1,74 @@
+# Codex 프로젝트 설정 — 훅 진입점.
+#
+# **기존 `.agent/` 훅 자산은 한 줄도 수정하지 않는다.** 훅 스크립트의 SSOT 는 `.agent/hooks/` 이고,
+# 본 파일은 같은 스크립트를 Codex 이벤트에 물리는 얇은 진입점이다 (복제하지 않는다).
+# 훅을 추가·삭제할 때는 `.claude/settings.json` 과 본 파일을 함께 갱신한다.
+#
+# 두 하네스의 훅 계약은 동일하다 — hook_event_name / tool_name / tool_input 페이로드,
+# hookSpecificOutput.permissionDecision, exit 2 + stderr 차단. 차이는 두 가지뿐이다:
+#
+#   1) 파일 편집이 tool_name = apply_patch 로 오고 file_path 가 없다 (한 패치에 여러 파일)
+#      → `.codex/hooks/*-codex.sh` 래퍼가 payload 를 Claude 형태로 바꿔 원본 훅을 파일마다 호출한다.
+#        (`.codex/lib/hook-io.sh` 추출 + `.codex/lib/delegate.sh` 위임)
+#   2) Read 도구가 없어 파일 읽기도 tool_name = Bash 로 온다
+#      → custom-secrets-read-guard.sh 는 등록하지 않는다. 읽기 차단은
+#        custom-block-env-read.sh (Bash matcher) 가 커버한다.
+#
+# ⚠ 첫 실행 시 Codex 가 훅 신뢰(hook trust) 승인을 요구한다. 승인하지 않으면
+#   훅이 **에러 없이 조용히 스킵**된다 — 가드가 없는 상태로 도는 것이다.
+#   승인 상태는 $CODEX_HOME/config.toml 의 [hooks.state] 에 기록된다.
+#
+# ⚠ command 는 셸을 거치지 않고 실행되며 인자를 받지 않는다. 경로는 프로젝트 루트
+#   기준 상대경로이므로 Codex 를 레포 루트에서(또는 -C <레포 루트> 로) 실행해야 한다.
+#
+# ⚠ git worktree 함정 (실측 확인). 두 조건이 모두 충족돼야 본 파일이 로드된다:
+#   1) 실행 경로가 $CODEX_HOME/config.toml 의 [projects."<경로>"] trust_level = "trusted" 로
+#      신뢰돼 있어야 한다. linked worktree 경로에는 이 항목이 자동 추가되지 않는다.
+#   2) Codex 는 linked worktree 안에서 실행해도 **메인 워크트리 루트**의 .codex/config.toml 을
+#      읽는다. 따라서 feature 워크트리에 있는 본 파일은 main 에 머지돼 메인 체크아웃에
+#      존재할 때 비로소 활성화된다.
+
+#
+# ── SessionStart ── 브랜치/JDK 안내
+[[hooks.SessionStart]]
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = ".agent/hooks/custom-session-start.sh"
+
+# ── PreToolUse (Bash) ── 5종 가드. Codex 의 셸 실행은 tool_name = Bash 로 정규화되므로
+# 원본 훅을 변환 없이 직접 호출한다.
+[[hooks.PreToolUse]]
+matcher = "Bash"
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = ".agent/hooks/custom-gradlew-jvm-guard.sh"
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = ".agent/hooks/custom-check-commit-prefix.sh"
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = ".agent/hooks/custom-block-git-push.sh"
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = ".agent/hooks/custom-block-mainline-merge.sh"
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = ".agent/hooks/custom-block-env-read.sh"
+
+# ── PreToolUse (파일 편집) ── apply_patch 를 명시해 alias 동작에 의존하지 않는다.
+[[hooks.PreToolUse]]
+matcher = "Edit|Write|MultiEdit|apply_patch"
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = ".codex/hooks/secrets-edit-guard-codex.sh"
+
+# ── PreToolUse (MCP write) ── mcp__<server>__<tool> 규칙은 양쪽이 동일하다.
+# claude.ai connector(mcp__claude_ai_*) 는 Codex 에 존재하지 않으므로 제외한다.
+# 프로젝트 .mcp.json 에 write 계열 서버를 추가하면 여기에 matcher 를 등록한다.
+
+# ── PostToolUse (파일 편집) ── detekt 리마인더
+[[hooks.PostToolUse]]
+matcher = "Edit|Write|MultiEdit|apply_patch"
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = ".codex/hooks/detekt-touch-reminder-codex.sh"

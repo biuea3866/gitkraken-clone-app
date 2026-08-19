@@ -1,0 +1,43 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "ac_results", "findings", "summary_ko"],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": ["APPROVED", "COMMENT", "REQUEST_CHANGES"],
+      "description": "p0~p2 존재 시 REQUEST_CHANGES, p3~p4 만 COMMENT, 없으면 APPROVED"
+    },
+    "ac_results": {
+      "type": "array",
+      "description": "스펙의 인수 조건 항목별 충족 여부와 근거",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["criterion", "met", "evidence"],
+        "properties": {
+          "criterion": { "type": "string" },
+          "met": { "type": "boolean" },
+          "evidence": { "type": "string", "description": "파일:라인 또는 테스트명" }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "description": "코드 리뷰 지적. 근거 없는 추측 금지 — 파일:라인 필수.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["level", "file", "line", "problem", "fix"],
+        "properties": {
+          "level": { "type": "string", "enum": ["p0", "p1", "p2", "p3", "p4"] },
+          "file": { "type": "string" },
+          "line": { "type": "integer" },
+          "problem": { "type": "string" },
+          "fix": { "type": "string" }
+        }
+      }
+    },
+    "summary_ko": { "type": "string" }
+  }
+}

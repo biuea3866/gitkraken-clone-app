@@ -1,0 +1,38 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ticket", "goal", "acceptance_criteria", "modules", "test_plan", "open_questions"],
+  "properties": {
+    "ticket": { "type": "string", "description": "티켓 키 (예: UND-14)" },
+    "goal": { "type": "string", "description": "무엇을 왜 하는지 2~3문장" },
+    "acceptance_criteria": {
+      "type": "array",
+      "description": "인수 조건. 검증 가능한 문장으로.",
+      "items": { "type": "string" }
+    },
+    "modules": {
+      "type": "array",
+      "description": "영향 모듈. 진입 디렉토리와 요구 JVM 을 함께.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["directory", "jvm", "reason"],
+        "properties": {
+          "directory": { "type": "string" },
+          "jvm": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "test_plan": {
+      "type": "array",
+      "description": "레이어별 테스트 시나리오 (해피·실패·엣지 포함)",
+      "items": { "type": "string" }
+    },
+    "open_questions": {
+      "type": "array",
+      "description": "사람 판단이 필요한 모호한 지점. 없으면 빈 배열.",
+      "items": { "type": "string" }
+    }
+  }
+}

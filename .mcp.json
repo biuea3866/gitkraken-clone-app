@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-mcp.json",
+
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp@3.0.0",
+        "--api-key",
+        "${CONTEXT7_API_KEY:-}"
+      ]
+    }
+  }
+}

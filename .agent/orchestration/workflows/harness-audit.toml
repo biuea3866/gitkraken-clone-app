@@ -1,0 +1,91 @@
+name = "harness-audit"
+description = "HARNESS.md 의 수량·경로 주장이 실제 파일과 일치하는지 감사한다 (rubric H 자동화). 전 노드 읽기 전용."
+cwd = "."
+
+# ── wave 1 ── 서로 독립인 3개 조사 노드. 단가 낮은 codex/terra 로 병렬 실행.
+
+[[nodes]]
+id = "inventory"
+vendor = "codex"
+model = "gpt-5.6-terra"
+effort = "low"
+sandbox = "read-only"
+output_schema = ".agent/orchestration/schemas/facts.json"
+prompt = '''
+.agent/ 디렉토리의 실제 자산 수를 세어 보고하세요. 셸 명령으로 직접 세고, 추측하지 마세요.
+
+측정 항목 (facts 의 key 로 이 이름을 그대로 사용):
+- agents_count — .agent/agents/*.md 중 README.md 를 제외한 개수
+- skills_count — .agent/skills/*/SKILL.md 의 개수
+- hooks_count — .agent/hooks/*.sh 의 개수
+- rules_count — .agent/rules/*.md 중 README.md 를 제외한 개수
+- mcp_servers_count — .mcp.json 의 mcpServers 키 개수
+
+evidence 에는 실제로 실행한 명령을 적으세요.
+'''
+
+[[nodes]]
+id = "doc-claims"
+vendor = "codex"
+model = "gpt-5.6-terra"
+effort = "low"
+sandbox = "read-only"
+output_schema = ".agent/orchestration/schemas/facts.json"
+prompt = '''
+.agent/HARNESS.md 를 읽고, 그 문서가 **주장하는** 자산 수량을 추출하세요. 실제 파일을 세지 마세요 — 문서에 적힌 숫자만 옮깁니다.
+
+측정 항목 (facts 의 key 로 이 이름을 그대로 사용):
+- claimed_agents — 문서가 주장하는 agents 개수
+- claimed_skills — 문서가 주장하는 skills 개수
+- claimed_hooks — 문서가 주장하는 hooks 개수
+- claimed_rules — 문서가 주장하는 rules 개수
+- claimed_mcp_servers — 문서가 주장하는 .mcp.json 서버 개수
+
+evidence 에는 그 숫자가 적힌 섹션명 또는 줄 내용을 적으세요. 서로 다른 섹션이 다른 숫자를
+주장하면 그 불일치도 fact 로 추가하세요 (key: doc_internal_conflict).
+'''
+
+[[nodes]]
+id = "settings-xref"
+vendor = "codex"
+model = "gpt-5.6-terra"
+effort = "low"
+sandbox = "read-only"
+output_schema = ".agent/orchestration/schemas/facts.json"
+prompt = '''
+.claude/settings.json (Claude 투영·손유지) 의 hooks 에 등록된 스크립트 경로와 실제 파일을 교차 검증하세요.
+
+측정 항목 (facts 의 key 로 이 이름을 그대로 사용):
+- registered_hook_paths — settings.json 에 등록된 훅 스크립트의 고유 경로 개수
+- missing_files — 등록됐지만 파일이 없는 경로 (없으면 "none")
+- not_executable — 파일은 있지만 실행 권한이 없는 경로 (없으면 "none")
+- orphan_scripts — .agent/hooks/ **최상위**에 있지만 settings.json 에 등록되지 않은 .sh (없으면 "none").
+  .agent/hooks/lib/ 하위는 훅이 아니라 공용 라이브러리이므로 제외합니다 (maxdepth 1 로 세세요).
+
+evidence 에는 실행한 명령을 적으세요.
+'''
+
+# ── wave 2 ── 세 결과를 종합. 판단·서술이므로 claude/opus.
+
+[[nodes]]
+id = "synthesize"
+vendor = "claude"
+model = "opus"
+tools = ["Read"]
+needs = ["inventory", "doc-claims", "settings-xref"]
+prompt = '''
+업스트림 3개 노드의 산출물을 읽고 HARNESS.md 의 문서 정합성을 판정하세요.
+
+다음 JSON 객체 하나만 출력하세요:
+{
+  "verdict": "PASS" | "DRIFT",
+  "drift": [ { "item": "...", "claimed": "...", "actual": "...", "fix": "HARNESS.md 의 어느 부분을 어떻게 고칠지" } ],
+  "clean": [ "일치한 항목 이름" ],
+  "summary_ko": "한 문장 요약"
+}
+
+규칙:
+- claimed 와 actual 이 다르면 drift 에 넣습니다. 같으면 clean 에 이름만 넣습니다.
+- missing_files / not_executable / orphan_scripts 가 "none" 이 아니면 drift 로 취급합니다.
+- 업스트림 파일에 없는 값을 추측해 채우지 마세요.
+'''

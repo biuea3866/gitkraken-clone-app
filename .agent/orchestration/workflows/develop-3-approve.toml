@@ -1,0 +1,104 @@
+name = "develop-3-approve"
+description = """
+개발 루프 3단계 (APPROVED·COMMENT 분기) — 문서 드리프트 점검 → 최종 요약 → 사람 게이트.
+`review_summary_1.json` 의 verdict 가 APPROVED 또는 COMMENT 일 때만 **메인 Claude 가** 이 워크플로우를
+고른다 (러너에는 조건부 분기가 없다). REQUEST_CHANGES 면 develop-3-repair.toml 로 간다.
+
+2차 검증을 **생략**한다 — 1차에서 p0~p2 가 없었으므로 수정할 것이 없고, 수정이 없으면 재검증할
+새 diff 도 없다. p3~p4 finding 은 최종 보고에 남기되 자동 수정 대상이 아니다.
+
+노드 배치:
+  wave 1 (1)  docs_final_1        codex/terra · read-only
+  wave 2 (1)  final_summary       codex/terra · read-only
+  wave 3 (1)  review_and_draft 🚦 사람
+
+사용법 (develop-2-implement 와 같은 run-dir 에 이어 쓴다):
+  .agent/orchestration/runner/run-graph.py .agent/orchestration/workflows/develop-3-approve.toml \\
+    --run-dir .agent/orchestration/runs/UND-14 \\
+    --set ticket=UND-14 \\
+    --set spec_file=.agent/orchestration/runs/UND-14/spec.json \\
+    --set review_file=.agent/orchestration/runs/UND-14/review_summary_1.json
+"""
+cwd = "."
+
+# ── wave 1 ── 문서 드리프트 점검. 최종 diff 가 곧 1차 구현 결과다 (수정 라운드가 없었으므로).
+[[nodes]]
+id = "docs_final_1"
+vendor = "codex"
+model = "gpt-5.6-terra"
+sandbox = "read-only"
+output_schema = ".agent/orchestration/schemas/doc-drift.json"
+prompt = '''
+티켓 {{ticket}} 의 **최종 diff** 가 문서 드리프트를 만드는지 점검하세요.
+**문서 작성 작업이며 파일을 수정하지 않습니다 — 제안만 냅니다.**
+
+입력:
+- 최종 변경: `git status --porcelain` 과 `git diff` (아직 커밋되지 않았습니다).
+  수정 라운드가 없었으므로 이 diff 가 1차 구현 결과이며 최종 상태입니다.
+- 점검 대상 문서:
+  - `docs/design/*.md` — 설계 문서
+  - `tickets/UND-*.md` — 티켓 정의
+  - `.agent/docs/ssot-map.md` · `README.md`
+
+해야 할 일:
+1. 변경된 심볼·경로·엔드포인트·토픽·엔티티 이름을 뽑아 **문서 전반에 grep** 합니다. 매치가 곧 후보입니다.
+2. 특히 Gateway 계약·화면 진입점·설정 스키마가 추가/제거/이동됐다면 해당 문서를 반드시 확인합니다.
+3. 제안 서술은 **최종 상태만** 기술합니다. `~로 이관됨`·`UND-NN 이후`·`더 이상 ~하지 않음` 같은
+   변경 이력 서술을 문서 본문에 넣지 마세요 (이력은 PR·커밋이 담당합니다).
+4. 코드가 같은 모듈 안에서 다른 배포단위로 이동했다면(예: API consumer → worker) 항목을 삭제하지 말고
+   **어느 컴포넌트가 수행하는지**를 갱신하는 제안을 냅니다. 모듈이 그 동작을 전혀 안 하게 된 경우에만 삭제입니다.
+5. 갱신 대상이 없으면 drift_found=false 로 두고 근거를 summary_ko 에 씁니다 (grep 했는데 매치 없음 등).
+6. 개인 memory(`~/.claude/projects/**/memory`)는 점검 대상이 아닙니다 — 레포 밖 개인 자산입니다.
+'''
+
+# ── wave 2 ── 최종 판정. 1차 리뷰 결과를 그대로 승계한다 (재검증 라운드가 없으므로).
+[[nodes]]
+id = "final_summary"
+vendor = "codex"
+model = "gpt-5.6-terra"
+sandbox = "read-only"
+needs = ["docs_final_1"]
+output_schema = ".agent/orchestration/schemas/final-summary.json"
+prompt = '''
+티켓 {{ticket}} 의 **최종 상태**를 판정하세요. 코드를 수정하지 않습니다.
+
+입력:
+- 1차 리뷰 결과: {{review_file}} — verdict · findings · ac_results 의 원본입니다.
+- 문서 제안: 업스트림 `docs_final_1` 산출물
+- 스펙: {{spec_file}}
+- 등급·verdict 규칙: .agent/docs/review-grading.md
+
+해야 할 일:
+1. `rounds_run` 은 1 입니다 (수정·재검증 라운드가 없었습니다).
+2. `verdict` 는 1차 리뷰의 verdict 를 그대로 승계합니다 (APPROVED 또는 COMMENT).
+   **1차 리뷰에 p0~p2 가 있다면 이 워크플로우가 잘못 선택된 것입니다** — verdict 를 REQUEST_CHANGES 로
+   바꾸고 summary_ko 에 "분기 오선택" 을 명시하세요 (fail-closed).
+3. `remaining_blocking` 은 1차 findings 중 p0~p2 입니다 — 정상 경로라면 **빈 배열**입니다.
+4. `advisory` 에 1차의 p3~p4 를 옮깁니다. 자동 수정 대상이 아니며 사람이 판단할 몫입니다.
+5. `ac_results` 는 1차 리뷰의 것을 승계하되, 근거가 비어 있는 항목은 코드에서 직접 확인해 채웁니다.
+6. `doc_proposals` 는 `docs_final_1` 의 proposals 개수입니다.
+7. `pr_ready` 는 **remaining_blocking 이 비어 있고 · 모든 AC 가 met 이고 · 빌드/테스트가 pass** 일 때만 true 입니다.
+   빌드 결과는 1차 리뷰의 축 2(tests) 근거로 확인합니다. 불확실하면 false 로 두고 이유를 적습니다.
+8. `next_steps_ko` 에는 사람이 게이트에서 할 일을 적습니다 — 문서 제안 반영, 커밋, Draft PR 순서.
+   **노드는 커밋·PR 을 수행하지 않습니다.**
+'''
+
+# ── wave 3 ── 게이트 ⑦. 사람이 검토한 뒤에만 문서 반영·커밋·Draft PR.
+[[nodes]]
+id = "review_and_draft"
+type = "gate"
+needs = ["final_summary"]
+prompt = '''
+게이트 ⑦ — 최종 검토. 티켓 {{ticket}} 의 결과를 확인하세요.
+
+확인할 것:
+1. `final_summary.json` 의 `pr_ready` 가 true 인가. `remaining_blocking` 이 비어 있는가.
+2. `advisory` (p3~p4) 중 지금 고칠 것이 있는가 — 자동 수정되지 않았습니다.
+3. `docs_final_1.json` 의 문서 제안을 반영할 것인가 — **노드는 문서를 수정하지 않았습니다.**
+4. `git diff` 로 최종 변경을 직접 확인했는가.
+
+승인 후 사람이 수행합니다 (노드가 하지 않습니다):
+  - 문서 제안 반영
+  - 커밋 (`[{{ticket}}] - <type>: <제목>` 형식)
+  - Draft PR (`/custom-pr-create`)
+'''

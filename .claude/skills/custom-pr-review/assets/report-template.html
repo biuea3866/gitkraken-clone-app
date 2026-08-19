@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title><!-- {{TITLE}} : [ticket] pr-{n} 제목 --></title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1f2328; --muted: #656d76; --border: #d1d9e0;
+    --card: #f6f8fa; --accent: #0969da;
+    --bug-bg: #ffebe9; --bug-fg: #cf222e; --bug-border: #ff818266;
+    --q-bg: #fff8c5; --q-fg: #7d4e00; --q-border: #d4a72c66;
+    --tidy-bg: #ddf4ff; --tidy-fg: #0969da; --tidy-border: #54aeff66;
+    --ok-bg: #dafbe1; --ok-fg: #1a7f37;
+    --code-bg: #eff1f3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117; --fg: #e6edf3; --muted: #8d96a0; --border: #30363d;
+      --card: #161b22; --accent: #4493f8;
+      --bug-bg: #490202; --bug-fg: #ff7b72; --bug-border: #f8514966;
+      --q-bg: #3a2d00; --q-fg: #e3b341; --q-border: #bb800966;
+      --tidy-bg: #0c2d6b; --tidy-fg: #79c0ff; --tidy-border: #388bfd66;
+      --ok-bg: #04260f; --ok-fg: #56d364;
+      --code-bg: #1c2128;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    line-height: 1.65; font-size: 15px;
+  }
+  main { max-width: 980px; margin: 0 auto; padding: 32px 24px 80px; }
+  h1 { font-size: 1.5rem; line-height: 1.35; margin: 0 0 4px; }
+  h2 { font-size: 1.2rem; margin: 48px 0 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 1.05rem; margin: 32px 0 12px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.86em;
+    background: var(--code-bg); padding: 2px 5px; border-radius: 4px; }
+  pre { background: var(--code-bg); padding: 12px 16px; border-radius: 8px; overflow-x: auto; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; display: block; overflow-x: auto; }
+  th, td { border: 1px solid var(--border); padding: 6px 12px; text-align: left; }
+  th { background: var(--card); }
+  .meta { color: var(--muted); font-size: 0.9rem; margin-bottom: 24px; }
+  .meta a { margin-right: 12px; }
+
+  /* 목적 카드 */
+  .purpose-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px 24px; margin: 20px 0;
+  }
+  .purpose-card dt { font-weight: 700; margin-top: 12px; color: var(--muted); font-size: 0.82rem;
+    text-transform: uppercase; letter-spacing: 0.04em; }
+  .purpose-card dt:first-child { margin-top: 0; }
+  .purpose-card dd { margin: 4px 0 0; }
+
+  /* 다이어그램 */
+  .diagram-block { margin: 24px 0; }
+  .diagram-block figcaption { color: var(--muted); font-size: 0.88rem; margin-top: 8px; }
+  /* 다이어그램은 사전 렌더링 SVG(라이트 테마) — 다크 모드에서도 읽히게 카드 배경은 항상 흰색 */
+  .mermaid-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px; background: #ffffff; }
+  .diagram-svg { display: flex; justify-content: center; }
+  .diagram-svg svg { max-width: 100%; height: auto; }
+
+  /* 심각도 배지 */
+  .badge { display: inline-block; font-size: 0.78rem; font-weight: 700; padding: 2px 10px;
+    border-radius: 999px; border: 1px solid; vertical-align: 2px; margin-right: 8px; }
+  .badge-bug { background: var(--bug-bg); color: var(--bug-fg); border-color: var(--bug-border); }
+  .badge-question { background: var(--q-bg); color: var(--q-fg); border-color: var(--q-border); }
+  .badge-tidy { background: var(--tidy-bg); color: var(--tidy-fg); border-color: var(--tidy-border); }
+  .badge-ok { background: var(--ok-bg); color: var(--ok-fg); border-color: transparent; }
+
+  /* finding 카드 */
+  .finding { border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin: 20px 0;
+    scroll-margin-top: 20px; }
+  .finding.sev-bug { border-left: 4px solid var(--bug-fg); }
+  .finding.sev-question { border-left: 4px solid var(--q-fg); }
+  .finding.sev-tidy { border-left: 4px solid var(--tidy-fg); }
+  .finding h3 { margin: 0 0 8px; }
+  .finding .lead { color: var(--muted); font-style: normal; margin: 0 0 16px; }
+  .finding dt { font-weight: 700; margin-top: 14px; font-size: 0.88rem; }
+  .finding dd { margin: 4px 0 0; }
+  .finding ul { margin: 4px 0; padding-left: 20px; }
+
+  details { margin: 12px 0; }
+  summary { cursor: pointer; font-weight: 600; }
+  .toc { font-size: 0.9rem; }
+  .toc a { display: inline-block; margin-right: 16px; }
+  footer { margin-top: 64px; color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--border); padding-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <h1><!-- {{PR_TITLE}} --></h1>
+  <p class="meta">
+    <!-- {{META}} : PR 링크 · 티켓 링크 · 작성자 · base←head · +N/−N (M files) · 리뷰 일시 -->
+  </p>
+  <p class="toc">
+    <a href="#understand">① PR 이해하기</a>
+    <a href="#review">② 리뷰 결과</a>
+    <a href="#scope">확인한 범위</a>
+    <a href="#verify">검증</a>
+  </p>
+</header>
+
+<!-- ═══════════════ 1부: PR 이해하기 ═══════════════ -->
+<h2 id="understand">① 이 PR 이해하기</h2>
+
+<section>
+  <h3>목적</h3>
+  <dl class="purpose-card">
+    <dt>무엇을</dt><dd><!-- {{WHAT}} : 이 PR이 바꾸는 것 1-2문장 --></dd>
+    <dt>왜</dt><dd><!-- {{WHY}} : 배경·계기 (티켓·설계 문서 근거, 링크 포함) --></dd>
+    <dt>어떻게</dt><dd><!-- {{HOW}} : 접근 방식 요약 1-2문장 --></dd>
+  </dl>
+</section>
+
+<section>
+  <h3>배경 — 처음 보는 분을 위한 설명</h3>
+  <!-- {{BACKGROUND}} : 이 도메인을 처음 보는 팀원 기준의 전제 지식 3-5개.
+       구조: (1) 관련 시스템 역할을 일상 비유로 소개(ol) → (2) 핵심 개념 다이어그램 1개
+       (figure.diagram-block, 사전 렌더링 SVG) → (3) "이 PR 이전의 문제"를 그 그림 위에서 서술(ul)
+       → (4) details 로 접은 용어 미니 사전(table: 용어|뜻). SKILL.md §눈높이 기준 참조. -->
+</section>
+
+<section>
+  <h3>변경 지도</h3>
+  <figure class="diagram-block">
+    <pre><code><!-- {{DIRECTORY_TREE}} : 변경 파일 경로 그대로의 패키지/디렉토리 트리(발명 금지).
+         leaf 파일 뒤에 [신규]/[수정]/[삭제] 태그. 25줄 초과 시 같은 디렉토리 나머지는 "… 외 N개"로 접는다.
+         예:
+         presentation/graph/
+         ├── business/domain/mail/
+         │   └── MailStatus.kt                 [수정] 상태 enum에 UNKNOWN 분기 추가
+         └── business/application/mail/
+             └── MailSendingResultConsumer.kt   [수정] consumer 로직
+      --></code></pre>
+    <!-- {{DIRECTORY_ROLES}} : ul — 위 트리의 최상위 디렉토리 1-2개마다 역할 한 줄 설명
+         (예: business/domain/ — 순수 도메인 모델·상태 규칙, 프레임워크 의존 없음). 처음 보는 팀원이
+         "이 파일이 왜 이 위치에 있는지" 감을 잡도록. -->
+    <figcaption>패키지/디렉토리 트리 — 변경 파일이 실제로 어느 위치에 있는지의 문자 그대로의 지도. 아래 flowchart는 이 파일들이 개념적으로 어떻게 연결되는지를 보여준다(둘은 서로 다른 정보라 하나가 다른 하나를 대체하지 않는다).</figcaption>
+  </figure>
+  <figure class="diagram-block">
+    <div class="mermaid-wrap">
+      <div class="diagram-svg"><!-- {{DIAGRAM_MAP_SVG}} : mermaid 소스를 mermaid-cli 로 사전 렌더링한 <svg> 인라인.
+           `npx -y @mermaid-js/mermaid-cli -i map.mmd -o map.svg -b transparent` 후 svg 파일 내용을 그대로 붙인다.
+           소스 규칙: 모듈·레이어 flowchart, 변경 노드 classDef changed, finding 노드 심각도 색, 노드 상한 ~15. --></div>
+      <details><summary>mermaid 소스</summary><pre><code><!-- {{DIAGRAM_MAP_SRC}} : 동일 mermaid 소스 원문 --></code></pre></details>
+    </div>
+    <figcaption><!-- {{DIAGRAM_MAP_CAPTION}} : 읽는 법 한 줄 (색 의미 등) --></figcaption>
+  </figure>
+</section>
+
+<section>
+  <h3>핵심 흐름</h3>
+  <!-- {{DIAGRAM_FLOW}} : PR 성격 라우팅 표에 따른 다이어그램 1-2개.
+       각각 figure.diagram-block > .mermaid-wrap > .diagram-svg(사전 렌더링 SVG 인라인) + details(소스) 구조.
+       AS-IS/TO-BE 비교면 반드시 figure 2개(세로로 쌓기, AS-IS 먼저 → TO-BE 다음) — 하나의 flowchart 안에
+       subgraph 2개로 나란히 묶지 않는다. mermaid가 연결 없는 subgraph를 가로 auto-layout하면서 페이지
+       폭에 맞춰 둘 다 축소돼 글자가 안 읽힌다(2026-08-06 사용자 지적). -->
+</section>
+
+<section>
+  <h3>변경 내러티브</h3>
+  <!-- {{NARRATIVE}} : 파일 순서가 아니라 논리 순서로 변경을 스토리텔링.
+       ol 리스트, 각 항목에 관련 파일 code 스팬. 5-8 스텝. -->
+</section>
+
+<!-- ═══════════════ 2부: 리뷰 결과 ═══════════════ -->
+<h2 id="review">② 리뷰 결과</h2>
+
+<p><!-- {{REVIEW_SUMMARY}} : 리뷰 초점 + finding 요약 한 단락. finding 0건이면 no-finding 문구. --></p>
+
+<!-- {{FINDINGS}} : finding 카드 반복. 구조:
+<article class="finding sev-bug" id="finding-1">
+  <h3><span class="badge badge-bug">Bug</span> {제목}</h3>
+  <p class="lead">{시나리오 lead 한 문장}</p>
+  <dl>
+    <dt>위치</dt><dd>{file link + snippet}</dd>
+    <dt>코드로 확인한 사실</dt><dd><ul><li>…</li></ul></dd>
+    <dt>왜 문제가 되는지</dt><dd>…</dd>
+    <dt>영향</dt><dd>…</dd>
+    <dt>수정 방향</dt><dd>…</dd>
+  </dl>
+</article>
+sev-question / sev-tidy 는 Light label(위치/사실/왜 문제가 될 수 있는지/영향/권장) 사용.
+record md 의 finding 본문과 100% 동일 내용 — HTML 은 표현만 바꾼다. -->
+
+<h2 id="questions">질문</h2>
+<!-- {{QUESTIONS}} : ul. 비면 섹션 제거. -->
+
+<h2 id="scope">확인한 범위</h2>
+<!-- {{SCOPE}} : ul — 점검 영역 + finding 으로 올리지 않은 근거 -->
+
+<h2 id="verify">검증</h2>
+<!-- {{VERIFY}} : ul — 실행 명령 + 결과, 또는 미실행 사유 -->
+
+<footer>
+  <!-- {{FOOTER}} : record md 절대경로 · 생성 스킬(custom-pr-review) · 생성 일시 -->
+</footer>
+
+</main>
+
+</body>
+</html>

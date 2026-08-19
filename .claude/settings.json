@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Edit(/.claude-local/jobs/**)",
+      "Edit(/analysis/**)",
+      "Edit(/retrospectives/**)",
+      "Bash(date:*)",
+      "Bash(ls:*)"
+    ],
+    "deny": [
+      "Read(**/.env)",
+      "Read(**/.env.local)",
+      "Read(**/.env.local.*)",
+      "Read(**/.env.development)",
+      "Read(**/.env.development.local)",
+      "Read(**/.env.staging)",
+      "Read(**/.env.staging.local)",
+      "Read(**/.env.production)",
+      "Read(**/.env.production.local)",
+      "Read(**/.env.test)",
+      "Read(**/.env.test.local)",
+      "Read(**/.env.private)",
+      "Read(**/.env.secret)",
+      "Read(**/credentials.json)",
+      "Read(**/secrets.yml)",
+      "Read(**/secrets.yaml)",
+      "Read(**/secrets.json)",
+      "Read(**/id_rsa)",
+      "Read(**/id_rsa.*)",
+      "Read(**/id_rsa_*)",
+      "Read(**/id_dsa)",
+      "Read(**/id_dsa.*)",
+      "Read(**/id_dsa_*)",
+      "Read(**/id_ecdsa)",
+      "Read(**/id_ecdsa.*)",
+      "Read(**/id_ecdsa_*)",
+      "Read(**/id_ed25519)",
+      "Read(**/id_ed25519.*)",
+      "Read(**/id_ed25519_*)",
+      "Read(**/id_ed448)",
+      "Read(**/id_ed448.*)",
+      "Read(**/id_ed448_*)",
+      "Read(**/*.pem)",
+      "Read(**/*.p12)",
+      "Read(**/*.pfx)",
+      "Read(**/*.keystore)",
+      "Read(**/*.jks)",
+      "Read(**/build/**)",
+      "Read(**/out/**)",
+      "Read(**/.gradle/**)",
+      "Read(**/*.generated.*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.agent/hooks/custom-session-start.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.agent/hooks/custom-gradlew-jvm-guard.sh"
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.agent/hooks/custom-check-commit-prefix.sh"
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.agent/hooks/custom-block-git-push.sh"
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.agent/hooks/custom-block-mainline-merge.sh"
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.agent/hooks/custom-block-env-read.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.agent/hooks/custom-secrets-read-guard.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.agent/hooks/custom-secrets-edit-guard.sh"
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.agent/hooks/custom-block-generated-edit.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__claude_ai_Slack__.*|mcp__claude_ai_GitHub__.*|mcp__claude_ai_Gmail__(create|update|delete|label|unlabel|send|trash|reply|forward).*|mcp__claude_ai_Google_Calendar__(create|update|delete|respond|move|share).*|mcp__claude_ai_Google_Drive__(create|update|delete|copy|move|share|upload|trash|rename).*|mcp__claude_ai_Figma__(create|update|delete|upload|add|send|use|generate).*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.agent/hooks/custom-confirm-mcp-write.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.agent/hooks/custom-detekt-touch-reminder.sh"
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.agent/hooks/custom-detekt-async-run.sh",
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}

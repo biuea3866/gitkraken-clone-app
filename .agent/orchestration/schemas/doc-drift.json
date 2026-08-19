@@ -1,0 +1,33 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["drift_found", "proposals", "summary_ko"],
+  "properties": {
+    "drift_found": {
+      "type": "boolean",
+      "description": "갱신이 필요한 문서가 하나라도 있으면 true"
+    },
+    "proposals": {
+      "type": "array",
+      "description": "문서 갱신 제안. 파일을 직접 수정하지 말고 제안만 낸다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file", "reason", "current", "proposed"],
+        "properties": {
+          "file": { "type": "string", "description": "갱신 대상 문서 경로" },
+          "reason": {
+            "type": "string",
+            "description": "왜 드리프트인지 — 변경된 심볼/경로/URL 을 근거로"
+          },
+          "current": { "type": "string", "description": "현재 문서의 해당 서술" },
+          "proposed": {
+            "type": "string",
+            "description": "제안 서술. 최종 상태만 기술하고 변경 이력은 넣지 않는다."
+          }
+        }
+      }
+    },
+    "summary_ko": { "type": "string" }
+  }
+}

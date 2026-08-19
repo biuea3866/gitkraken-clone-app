@@ -1,0 +1,75 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "rounds_run", "remaining_blocking", "ac_results", "pr_ready", "next_steps_ko", "summary_ko"],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": ["APPROVED", "COMMENT", "REQUEST_CHANGES"],
+      "description": "최종 diff 기준. 산출 규칙은 .agent/docs/review-grading.md"
+    },
+    "rounds_run": {
+      "type": "integer",
+      "description": "검증 라운드 수 — 1 (수정 불필요) 또는 2 (repair 후 재검증)"
+    },
+    "remaining_blocking": {
+      "type": "array",
+      "description": "최종 diff 에 남아 있는 p0~p2. 비어 있어야 PR 준비 완료다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["level", "file", "line", "problem", "fix"],
+        "properties": {
+          "level": { "type": "string", "enum": ["p0", "p1", "p2"] },
+          "file": { "type": "string" },
+          "line": { "type": "integer" },
+          "problem": { "type": "string" },
+          "fix": { "type": "string" }
+        }
+      }
+    },
+    "advisory": {
+      "type": "array",
+      "description": "p3~p4. 보고에만 남기고 자동 수정 대상이 아니다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["level", "file", "line", "problem"],
+        "properties": {
+          "level": { "type": "string", "enum": ["p3", "p4"] },
+          "file": { "type": "string" },
+          "line": { "type": "integer" },
+          "problem": { "type": "string" }
+        }
+      }
+    },
+    "ac_results": {
+      "type": "array",
+      "description": "스펙 인수 조건별 충족 여부와 근거",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["criterion", "met", "evidence"],
+        "properties": {
+          "criterion": { "type": "string" },
+          "met": { "type": "boolean" },
+          "evidence": { "type": "string" }
+        }
+      }
+    },
+    "doc_proposals": {
+      "type": "integer",
+      "description": "문서 드리프트 제안 개수 (docs_final_* 산출물 기준)"
+    },
+    "pr_ready": {
+      "type": "boolean",
+      "description": "remaining_blocking 이 비어 있고 모든 AC 가 met 이며 빌드·테스트가 통과했는지"
+    },
+    "next_steps_ko": {
+      "type": "array",
+      "description": "사람이 게이트에서 할 일. 커밋·Draft PR 은 여기까지만 안내하고 노드가 수행하지 않는다.",
+      "items": { "type": "string" }
+    },
+    "summary_ko": { "type": "string" }
+  }
+}

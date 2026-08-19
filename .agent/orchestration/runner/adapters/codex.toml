@@ -1,0 +1,27 @@
+# 벤더 어댑터 — OpenAI Codex CLI (`codex exec`)
+#
+# 스키마 정의와 새 벤더 추가 절차: adapters/README.md
+
+id = "codex"
+description = "Codex CLI — 읽기 전용 리뷰·문서 노드용. --output-schema 로 출력 형식을 강제할 수 있다."
+
+base = ["codex", "exec", "--skip-git-repo-check", "--ephemeral"]
+
+prompt_delivery = "argv"
+
+# codex 는 -o 로 최종 메시지를 직접 파일에 쓴다.
+result = "out_file"
+
+[defaults]
+sandbox = "read-only"
+
+[flags]
+model = ["-m", "{value}"]
+effort = ["-c", "model_reasoning_effort=\"{value}\""]
+sandbox = ["-s", "{value}"]
+output_schema = ["--output-schema", "{repo_path}"]
+
+# 러너가 값을 채우는 슬롯. out_file 은 노드 산출물 경로, cwd 는 실행 디렉토리.
+[runtime]
+out_file = ["-o", "{path}"]
+cwd = ["-C", "{path}"]

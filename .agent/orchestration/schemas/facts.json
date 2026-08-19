@@ -1,0 +1,25 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "facts"],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "조사 결과 한 문장 요약"
+    },
+    "facts": {
+      "type": "array",
+      "description": "측정한 사실 목록. 추측 금지, 실제로 확인한 값만.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "value", "evidence"],
+        "properties": {
+          "key": { "type": "string", "description": "사실의 이름 (예: agents_file_count)" },
+          "value": { "type": "string", "description": "측정값" },
+          "evidence": { "type": "string", "description": "근거 — 파일 경로 또는 실행한 명령" }
+        }
+      }
+    }
+  }
+}

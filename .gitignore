@@ -1,0 +1,50 @@
+# --- Gradle / JVM ---
+.gradle/
+build/
+out/
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+hs_err_pid*
+replay_pid*
+
+# --- IDE ---
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- 시크릿 ---
+.env
+.env.local
+.env.*.local
+.env.private
+.env.secret
+*.pem
+*.p12
+*.pfx
+*.keystore
+*.jks
+!.env.example
+
+# --- 하네스: 로컬 전용 산출물 ---
+# 기계장치(.agent/** · .claude/** · .codex/**)는 tracked — clone 단독 동작이 목적이다.
+# 아래는 실행 결과물·개인 설정이라 원격에 남기지 않는다.
+.claude-local/
+.claude/settings.local.json
+**.local.json
+.agent/orchestration/runs/
+
+# 분석·회고 아카이브는 로컬 경로·개인 환경 사실을 담을 수 있어 로컬 전용
+analysis/
+retrospectives/
+
+# --- 배포 산출물 ---
+*.dmg
+*.msi
+*.deb

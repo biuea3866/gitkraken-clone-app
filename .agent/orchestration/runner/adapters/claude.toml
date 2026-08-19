@@ -1,0 +1,35 @@
+# 벤더 어댑터 — Anthropic Claude Code CLI (헤드리스 `claude -p`)
+#
+# 스키마 정의와 새 벤더 추가 절차: adapters/README.md
+# 러너 코드에는 벤더 분기가 없다 — 이 파일이 CLI 조립 규칙의 유일한 정의다.
+
+id = "claude"
+description = "Claude Code CLI — 헤드리스 실행. 프로젝트 MCP 를 붙일 수 있는 유일한 벤더."
+
+# 항상 붙는 고정 인자.
+base = ["claude", "-p", "--output-format", "json"]
+
+# 프롬프트 전달 방식: stdin (표준입력) | argv (마지막 인자)
+prompt_delivery = "stdin"
+
+# 결과 회수 방식: stdout_envelope (stdout 의 JSON 봉투에서 꺼냄) | out_file (CLI 가 파일에 씀)
+result = "stdout_envelope"
+envelope_result_key = "result"
+envelope_cost_key = "total_cost_usd"
+
+# 노드가 값을 주지 않았을 때 적용할 기본값.
+# 읽기 전용 노드는 dontAsk 로 충분하다. 파일을 쓰는 노드는 워크플로우에서 acceptEdits 등을
+# 명시한다 (헤드리스에는 승인을 누를 사람이 없다). 어느 모드에서도 훅 가드는 그대로 적용된다.
+[defaults]
+permission_mode = "dontAsk"
+
+# 노드 키 → argv 조각. 노드에 값이 있을 때만 붙는다.
+# 자리표시자: {value} 원값 · {csv} 리스트를 쉼표로 연결 · {repo_path} 레포 루트 기준 경로(존재 검증)
+[flags]
+model = ["--model", "{value}"]
+effort = ["--effort", "{value}"]
+permission_mode = ["--permission-mode", "{value}"]
+tools = ["--allowedTools", "{csv}"]
+# MCP 는 claude 노드만 붙일 수 있다 (codex 는 개인 설정에 별도 등록해야 하고 claude.ai
+# connector 계열은 아예 없다). MCP 가 필요한 단계는 claude 노드로 잡고 결과를 파일로 넘긴다.
+mcp_config = ["--mcp-config", "{repo_path}", "--strict-mcp-config"]
