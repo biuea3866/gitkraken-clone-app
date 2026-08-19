@@ -1,0 +1,22 @@
+[versions]
+# 이 파일이 라이브러리 버전의 단일 진실 공급원(SSOT)이다.
+# 빌드 스크립트에 버전을 하드코딩하지 않는다.
+# JDK 는 여기가 아니라 gradle.properties 의 undine.jvm 이 SSOT 다 (훅 가드가 그 값을 읽는다).
+kotlin = "2.2.0"
+compose = "1.8.2"
+jgit = "7.3.0.202506031305-r"
+kotest = "5.9.1"
+mockk = "1.14.3"
+detekt = "1.23.8"
+
+[libraries]
+jgit = { module = "org.eclipse.jgit:org.eclipse.jgit", version.ref = "jgit" }
+kotest-runner-junit5 = { module = "io.kotest:kotest-runner-junit5", version.ref = "kotest" }
+kotest-assertions-core = { module = "io.kotest:kotest-assertions-core", version.ref = "kotest" }
+mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+compose = { id = "org.jetbrains.compose", version.ref = "compose" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }

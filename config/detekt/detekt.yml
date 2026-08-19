@@ -1,0 +1,7 @@
+# detekt 기본 설정(buildUponDefaultConfig = true) 위에 얹는 의도적 예외만 적는다.
+# 기본값과 같은 항목을 복사해 두면 detekt 를 올릴 때 조용히 어긋난다.
+
+naming:
+  FunctionNaming:
+    # @Composable 함수는 Compose 관례상 PascalCase 다 — 이 관례를 따르는 쪽이 표준이다.
+    ignoreAnnotated: ['Composable']
