@@ -67,9 +67,9 @@ flowchart LR
 ## 테스트 케이스
 
 - 정상 저장소 경로를 열면 `OpenedRepository(state = NORMAL, currentBranch)` 를 반환한다
-- Git 저장소가 아닌 디렉토리를 열면 `UndineException.InvalidRepositoryPath` 를 던진다
-- 존재하지 않는 경로를 열면 경로 없음 예외를 던지며, 권한 없음과 구분된다
-- 커밋이 0건인 빈 저장소를 열어도 예외 없이 열리고 HEAD 없음 상태를 보고한다
+- Git 저장소가 아닌 디렉토리를 열면 `InvalidRepositoryPath(reason = NOT_A_REPOSITORY)` 를 던진다
+- 존재하지 않는 경로는 `reason = NOT_FOUND`, 권한 없음은 `PERMISSION_DENIED` 로 구분된다
+- 커밋이 0건인 빈 저장소를 열면 `RepositoryState.EMPTY` 로 판정된다 (예외 없음)
 - detached HEAD 상태의 저장소는 `RepositoryState.DETACHED` 로 판정되고 `currentBranch` 가 null 이다
-- 베어 저장소는 열기 단계에서 거부된다
+- 베어 저장소는 `reason = BARE_REPOSITORY` 로 거부된다
 - 저장소를 전환하면 이전 `Repository` 핸들이 닫힌다 (파일 핸들 누수 없음)

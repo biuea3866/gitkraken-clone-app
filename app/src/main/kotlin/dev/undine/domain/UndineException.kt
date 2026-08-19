@@ -15,9 +15,29 @@ sealed class UndineException(message: String, cause: Throwable? = null) : Except
     class InvalidRefName(val raw: String) :
         UndineException("사용할 수 없는 참조 이름입니다: '$raw'")
 
-    /** 경로를 Git 저장소로 열 수 없다. 경로 유효성 판정은 `RepositoryGateway` 소유 티켓이 구현한다. */
-    class InvalidRepositoryPath(val raw: String) :
-        UndineException("Git 저장소로 열 수 없는 경로입니다: '$raw'")
+    /**
+     * 경로를 Git 저장소로 열 수 없다. 경로 유효성 판정은 `RepositoryGateway` 소유 티켓이 구현한다.
+     *
+     * [reason] 을 닫힌 enum 으로 두는 이유: 사용자가 취할 행동이 사유마다 다르다
+     * (경로 확인 / 다른 디렉토리 선택 / 권한 부여). 자유 문자열이면 화면이 분기할 수 없다.
+     */
+    class InvalidRepositoryPath(val raw: String, val reason: Reason) :
+        UndineException("Git 저장소로 열 수 없는 경로입니다(${reason.name}): '$raw'") {
+
+        enum class Reason {
+            /** 경로가 존재하지 않는다. */
+            NOT_FOUND,
+
+            /** 경로는 있지만 Git 저장소가 아니다. */
+            NOT_A_REPOSITORY,
+
+            /** 읽을 권한이 없다. */
+            PERMISSION_DENIED,
+
+            /** 베어 저장소다 — 워킹트리가 없어 이 앱이 다룰 수 없다. */
+            BARE_REPOSITORY,
+        }
+    }
 
     /**
      * 원격 인증 실패. 원격 URL 에는 토큰이 들어 있을 수 있어 메시지에는 원격 이름만 담는다.
