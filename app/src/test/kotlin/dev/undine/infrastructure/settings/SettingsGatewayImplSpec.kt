@@ -343,4 +343,36 @@ class SettingsGatewayImplSpec : FunSpec({
             }
         }
     }
+
+    test("Long 범위를 넘는 schemaVersion 은 해석하지 못하므로 원본을 보존한다") {
+        val settingsFile = settingsFileIn(tempdir())
+        val futureContent = """{ "schemaVersion": 9223372036854775808, "theme": "DARK" }"""
+        writeFile(settingsFile, futureContent)
+
+        gatewayFor(settingsFile).load() shouldBe DEFAULTS
+
+        gatewayFor(settingsFile).save(settingsOf("/tmp/saved"))
+        Files.readString(newerSchemaBackupOf(settingsFile)) shouldBe futureContent
+    }
+
+    test("schemaVersion 이 숫자가 아니어도 원본을 보존한다") {
+        val settingsFile = settingsFileIn(tempdir())
+        val alienContent = """{ "schemaVersion": "2.0", "theme": "DARK" }"""
+        writeFile(settingsFile, alienContent)
+
+        gatewayFor(settingsFile).load() shouldBe DEFAULTS
+
+        gatewayFor(settingsFile).save(settingsOf("/tmp/saved"))
+        Files.readString(newerSchemaBackupOf(settingsFile)) shouldBe alienContent
+    }
+
+    test("schemaVersion 이 없는 최초 형식 파일은 그대로 읽는다") {
+        val settingsFile = settingsFileIn(tempdir())
+        writeFile(settingsFile, """{ "theme": "DARK", "recentRepositories": ["/tmp/legacy"] }""")
+
+        gatewayFor(settingsFile).load() shouldBe DEFAULTS.copy(
+            recentRepositories = listOf(RepositoryPath("/tmp/legacy")),
+            theme = ThemeMode.DARK,
+        )
+    }
 })

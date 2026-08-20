@@ -82,10 +82,23 @@ internal fun decodeSettings(text: String): SettingsDecodeResult {
 private fun decodeFields(document: Any?): SettingsDecodeResult {
     val fields = document as? Map<*, *>
         ?: return SettingsDecodeResult.Corrupt("최상위 값이 JSON 객체가 아닙니다")
-    // Int 로 좁히지 않는다 — 2^31 이상을 잘라 내면 미래 스키마가 과거로 보여 그대로 덮어써진다.
-    val schemaVersion = fields.readLong(KEY_SCHEMA_VERSION) ?: CURRENT_SCHEMA_VERSION.toLong()
+    val schemaVersion = fields[KEY_SCHEMA_VERSION]
 
     return when {
+        // 키가 없으면 스키마 버전을 적기 전의 최초 형식이다 — 우리가 읽을 수 있다.
+        schemaVersion == null -> SettingsDecodeResult.Decoded(
+            Settings(
+                recentRepositories = readRecentRepositories(fields[KEY_RECENT_REPOSITORIES]),
+                theme = readTheme(fields[KEY_THEME]),
+                window = readWindow(fields[KEY_WINDOW]),
+            ),
+        )
+
+        // 버전이 있는데 해석할 수 없으면(Long 범위 밖의 수·문자열 등) **우리 것이 아니다.**
+        // "모르니 기본값" 으로 처리하면 그 파일을 그대로 덮어써 되돌릴 수 없다.
+        schemaVersion !is Long -> SettingsDecodeResult.FromNewerSchema
+
+        // Int 로 좁히지 않는다 — 2^31 이상을 잘라 내면 미래 스키마가 과거로 보인다.
         schemaVersion > CURRENT_SCHEMA_VERSION.toLong() -> SettingsDecodeResult.FromNewerSchema
 
         else -> SettingsDecodeResult.Decoded(
