@@ -6,9 +6,14 @@ import io.kotest.matchers.collections.shouldContainExactly
 
 class DomainEnumSpec : FunSpec({
 
-    test("RepositoryState 는 정상·빈저장소·병합중·리베이스중·detached 다섯 값으로 닫혀 있다") {
+    test("RepositoryState 는 정상·빈저장소·병합중·리베이스중·revert중·detached 여섯 값으로 닫혀 있다") {
         RepositoryState.entries.map { it.name } shouldContainExactly
-            listOf("NORMAL", "EMPTY", "MERGING", "REBASING", "DETACHED")
+            listOf("NORMAL", "EMPTY", "MERGING", "REBASING", "REVERTING", "DETACHED")
+    }
+
+    test("NotFound.Kind 는 참조·커밋·스태시·원격 네 종류로 닫혀 있다") {
+        UndineException.NotFound.Kind.entries.map { it.name } shouldContainExactly
+            listOf("REF", "COMMIT", "STASH", "REMOTE")
     }
 
     test("InvalidRepositoryPath.Reason 은 네 사유로 닫혀 있다") {

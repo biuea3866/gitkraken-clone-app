@@ -23,7 +23,7 @@
 |---|---|
 | 식별자·값 | `CommitId`, `RefName`, `RepositoryPath` |
 | 모델 | `Commit`, `Branch`, `Tag`, `RemoteRef`, `FileChange`, `DiffHunk`, `StashEntry` |
-| 상태 | `WorkingTreeStatus`, `RepositoryState`(정상/빈저장소/병합중/리베이스중/detached) |
+| 상태 | `WorkingTreeStatus`, `RepositoryState`(정상/빈저장소/병합중/리베이스중/revert중/detached) |
 | Gateway | `RepositoryGateway`, `HistoryGateway`, `DiffGateway`, `StagingGateway`, `RefGateway`, `RemoteGateway`, `WorktreeOpsGateway` |
 | 반환 타입 | `OpenedRepository` · `DiffResult` · `CommitResult` · `DeleteBranchResult` · `PushResult` · `RevertResult` · `ResetMode` · `Progress` |
 | 설정 | `SettingsGateway` · `Settings(recentRepositories, theme, window)` · `ThemeMode` · `WindowBounds(width, height, maximized)` |

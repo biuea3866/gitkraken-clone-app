@@ -56,4 +56,34 @@ sealed class UndineException(message: String, cause: Throwable? = null) : Except
     /** 커밋되지 않은 변경 때문에 진행할 수 없다. */
     class DirtyWorkingTree(val paths: List<String>) :
         UndineException("워킹트리에 커밋되지 않은 변경이 있습니다: ${paths.size}개 파일")
+
+    /**
+     * 찾는 대상이 없다. 사용자가 오타를 냈거나 대상이 이미 사라진 경우다 —
+     * 앱 버그인 [GitOperationFailed] 와 구분해야 화면이 다르게 안내할 수 있다.
+     */
+    class NotFound(val kind: Kind, val name: String) :
+        UndineException("${kind.label} 을(를) 찾을 수 없습니다: '$name'") {
+
+        enum class Kind(val label: String) {
+            REF("참조"),
+            COMMIT("커밋"),
+            STASH("스태시"),
+            REMOTE("원격"),
+        }
+    }
+
+    /**
+     * JGit 연산이 예상 못 한 이유로 실패했다. 사용자가 고칠 수 없는 실패이므로
+     * 화면은 로그 위치를 안내하고 [cause] 를 보존한다.
+     */
+    class GitOperationFailed(val operation: String, cause: Throwable? = null) :
+        UndineException("Git 연산 '$operation' 이 실패했습니다.", cause)
+
+    /** git 작성자 정보(user.name·user.email)가 설정되지 않아 커밋할 수 없다. */
+    class AuthorNotConfigured :
+        UndineException("Git 작성자 정보가 설정되지 않았습니다. user.name 과 user.email 을 설정하세요.")
+
+    /** 스테이징된 변경이 없어 커밋할 것이 없다. */
+    class NothingToCommit :
+        UndineException("스테이징된 변경이 없습니다.")
 }

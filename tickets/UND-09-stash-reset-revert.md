@@ -75,9 +75,9 @@ flowchart LR
 
 - stash push 후 워킹트리가 깨끗해지고 pop 하면 변경이 복원된다
 - 추적되지 않는 파일은 기본 stash 에 포함되지 않는다
-- `includeUntracked=true` 로 stash 하면 추적되지 않는 파일도 포함되고 그 사실이 결과에 담긴다
+- `includeUntracked=true` 로 stash 하면 추적되지 않는 파일도 포함되고 `StashEntry.includedUntracked` 가 true 다
 - revert 충돌은 예외가 아니라 `RevertResult.Conflicted(paths)` 로 반환된다 (성공은 `Succeeded(commit)`)
-- revert 충돌 후 저장소 상태가 revert 진행 중으로 보고된다
+- revert 충돌 후 저장소 상태가 `RepositoryState.REVERTING` 으로 보고된다
 - `reset --soft` 후 워킹트리와 인덱스 내용이 보존된다
 - `hardReset` 은 별도 메서드로만 호출 가능하다 (플래그 인자 부재 검증)
-- stash 가 0건일 때 pop 하면 stash 없음 예외를 던진다
+- stash 가 0건일 때 pop 하면 `UndineException.NotFound(STASH, ...)` 를 던진다
