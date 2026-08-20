@@ -1,6 +1,6 @@
 # [UND-17] 스테이징 · 커밋 작성 패널
 
-> wave 3 · 사이즈 M · 의존 UND-06, UND-10 · 소유 `presentation/staging/`
+> wave 4 · 사이즈 M · 의존 UND-06, UND-10, UND-53 · 소유 `presentation/staging/`
 
 ## 작업 내용 (설계 의도)
 워킹트리 변경을 staged/unstaged 두 목록으로 보여주고, 커밋 메시지를 작성해 커밋한다.

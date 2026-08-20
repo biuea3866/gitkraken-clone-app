@@ -1,6 +1,6 @@
 # tickets — 작업 단위 SSOT
 
-Undine 구현을 **52개 티켓 / 10개 wave** 로 분해한 결과다.
+Undine 구현을 **53개 티켓 / 10개 wave** 로 분해한 결과다.
 **착수 전 자기 티켓의 소유 패키지를 확인한다** — 같은 wave 의 다른 티켓과 파일이 겹치면
 머지 충돌이 난다 (`.agent/docs/conventions.md` Rule 3).
 
@@ -11,7 +11,7 @@ Undine 구현을 **52개 티켓 / 10개 wave** 로 분해한 결과다.
 
 | 범위 | wave | 티켓 | 내용 |
 |---|---|---|---|
-| **1차 — 일상 사용** | 1~6 | 28건 | 저장소·그래프·diff·스테이징·브랜치·원격·병합·충돌·리베이스·검색 |
+| **1차 — 일상 사용** | 1~6 | 29건 | 저장소·그래프·diff·스테이징·브랜치·원격·병합·충돌·리베이스·검색 |
 | **2차 — 완성도** | 2, 7~10 | 25건 | cherry-pick·blame·reflog·patch·submodule·LFS·worktree·bisect·서명·undo·설정 화면·드래그&드롭·탭·접근성·자동 업데이트 |
 
 **1차만 끝나도 매일 쓸 수 있다.** 2차는 "GitKraken 과 비슷해지는" 구간이며,
@@ -41,7 +41,7 @@ Undine 구현을 **52개 티켓 / 10개 wave** 로 분해한 결과다.
 | [UND-14](UND-14-commit-graph-view.md) | 커밋 그래프 뷰 렌더링 | L | 3 | UND-03 · UND-04 · UND-10 | `presentation/graph/` |
 | [UND-15](UND-15-commit-detail-panel.md) | 커밋 상세 패널 | M | 3 | UND-03 · UND-05 · UND-10 | `presentation/commitdetail/` |
 | [UND-16](UND-16-diff-viewer.md) | Diff 뷰어 | L | 3 | UND-05 · UND-10 | `presentation/diff/` |
-| [UND-17](UND-17-staging-commit-panel.md) | 스테이징 · 커밋 작성 패널 | M | 3 | UND-06 · UND-10 | `presentation/staging/` |
+| [UND-17](UND-17-staging-commit-panel.md) | 스테이징 · 커밋 작성 패널 | M | 4 | UND-06 · UND-10 · UND-53 | `presentation/staging/` |
 | [UND-18](UND-18-toolbar-remote-progress.md) | 툴바 · 원격 작업 진행 표시 | M | 3 | UND-08 · UND-10 | `presentation/toolbar/` |
 | [UND-19](UND-19-repo-open-clone-screen.md) | 저장소 열기 · 클론 화면 | M | 3 | UND-02 · UND-08 · UND-10 · UND-11 | `presentation/welcome/` |
 | [UND-20](UND-20-commit-search-filter.md) | 커밋 검색 · 필터 | M | 3 | UND-03 · UND-10 | `presentation/search/` |
@@ -53,6 +53,7 @@ Undine 구현을 **52개 티켓 / 10개 wave** 로 분해한 결과다.
 | [UND-26](UND-26-app-wiring-di.md) | 앱 통합 와이어업 · DI | M | 5 | UND-12 · UND-13 · UND-14 · UND-15 · UND-16 · UND-17 · UND-18 · UND-19 · UND-20 · UND-21 · UND-22 · UND-23 · UND-24 | `presentation/App.kt` · `di/` |
 | [UND-27](UND-27-e2e-scenario-tests.md) | E2E 시나리오 테스트 | M | 6 | UND-26 | `app/src/test/kotlin/.../scenario/` |
 | [UND-49](UND-49-i18n-string-resources.md) | i18n 문자열 리소스 기반 | M | 2 | UND-01 | `presentation/i18n/` |
+| [UND-53](UND-53-amend-preflight-contract.md) | amend 사전 확인 계약 · 실행 가드 | M | 3 | UND-06 | `domain/`(StagingGateway·CommitResult·amend 예외) · `infrastructure/git/staging/` · `application/staging/` |
 
 ## 티켓 목록 — 2차
 
@@ -112,7 +113,7 @@ flowchart LR
         W1["wave 1<br/>스캐폴딩·계약<br/>(1)"]
         W2["wave 2<br/>Gateway·디자인·i18n<br/>(11)"]
         W3["wave 3<br/>UI·병합엔진·검색<br/>(11)"]
-        W4["wave 4<br/>충돌·리베이스UI·패키징<br/>(3)"]
+        W4["wave 4<br/>충돌·리베이스UI·패키징<br/>(4)"]
         W5["wave 5<br/>통합 와이어업<br/>(1)"]
         W6["wave 6<br/>E2E<br/>(1)"]
     end
@@ -141,8 +142,8 @@ flowchart LR
 |---|---|---|
 | 1 | UND-01 | 1 |
 | 2 | UND-02, UND-03, UND-04, UND-05, UND-06, UND-07, UND-08, UND-09, UND-10, UND-11, UND-49 | 11 |
-| 3 | UND-12, UND-13, UND-14, UND-15, UND-16, UND-17, UND-18, UND-19, UND-20, UND-21, UND-22 | 11 |
-| 4 | UND-23, UND-24, UND-25 | 3 |
+| 3 | UND-12, UND-13, UND-14, UND-15, UND-16, UND-18, UND-19, UND-20, UND-21, UND-22, UND-53 | 11 |
+| 4 | UND-17, UND-23, UND-24, UND-25 | 4 |
 | 5 | UND-26 | 1 |
 | 6 | UND-27 | 1 |
 | 7 | UND-28, UND-29, UND-30, UND-31, UND-32, UND-33, UND-34, UND-35, UND-36, UND-37, UND-38, UND-39 | 12 |
@@ -150,8 +151,8 @@ flowchart LR
 | 9 | UND-51 | 1 |
 | 10 | UND-50, UND-52 | 2 |
 
-- **너비 분포**: [1, 11, 11, 3, 1, 1, 12, 9, 1, 2]
-- **평균 wave 너비**: 5.20
+- **너비 분포**: [1, 11, 11, 4, 1, 1, 12, 9, 1, 2]
+- **평균 wave 너비**: 5.30
 - **판정: 통과** — 모든 wave 너비가 1~2 인 직선형 DAG 가 아니다.
   wave 2·3·7·8 에서 각각 11·11·12·9 개가 동시에 열린다.
 
@@ -193,8 +194,8 @@ flowchart LR
 |---|---|
 | 1 | 1건 — 루트 빌드 · `domain/` 전체 계약 · 최소 `presentation/App.kt` |
 | 2 | 11건 — `infrastructure/git/repository/` · `infrastructure/git/history/` · `domain/graph/` · `infrastructure/git/diff/` · `infrastructure/git/staging/` · `infrastructure/git/ref/` · `infrastructure/git/remote/` · `infr |
-| 3 | 11건 — `presentation/shell/` · `presentation/sidebar/` · `presentation/graph/` · `presentation/commitdetail/` · `presentation/diff/` · `presentation/staging/` · `presentation/toolbar/` · `presentation/welcome/` · `pre |
-| 4 | 3건 — `presentation/conflict/` · `presentation/rebase/` · `build.gradle.kts` · `packaging/` |
+| 3 | 11건 — `presentation/shell/` · `presentation/sidebar/` · `presentation/graph/` · `presentation/commitdetail/` · `presentation/diff/` · `presentation/toolbar/` · `presentation/welcome/` · `presentation/search/` · `domain/merge/` · `application/merge/` · `infrastructure/git/merge/` · `presentation/palette/` · `domain/` · `infrastructure/git/staging/` · `application/staging/` |
+| 4 | 4건 — `presentation/staging/` · `presentation/conflict/` · `presentation/rebase/` · `build.gradle.kts` · `packaging/` |
 | 5 | 1건 — `presentation/App.kt` · `di/` |
 | 6 | 1건 — `app/src/test/kotlin/.../scenario/` |
 | 7 | 12건 — `domain/cherrypick/` · `application/cherrypick/` · `infrastructure/git/cherrypick/` · `domain/blame/` · `infrastructure/git/blame/` · `domain/reflog/` · `infrastructure/git/reflog/` · `domain/patch/` · `infrast |
