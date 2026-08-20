@@ -224,10 +224,14 @@ wave 1 `docs_final_1` → wave 2 `final_summary` → wave 3 게이트 **exit 2**
 
 ### ⑧ 사람 수정분 재검증  (develop-4-verify — ⑦에서 코드를 고쳤을 때만)
 ```bash
+# 축 노드는 사람의 터미널을 볼 수 없다 — 빌드 증적을 파일로 남겨 넘긴다.
+(cd <워크트리> && ./gradlew build > $RUN/human-build.log 2>&1)
+
 $R $W/develop-4-verify.toml --run-dir $RUN \
   --set ticket=UND-NN --set spec_file=$RUN/spec.json \
   --set review_file=$RUN/final_summary.json \
-  --set decisions_file=<결정 문서 경로 또는 없음> --max-parallel 6
+  --set decisions_file=<결정 문서 경로 또는 없음> \
+  --set build_log=$RUN/human-build.log --max-parallel 6
 ```
 - 수정 노드가 없다. **지금 워킹트리의 diff** 를 5축 + 문서 드리프트로 다시 본다 → `final_summary_v.json`
   → `verify_and_draft` 게이트 **exit 2**.
