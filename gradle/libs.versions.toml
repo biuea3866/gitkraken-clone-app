@@ -8,9 +8,13 @@ jgit = "7.3.0.202506031305-r"
 kotest = "5.9.1"
 mockk = "1.14.3"
 detekt = "1.23.8"
+# Compose 가 전이로 끌어오지만 명시 선언한다 — Compose 버전을 올릴 때 조용히 사라지면
+# 전 Gateway 구현의 withContext(Dispatchers.IO) 가 한꺼번에 깨진다.
+coroutines = "1.8.0"
 
 [libraries]
 jgit = { module = "org.eclipse.jgit:org.eclipse.jgit", version.ref = "jgit" }
+coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotest-runner-junit5 = { module = "io.kotest:kotest-runner-junit5", version.ref = "kotest" }
 kotest-assertions-core = { module = "io.kotest:kotest-assertions-core", version.ref = "kotest" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }

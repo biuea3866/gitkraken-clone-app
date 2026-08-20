@@ -9,5 +9,5 @@ interface DiffGateway {
 
     suspend fun changedFilesUnstaged(): List<FileChange>
 
-    suspend fun hunksOf(commit: CommitId, path: String): DiffResult
+    suspend fun hunksOf(commit: CommitId, path: String, parentIndex: Int): DiffResult
 }

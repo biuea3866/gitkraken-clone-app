@@ -33,7 +33,7 @@ sequenceDiagram
     GW->>DF: use { scan(부모 트리, 커밋 트리) }
     DF-->>GW: DiffEntry 목록 (rename 탐지 on)
     GW-->>UC: List<FileChange>
-    UC->>GW: hunksOf(commitId, path)
+    UC->>GW: hunksOf(commitId, path, parentIndex)
     GW->>DF: use { format(단일 경로) }
     alt 이진 · 임계치 초과
         GW-->>UC: DiffResult.NotComputed(BINARY | TOO_LARGE)
