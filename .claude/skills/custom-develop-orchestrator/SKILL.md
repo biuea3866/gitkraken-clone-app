@@ -116,8 +116,11 @@ description: >
 ### ② 스펙 생성  (develop-1-spec — evidence + spec + 게이트)
 ```bash
 $R $W/develop-1-spec.toml --run-dir $RUN \
-  --set ticket=UND-NN --set requirements_file=.claude-local/UND-NN.md
+  --set ticket=UND-NN --set requirements_file=.claude-local/UND-NN.md \
+  --set decisions_file=<결정 문서 경로 또는 없음>
 ```
+- **`decisions_file` 을 빠뜨리지 않는다.** 스펙이 정정 이전 결정으로 AC 를 굳히면, 정정을 따른 구현을
+  이후 5축이 **AC 위반으로 지적**한다 — 오탐이 파이프라인을 막는다 (wave 2 에서 UND-03·UND-07 이 그렇게 막혔다).
 - `evidence`(claude/sonnet — 코드베이스 조사) → `spec`(codex/terra) → `approve_spec` 게이트에서 **exit 2**.
 - 운영 근거가 필요 없는 티켓이라도 evidence 노드는 돈다 — "해당 없음" 을 근거로 남기게 되어 있다.
 
@@ -185,8 +188,15 @@ wave 1 `docs_final_1` → wave 2 `final_summary` → wave 3 게이트 **exit 2**
 
 - 문서 노드는 **최종 diff** 만 대상으로 하고 **제안만** 낸다 — 파일을 수정하지 않는다.
 - `repair_and_verify_2.json` 의 `disputed`(수정에 동의하지 않은 finding) 는 2차 축 노드가 타당성을 판정한다.
-- 2차에서도 `remaining_blocking` 이 남으면 사용자에게 보고하고, 재차 수정 라운드를 돌릴지 묻는다
-  (같은 워크플로우를 다시 실행하면 된다 — `--run-dir` 을 유지하면 산출물이 덮어써진다).
+- 2차에서도 `remaining_blocking` 이 남으면 **묻지 말고 3회전을 한 번 더 돌린다** (상한 3회 이내).
+  같은 워크플로우를 `--run-dir` 유지로 다시 실행하되, `--set review_file=$RUN/final_summary.json`
+  으로 **직전 판정**을 넘긴다. 게이트에서만 멈춘다는 원칙이 여기에도 적용된다 —
+  자동으로 돌 수 있는 라운드를 사람에게 묻는 것은 루프를 거기서 끊는 것과 같다
+  (wave 2 에서 6건이 2회전 상태로 사람에게 넘어와 손으로 고쳤다).
+- **3회전 후에도 남으면** 그때 사람에게 보고하고 판단을 요청한다 (상한 규칙).
+- 3회전 전에 finding 을 살펴 **오탐이 반복되고 있으면** 라운드를 더 돌리지 말고 멈춘다 —
+  같은 지적이 반복되는 것은 스펙·결정 문서가 어긋났다는 신호다. `.agent/docs/review-false-positives.md`
+  대조 후 스펙을 고치는 쪽이 싸다.
 
 ### 📨#4 — 최종 요약 + 문서 갱신 제안  → 게이트 ⑦ 입력
 - `final_summary.json`: verdict · `rounds_run` · `remaining_blocking` · `advisory`(p3~p4) · AC 충족 ·
@@ -197,18 +207,33 @@ wave 1 `docs_final_1` → wave 2 `final_summary` → wave 3 게이트 **exit 2**
 - 그 외 모든 문서(도메인/컨텍스트 + 하네스/팀가이드, 전부 tracked)는 **자동 수정 금지 — 제안만**.
   PR 포함 여부는 "코드유발이냐" 가 아니라 **사용자 승인**이 결정한다.
 
-### ⑦ 최종 검토 → Draft 올림  🚦 (사람)
+### ⑦ 최종 검토  🚦 (사람)
 - **코드 확인 환경 마련 여부 질문**(필수): "변경 코드를 직접 확인할 수 있게 IDE 환경(IntelliJ IDEA/VS Code 등)을
   마련할지" 묻는다 — 워크트리/브랜치 포함. IDEA 선택 시 ④의 워크트리 디렉토리를 직접 연다
   
 - **문서 제안 승인 처리**: 사용자가 승인한 항목만 워크트리 브랜치에 커밋해 **해당 PR 에 포함**한다.
   코드 커밋과 논리적으로 분리(별도 커밋)하되 같은 PR 에 싣는다.
+- **게이트에서 코드를 고쳤다면 ⑧ 재검증을 먼저 돌린다** — 사람이 넣은 수정(오탐 기각·설계 결정 반영·
+  직접 패치)은 어떤 축 노드도 보지 않은 상태다. 문서만 고쳤으면 ⑧을 건너뛴다.
 - **커밋은 사람 승인 후 여기서 처음 일어난다** — 노드는 커밋하지 않았다.
   접두사 `[UND-NN] - <type>: <제목>`.
 - **PR 은 명시적 확인 후에만 생성**: IDE 를 열어준 직후 곧장 만들지 않는다. **"확인되었습니까? Draft PR 올릴까요?"**
   를 묻고 응답을 기다린다 — 게이트 승인 ≠ PR 즉시 생성.
 - 확인을 받은 뒤에만 [[custom-pr-create]] 로 `--draft` PR 생성.
 - 이후부터 CI 트리거(base 가 `main`/`stage-*` 일 때 — `dev` 브랜치는 사용하지 않는다).
+
+### ⑧ 사람 수정분 재검증  (develop-4-verify — ⑦에서 코드를 고쳤을 때만)
+```bash
+$R $W/develop-4-verify.toml --run-dir $RUN \
+  --set ticket=UND-NN --set spec_file=$RUN/spec.json \
+  --set review_file=$RUN/final_summary.json \
+  --set decisions_file=<결정 문서 경로 또는 없음> --max-parallel 6
+```
+- 수정 노드가 없다. **지금 워킹트리의 diff** 를 5축 + 문서 드리프트로 다시 본다 → `final_summary_v.json`
+  → `verify_and_draft` 게이트 **exit 2**.
+- `remaining_blocking` 이 비어야 커밋·PR 로 간다. 남으면 고치고 다시 ⑧을 돌린다.
+- 축 노드가 **사람이 기각한 finding 을 다시 올리면**, 기각 근거를
+  `.agent/docs/review-false-positives.md` 에 항목으로 남겨 다음 라운드부터 재발을 막는다.
 
 ## 안티패턴
 
@@ -222,6 +247,8 @@ wave 1 `docs_final_1` → wave 2 `final_summary` → wave 3 게이트 **exit 2**
 - ❌ 커밋마다 게시 (정형 체크포인트는 4회 — 애드혹 📊 게시는 별개로 허용)
 - ❌ 문서·하네스 문서를 ⑥에서 자동 수정 (제안만 — memory 만 자동)
 - ❌ ⑦ 에서 IDE 만 열어주고 "확인되었습니까?" 없이 곧장 PR 생성
+- ❌ **게이트에서 코드를 고쳐 놓고 ⑧ 재검증 없이 커밋·PR** — 무인 5축은 수정 **이전** 상태만 봤다
+- ❌ **PR 체크리스트에 셀프 리뷰 완료 표기** — 실제로 그 상태를 본 축 노드나 자가 리뷰가 없을 때
 - ❌ feature 브랜치끼리 PR 만들고 CI 도는 것으로 기대 (CI 는 `main`/`stage-*` base 만)
 
 ## 관련

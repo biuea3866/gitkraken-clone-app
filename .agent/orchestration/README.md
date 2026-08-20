@@ -12,6 +12,7 @@
 │   ├── develop-2-implement.toml        # 개발 ④ — 구현 → 1차 5축 병렬 검증 → verdict
 │   ├── develop-3-repair.toml           # 개발 ⑥ REQUEST_CHANGES — 수정 → 2차 6축 → 최종 → 게이트
 │   ├── develop-3-approve.toml          # 개발 ⑥ APPROVED·COMMENT — 문서 점검 → 최종 → 게이트
+│   ├── develop-4-verify.toml           # 개발 ⑧ — 게이트 ⑦에서 사람이 고친 diff 를 5축 재검증
 │   └── ticket-review.toml              # tickets/ 를 5개 렌즈로 병렬 리뷰 → 종합 (읽기 전용)
 ├── runner/
 │   ├── run-graph.py                # DAG 실행기 (서드파티 의존 0, stdlib tomllib)
@@ -145,6 +146,9 @@ develop-2-implement   implement_1(claude) → [5축 병렬](codex) → review_su
                              │          → final_summary(codex) → review_and_draft 🚦
        verdict == APPROVED|COMMENT ─→ develop-3-approve
                                         docs_final_1(codex) → final_summary(codex) → review_and_draft 🚦
+                             │
+       ⑦에서 사람이 코드를 고쳤다면 ─→ develop-4-verify
+                                        [재검증 6축 병렬](codex) → final_summary_v(codex) → verify_and_draft 🚦
 ```
 
 | 단계 | 워크플로우 · 노드 | 담당 |
@@ -160,7 +164,9 @@ develop-2-implement   implement_1(claude) → [5축 병렬](codex) → review_su
 | ⑥ 수정 + 2차 6축 (REQUEST_CHANGES) | `develop-3-repair` | claude/opus (write) + codex/terra 병렬 |
 | ⑥ 문서 점검 (APPROVED·COMMENT) | `develop-3-approve` → `docs_final_1` | codex/terra |
 | ⑥ 최종 판정 | `develop-3-*` → `final_summary` | codex/terra |
-| **⑦ 최종 검토 🚦** | `develop-3-*` → `review_and_draft` (exit 2) | 사람 (`/custom-pr-create`) |
+| **⑦ 최종 검토 🚦** | `develop-3-*` → `review_and_draft` (exit 2) | 사람 |
+| ⑧ 사람 수정분 재검증 (⑦에서 코드를 고쳤을 때만) | `develop-4-verify` → 6축 → `final_summary_v` | codex/terra 병렬 |
+| **⑧ 재검증 게이트 🚦** | `develop-4-verify` → `verify_and_draft` (exit 2) | 사람 (`/custom-pr-create`) |
 
 ```bash
 R=.agent/orchestration/runner/run-graph.py
@@ -170,7 +176,8 @@ RUN=.agent/orchestration/runs/UND-14            # 티켓 1건 = run-dir 1개
 # ①  티켓 본문을 파일로 준비 (헤드리스 노드는 대화 맥락이 없다)
 # ②③ 스펙 → 게이트에서 exit 2
 $R $W/develop-1-spec.toml --run-dir $RUN \
-  --set ticket=UND-14 --set requirements_file=.claude-local/UND-14.md
+  --set ticket=UND-14 --set requirements_file=.claude-local/UND-14.md \
+  --set decisions_file=<결정 문서 또는 없음>   # 빠뜨리면 낡은 결정으로 AC 가 굳는다
 
 # ④  구현 + 1차 5축 + 요약
 $R $W/develop-2-implement.toml --run-dir $RUN \
@@ -186,7 +193,13 @@ $R $W/develop-3-repair.toml --run-dir $RUN \
   --set review_file=$RUN/review_summary_1.json \
   --set decisions_file=<결정 문서 또는 없음> --max-parallel 6
 
-# ⑦  사람이 final_summary.json / docs_final_*.json 검토 → 문서 반영 → 커밋 → Draft PR
+# ⑦  사람이 final_summary.json / docs_final_*.json 검토 → 문서 반영
+
+# ⑧  ⑦에서 코드를 고쳤으면 재검증 (고치지 않았으면 건너뛴다) → 통과 후 커밋 → Draft PR
+$R $W/develop-4-verify.toml --run-dir $RUN \
+  --set ticket=UND-14 --set spec_file=$RUN/spec.json \
+  --set review_file=$RUN/final_summary.json \
+  --set decisions_file=<결정 문서 또는 없음> --max-parallel 6
 ```
 
 의도적으로 지키는 것 3개:
@@ -196,6 +209,8 @@ $R $W/develop-3-repair.toml --run-dir $RUN \
 - **문서 노드는 문서를 수정하지 않는다** (제안만). 대상은 항상 **최종 diff** 다 — 중간 상태를 근거로 하면
   이미 해소된 드리프트를 다시 올린다.
 - **p3~p4 는 자동 수정하지 않는다.** 최종 보고에만 남긴다 (스코프 확산 방지).
+- **사람이 게이트에서 고친 코드도 축 노드를 거친다** (⑧). 무인 5축은 수정 **이전** 상태만 봤으므로,
+  게이트에서 손댄 diff 를 그대로 커밋하면 검증 없는 코드가 PR 로 나간다.
 
 5축 정의의 SSOT 는 `.agent/skills/custom-self-code-review/SKILL.md` 하나다 — 축 노드가 `role_file` 로
 주입받아 대화형 자가 리뷰와 무인 검증이 같은 기준을 쓴다. 등급·verdict 규칙은
