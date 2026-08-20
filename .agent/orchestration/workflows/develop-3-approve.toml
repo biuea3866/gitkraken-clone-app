@@ -66,6 +66,9 @@ prompt = '''
 - 1차 리뷰 결과: {{review_file}} — verdict · findings · ac_results 의 원본입니다.
 - 문서 제안: 업스트림 `docs_final_1` 산출물
 - 스펙: {{spec_file}}
+- **결정 문서: {{decisions_file}}** — 스펙 밖에서 사람이 확정한 결정과 **앞선 결정의 정정**이 들어 있다.
+  결정 문서의 `정정` 절은 이전 서술을 **덮어쓴다** — 구현이 옛 결정을 따르고 있으면 정정 쪽으로 고친다.
+  값이 `없음` 이면 결정 문서가 없다는 뜻이다.
 - 등급·verdict 규칙: .agent/docs/review-grading.md
 
 해야 할 일:
