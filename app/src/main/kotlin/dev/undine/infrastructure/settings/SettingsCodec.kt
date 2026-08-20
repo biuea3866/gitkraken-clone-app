@@ -82,10 +82,11 @@ internal fun decodeSettings(text: String): SettingsDecodeResult {
 private fun decodeFields(document: Any?): SettingsDecodeResult {
     val fields = document as? Map<*, *>
         ?: return SettingsDecodeResult.Corrupt("최상위 값이 JSON 객체가 아닙니다")
-    val schemaVersion = fields.readInt(KEY_SCHEMA_VERSION) ?: CURRENT_SCHEMA_VERSION
+    // Int 로 좁히지 않는다 — 2^31 이상을 잘라 내면 미래 스키마가 과거로 보여 그대로 덮어써진다.
+    val schemaVersion = fields.readLong(KEY_SCHEMA_VERSION) ?: CURRENT_SCHEMA_VERSION.toLong()
 
     return when {
-        schemaVersion > CURRENT_SCHEMA_VERSION -> SettingsDecodeResult.FromNewerSchema
+        schemaVersion > CURRENT_SCHEMA_VERSION.toLong() -> SettingsDecodeResult.FromNewerSchema
 
         else -> SettingsDecodeResult.Decoded(
             Settings(
@@ -125,7 +126,12 @@ private fun readWindow(value: Any?): WindowBounds {
     )
 }
 
-private fun Map<*, *>.readInt(key: String): Int? = (this[key] as? Long)?.toInt()
+private fun Map<*, *>.readInt(key: String): Int? = readLong(key)?.let { value ->
+    // Int 범위를 벗어난 창 크기는 "값 없음" 으로 본다 — 잘라 내면 음수 크기가 된다.
+    if (value in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong()) value.toInt() else null
+}
+
+private fun Map<*, *>.readLong(key: String): Long? = this[key] as? Long
 
 /** JSON 문자열 리터럴로 쓸 수 있게 따옴표·역슬래시·제어문자를 이스케이프한다. */
 private fun escapeJsonString(raw: String): String = buildString {

@@ -306,4 +306,41 @@ class SettingsGatewayImplSpec : FunSpec({
             entries.filter { it.name != settingsFile.name }.count() shouldBe 0L
         }
     }
+
+    test("Int 범위를 넘는 schemaVersion 도 미래 스키마로 보고 저장 시 원본을 보존한다") {
+        val settingsFile = settingsFileIn(tempdir())
+        val futureContent = """{ "schemaVersion": 2147483648, "theme": "DARK" }"""
+        writeFile(settingsFile, futureContent)
+
+        gatewayFor(settingsFile).load() shouldBe DEFAULTS
+
+        gatewayFor(settingsFile).save(settingsOf("/tmp/saved"))
+        Files.readString(newerSchemaBackupOf(settingsFile)) shouldBe futureContent
+    }
+
+    test("Int 범위를 넘는 창 크기는 기본값으로 읽는다") {
+        val settingsFile = settingsFileIn(tempdir())
+        writeFile(
+            settingsFile,
+            """{ "schemaVersion": 1, "window": { "width": 4294967296, "height": 800 } }""",
+        )
+
+        gatewayFor(settingsFile).load().window shouldBe DEFAULTS.window
+    }
+
+    test("부모 없는 상대 경로로도 저장하고 다시 읽는다") {
+        val settingsFile = Path.of("undine-relative-settings-test.json")
+        try {
+            gatewayFor(settingsFile).save(settingsOf("/tmp/relative"))
+
+            Files.exists(settingsFile) shouldBe true
+            gatewayFor(settingsFile).load() shouldBe settingsOf("/tmp/relative")
+        } finally {
+            Files.deleteIfExists(settingsFile)
+            Files.list(Path.of(".")).use { entries ->
+                entries.filter { it.name.startsWith("undine-relative-settings-test.json") }
+                    .forEach(Files::deleteIfExists)
+            }
+        }
+    }
 })
