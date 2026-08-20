@@ -15,6 +15,7 @@ dependencies {
     implementation(compose.material3)
     implementation(libs.jgit)
     implementation(libs.coroutines.core)
+    implementation(libs.jgit.ssh.apache)
 
     testImplementation(libs.kotest.runner.junit5)
     testImplementation(libs.kotest.assertions.core)
