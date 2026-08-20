@@ -174,7 +174,8 @@ $R $W/develop-1-spec.toml --run-dir $RUN \
 
 # ④  구현 + 1차 5축 + 요약
 $R $W/develop-2-implement.toml --run-dir $RUN \
-  --set ticket=UND-14 --set spec_file=$RUN/spec.json --max-parallel 5
+  --set ticket=UND-14 --set spec_file=$RUN/spec.json \
+  --set decisions_file=<결정 문서 또는 없음> --max-parallel 5
 
 # ⑤  분기 — 메인 Claude 가 판정 (없거나 파싱 실패면 REQUEST_CHANGES, fail-closed)
 verdict=$(python3 -c "import json;print(json.load(open('$RUN/review_summary_1.json')).get('verdict','REQUEST_CHANGES'))")
@@ -182,7 +183,8 @@ verdict=$(python3 -c "import json;print(json.load(open('$RUN/review_summary_1.js
 # ⑥  REQUEST_CHANGES → develop-3-repair.toml / APPROVED·COMMENT → develop-3-approve.toml
 $R $W/develop-3-repair.toml --run-dir $RUN \
   --set ticket=UND-14 --set spec_file=$RUN/spec.json \
-  --set review_file=$RUN/review_summary_1.json --max-parallel 6
+  --set review_file=$RUN/review_summary_1.json \
+  --set decisions_file=<결정 문서 또는 없음> --max-parallel 6
 
 # ⑦  사람이 final_summary.json / docs_final_*.json 검토 → 문서 반영 → 커밋 → Draft PR
 ```

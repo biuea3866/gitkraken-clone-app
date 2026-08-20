@@ -132,7 +132,8 @@ $R $W/develop-1-spec.toml --run-dir $RUN \
 ### ④ 구현 + 1차 5축 검증  (develop-2-implement, 무승인 자동)
 ```bash
 $R $W/develop-2-implement.toml --run-dir $RUN \
-  --set ticket=UND-NN --set spec_file=$RUN/spec.json --max-parallel 5
+  --set ticket=UND-NN --set spec_file=$RUN/spec.json \
+  --set decisions_file=<결정 문서 경로 또는 없음> --max-parallel 5
 ```
 - wave 1 `implement_1`(claude/opus, workspace-write) → wave 2 5축 병렬(codex/terra) → wave 3 `review_summary_1`.
 - **노드는 커밋하지 않는다.** 변경은 워크트리에 남는다 — 커밋은 게이트 ⑦ 이후 사람이 한다.
@@ -167,7 +168,8 @@ verdict=$(python3 -c "import json;print(json.load(open('$RUN/review_summary_1.js
 ```bash
 $R $W/develop-3-repair.toml --run-dir $RUN \
   --set ticket=UND-NN --set spec_file=$RUN/spec.json \
-  --set review_file=$RUN/review_summary_1.json --max-parallel 6
+  --set review_file=$RUN/review_summary_1.json \
+  --set decisions_file=<결정 문서 경로 또는 없음> --max-parallel 6
 ```
 wave 1 `repair_and_verify_2`(claude/opus) → wave 2 2차 6축 병렬(5축 + `docs_final_2`) → wave 3 `final_summary`
 → wave 4 게이트 **exit 2**.
@@ -176,7 +178,8 @@ wave 1 `repair_and_verify_2`(claude/opus) → wave 2 2차 6축 병렬(5축 + `do
 ```bash
 $R $W/develop-3-approve.toml --run-dir $RUN \
   --set ticket=UND-NN --set spec_file=$RUN/spec.json \
-  --set review_file=$RUN/review_summary_1.json
+  --set review_file=$RUN/review_summary_1.json \
+  --set decisions_file=<결정 문서 경로 또는 없음>
 ```
 wave 1 `docs_final_1` → wave 2 `final_summary` → wave 3 게이트 **exit 2**.
 
