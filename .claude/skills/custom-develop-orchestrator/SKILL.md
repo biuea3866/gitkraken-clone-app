@@ -237,6 +237,8 @@ $R $W/develop-4-verify.toml --run-dir $RUN \
   `cp $RUN/final_summary_v.json $RUN/final_summary_v.prev.json` 후 그 경로를 넘긴다.
 - 축 노드가 **사람이 기각한 finding 을 다시 올리면**, 기각 근거를
   `.agent/docs/review-false-positives.md` 에 항목으로 남겨 다음 라운드부터 재발을 막는다.
+  단 그 문서는 **검증 대상 브랜치의 체크아웃**에서 읽힌다 — 하네스 브랜치에만 넣어 두면 그 항목이
+  main 에 들어오기 전까지 같은 지적이 계속 올라온다. 재발 횟수를 새 근거로 착각하지 않는다.
 
 ## 안티패턴
 
