@@ -85,8 +85,9 @@ private fun decodeFields(document: Any?): SettingsDecodeResult {
     val schemaVersion = fields[KEY_SCHEMA_VERSION]
 
     return when {
-        // 키가 없으면 스키마 버전을 적기 전의 최초 형식이다 — 우리가 읽을 수 있다.
-        schemaVersion == null -> SettingsDecodeResult.Decoded(
+        // 키 자체가 없어야 스키마 버전을 적기 전의 최초 형식이다 — 우리가 읽을 수 있다.
+        // 값이 명시적 null 인 것은 "버전을 적었는데 우리가 모르는 형태" 라 아래 분기로 내려간다.
+        !fields.containsKey(KEY_SCHEMA_VERSION) -> SettingsDecodeResult.Decoded(
             Settings(
                 recentRepositories = readRecentRepositories(fields[KEY_RECENT_REPOSITORIES]),
                 theme = readTheme(fields[KEY_THEME]),

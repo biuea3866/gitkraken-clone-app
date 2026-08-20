@@ -375,4 +375,15 @@ class SettingsGatewayImplSpec : FunSpec({
             theme = ThemeMode.DARK,
         )
     }
+
+    test("schemaVersion 이 명시적 null 이어도 원본을 보존한다") {
+        val settingsFile = settingsFileIn(tempdir())
+        val alienContent = """{ "schemaVersion": null, "theme": "DARK" }"""
+        writeFile(settingsFile, alienContent)
+
+        gatewayFor(settingsFile).load() shouldBe DEFAULTS
+
+        gatewayFor(settingsFile).save(settingsOf("/tmp/saved"))
+        Files.readString(newerSchemaBackupOf(settingsFile)) shouldBe alienContent
+    }
 })
