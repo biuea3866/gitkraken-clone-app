@@ -4,7 +4,7 @@ description = """
 게이트 ③(스펙 승인)을 통과한 뒤 실행한다.
 
 노드 배치:
-  wave 1 (1)  implement_1                                    codex/terra  · workspace-write
+  wave 1 (1)  implement_1                                    claude/opus  · workspace-write
   wave 2 (5)  intent_ac_1 tests_1 side_effects_1 deploy_1 rollback_1   codex/terra · read-only
   wave 3 (1)  review_summary_1                               codex/terra  · read-only
 
@@ -25,15 +25,15 @@ description = """
 """
 cwd = "."
 
-# ── wave 1 ── 코드 작성. 벤더는 codex 다 (라우팅 표 참조).
+# ── wave 1 ── 코드 작성. 판단·설계 비중이 크므로 claude/opus.
 [[nodes]]
 id = "implement_1"
-vendor = "codex"
-model = "gpt-5.6-terra"
-# ⚠ codex 노드는 .claude/settings.json 훅을 거치지 않는다 — JDK 가드·시크릿 가드·push 차단이
-#   **강제되지 않는다.** 아래 프롬프트의 금지 항목이 유일한 방어선이므로 지우지 않는다.
-sandbox = "workspace-write"
-output_schema = ".agent/orchestration/schemas/implement.json"
+vendor = "claude"
+model = "opus"
+tools = ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
+# 헤드리스라 승인을 누를 사람이 없다. 편집이 거부되면 bypassPermissions 로 올린다 —
+# 어느 모드에서도 .agent/hooks 가드(시크릿·push·mainline·JDK)는 그대로 적용된다.
+permission_mode = "acceptEdits"
 timeout_seconds = 3600
 prompt = '''
 티켓 {{ticket}} 을 구현하세요. **코드 작성 작업입니다.**

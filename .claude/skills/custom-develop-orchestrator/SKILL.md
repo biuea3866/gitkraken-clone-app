@@ -138,10 +138,8 @@ $R $W/develop-2-implement.toml --run-dir $RUN \
   --set ticket=UND-NN --set spec_file=$RUN/spec.json \
   --set decisions_file=<결정 문서 경로 또는 없음> --max-parallel 5
 ```
-- wave 1 `implement_1`(codex/terra, workspace-write) → wave 2 5축 병렬(codex/terra) → wave 3 `review_summary_1`.
+- wave 1 `implement_1`(claude/opus, workspace-write) → wave 2 5축 병렬(codex/terra) → wave 3 `review_summary_1`.
 - **노드는 커밋하지 않는다.** 변경은 워크트리에 남는다 — 커밋은 게이트 ⑦ 이후 사람이 한다.
-  쓰기 노드가 codex 라 `.claude/settings.json` 훅(push 차단·시크릿 가드·JDK 가드)이 **걸리지 않는다** —
-  게이트에서 `git log`·`git status` 로 커밋이 생기지 않았는지 사람이 직접 확인한다.
 - 장기 실행이므로 시작 전 예상 소요와 확인 방법을 공지한다. 러너 출력을 파이프로 가리지 않는다
   (노드별 성공/실패·비용이 실시간으로 보인다).
 - `implement_1` 이 `blocked_by_open_questions` 로 끝나면 ②로 돌아간다.
@@ -176,7 +174,7 @@ $R $W/develop-3-repair.toml --run-dir $RUN \
   --set review_file=$RUN/review_summary_1.json \
   --set decisions_file=<결정 문서 경로 또는 없음> --max-parallel 6
 ```
-wave 1 `repair_and_verify_2`(codex/terra) → wave 2 2차 6축 병렬(5축 + `docs_final_2`) → wave 3 `final_summary`
+wave 1 `repair_and_verify_2`(claude/opus) → wave 2 2차 6축 병렬(5축 + `docs_final_2`) → wave 3 `final_summary`
 → wave 4 게이트 **exit 2**.
 
 **APPROVED · COMMENT 경로**
