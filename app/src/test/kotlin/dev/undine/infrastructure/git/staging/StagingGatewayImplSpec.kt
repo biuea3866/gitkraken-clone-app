@@ -13,6 +13,7 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.engine.spec.tempdir
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import kotlinx.coroutines.CancellationException
@@ -445,9 +446,10 @@ class StagingGatewayImplSpec : FunSpec({
                 gateway.commit("초기 커밋 고침", amend = true)
             }
 
-            val backup = git.repository.resolve("refs/undine/amend-backup/$MAIN_BRANCH-$FIXED_NOW")
-            backup shouldNotBe null
-            backup.name shouldBe amendedCommit
+            val backups = git.repository.refDatabase.getRefsByPrefix("refs/undine/amend-backup/")
+            backups shouldHaveSize 1
+            backups.single().name shouldBe "refs/undine/amend-backup/$MAIN_BRANCH-$FIXED_NOW-${amendedCommit.take(8)}"
+            backups.single().objectId.name shouldBe amendedCommit
             result.commitId.value shouldNotBe amendedCommit
         }
     }
@@ -465,6 +467,58 @@ class StagingGatewayImplSpec : FunSpec({
             }
 
             git.repository.refDatabase.getRefsByPrefix("refs/undine/").shouldBeEmpty()
+        }
+    }
+
+    test("같은 시각에 두 번 amend 해도 복구 지점이 둘 다 남는다") {
+        initRepository().use { git ->
+            git.configureAuthor()
+            git.writeFile(FILE_PATH, "first\n")
+            git.commitAll("초기 커밋")
+            val firstTarget = git.repository.resolve(Constants.HEAD).name
+            git.writeFile(FILE_PATH, "first\nsecond\n")
+
+            // 시각을 고정해 이름 충돌 조건을 강제한다 — 커밋 약어가 없으면 앞선 백업이 덮어써진다.
+            val secondTarget = git.withStagingGateway { gateway ->
+                gateway.stage(listOf(FILE_PATH))
+                gateway.commit("한 번 고침", amend = true).commitId.value
+            }
+            git.writeFile(FILE_PATH, "first\nsecond\nthird\n")
+            git.withStagingGateway { gateway ->
+                gateway.stage(listOf(FILE_PATH))
+                gateway.commit("두 번 고침", amend = true)
+            }
+
+            val backups = git.repository.refDatabase.getRefsByPrefix("refs/undine/amend-backup/")
+            backups shouldHaveSize 2
+            backups.map { it.objectId.name }.toSet() shouldBe setOf(firstTarget, secondTarget)
+        }
+    }
+
+    test("백업 ref 를 만들지 못하면 amend 하지 않고 HEAD·인덱스·워킹트리를 그대로 둔다") {
+        initRepository().use { git ->
+            git.configureAuthor()
+            git.writeFile(FILE_PATH, "first\n")
+            git.commitAll("초기 커밋")
+            val headBefore = git.repository.resolve(Constants.HEAD).name
+            val indexBefore = git.repository.indexObjectIdOf(FILE_PATH)
+            val workingTreeContent = "first\nsecond\n"
+            git.writeFile(FILE_PATH, workingTreeContent)
+            // 백업 ref 경로를 디렉터리로 선점해 ref 생성을 실패시킨다.
+            val blocker = git.repository.updateRef(
+                "refs/undine/amend-backup/$MAIN_BRANCH-$FIXED_NOW-${headBefore.take(8)}/blocker",
+            )
+            blocker.setNewObjectId(git.repository.resolve(Constants.HEAD))
+            blocker.setForceUpdate(true)
+            blocker.update()
+
+            shouldThrow<UndineException.StateViolation> {
+                git.withStagingGateway { gateway -> gateway.commit("고치기 시도", amend = true) }
+            }
+
+            git.repository.resolve(Constants.HEAD).name shouldBe headBefore
+            git.repository.indexObjectIdOf(FILE_PATH) shouldBe indexBefore
+            File(git.repository.workTree, FILE_PATH).readText() shouldBe workingTreeContent
         }
     }
 })

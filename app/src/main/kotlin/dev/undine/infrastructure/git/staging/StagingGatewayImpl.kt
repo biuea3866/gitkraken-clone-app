@@ -27,6 +27,9 @@ private const val NO_AMEND_TARGET_DETAIL = "고칠 이전 커밋이 없습니다
 private const val AMEND_BACKUP_REF_PREFIX = "refs/undine/amend-backup/"
 private const val AMEND_BACKUP_FAILED_DETAIL = "amend 대상을 백업하지 못해 커밋을 고치지 않았습니다"
 
+/** 백업 ref 이름에 붙이는 커밋 약어 길이 — 같은 밀리초의 서로 다른 amend 를 구분한다. */
+private const val BACKUP_ABBREVIATION_LENGTH = 8
+
 /**
  * JGit 실패를 도메인 실패로 번역한다.
  *
@@ -161,19 +164,22 @@ private fun Repository.createCommit(
 }
 
 /**
- * 고치기 전 커밋을 `refs/undine/amend-backup/<브랜치>-<epochMillis>` 로 남긴다.
+ * 고치기 전 커밋을 `refs/undine/amend-backup/<브랜치>-<epochMillis>-<커밋 약어>` 로 남긴다.
  * 백업에 실패하면 **amend 를 진행하지 않는다** — 복구 지점 없이 HEAD 를 다시 쓰지 않는다.
+ *
+ * 이름에 커밋 약어를 붙이고 **force update 를 쓰지 않는다.** 시각만으로 이름을 지으면 같은 밀리초에
+ * 두 번 amend 할 때 앞선 복구 지점이 조용히 덮어써진다 — 덮어쓰기를 막으려는 백업이 스스로
+ * 덮어쓰는 셈이다. 같은 커밋을 같은 밀리초에 두 번 백업하는 경우만 이름이 겹치고, 그때는 내용이
+ * 같으므로 [RefUpdate.Result.NO_CHANGE] 로 통과한다.
  */
 private fun Repository.backupAmendTarget(target: ObjectId, now: Long) {
     val branchName = branch ?: Constants.HEAD
-    val update = updateRef("$AMEND_BACKUP_REF_PREFIX$branchName-$now")
+    val abbreviation = target.abbreviate(BACKUP_ABBREVIATION_LENGTH).name()
+    val update = updateRef("$AMEND_BACKUP_REF_PREFIX$branchName-$now-$abbreviation")
     update.setNewObjectId(target)
     update.setRefLogMessage("undine: amend backup", false)
-    update.isForceUpdate = true
     val result = update.update()
-    val stored = result == RefUpdate.Result.NEW ||
-        result == RefUpdate.Result.FORCED ||
-        result == RefUpdate.Result.NO_CHANGE
+    val stored = result == RefUpdate.Result.NEW || result == RefUpdate.Result.NO_CHANGE
     if (!stored) throw UndineException.StateViolation("$AMEND_BACKUP_FAILED_DETAIL ($result)")
 }
 
