@@ -51,6 +51,7 @@
 | FP-B6 | UI 상태 홀더가 `StateFlow` 를 노출하고 Composable 이 `collectAsState` | 표준 단방향 데이터 흐름 |
 | FP-B7 | 임시 저장소를 만드는 테스트가 느림 | 실제 Git 동작 검증이 목적 — Mock 대체는 [`testing`](../rules/testing.md) 규칙 1 위반이다 |
 | FP-B8 | `~GatewayImpl` 이 `Repository` 가 아니라 `GitAccess` 를 생성자로 받음 | `Repository` 는 스레드 안전하지 않아 직렬화·`Dispatchers.IO` 경계를 `GitAccess` 가 공유한다. 결정문 C1 이 "생성자로 `Repository` 를 받는다"(A1)를 **대체**했다 — Impl 이 락·`withContext` 를 다시 걸지 않는 것도 같은 이유다 |
+| FP-B10 | `commit(amend = true)` 가 원격 포함 여부를 **재작성 뒤**에 `CommitResult.existsOnRemote` 로 알려줌 | preflight 를 추가하면 `StagingGateway`(UND-01 계약)와 UND-17·UND-26 이 함께 움직여야 한다. 결정문 C6 이 **domain 계약 유지 + 백업 ref 로 복구 지점 확보 + UI 사전 확인은 UND-17 소유**로 확정했다 — UND-06 범위에서 계약 변경을 요구하지 않는다 |
 | FP-B9 | `DirCacheBuilder.add()` 를 정렬 순서와 무관하게 호출 | `commit()` → `finish()` 가 `sorted` 플래그를 보고 `resort()` 한다 (JGit 7.3 확인). 엔트리를 뒤에 덧붙여도 인덱스 순서는 깨지지 않는다 |
 
 ## C. 코멘트 작성 형태

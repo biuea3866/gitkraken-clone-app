@@ -232,6 +232,9 @@ $R $W/develop-4-verify.toml --run-dir $RUN \
 - 수정 노드가 없다. **지금 워킹트리의 diff** 를 5축 + 문서 드리프트로 다시 본다 → `final_summary_v.json`
   → `verify_and_draft` 게이트 **exit 2**.
 - `remaining_blocking` 이 비어야 커밋·PR 로 간다. 남으면 고치고 다시 ⑧을 돌린다.
+- **⑧을 다시 돌릴 때는 직전 판정을 먼저 스냅샷**한다 — `final_summary_v.json` 은 이 워크플로우가
+  덮어쓰므로 그대로 `review_file` 로 넘기면 노드가 읽지 못한다:
+  `cp $RUN/final_summary_v.json $RUN/final_summary_v.prev.json` 후 그 경로를 넘긴다.
 - 축 노드가 **사람이 기각한 finding 을 다시 올리면**, 기각 근거를
   `.agent/docs/review-false-positives.md` 에 항목으로 남겨 다음 라운드부터 재발을 막는다.
 
