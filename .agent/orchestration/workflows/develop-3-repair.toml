@@ -5,7 +5,7 @@ description = """
 (러너에는 조건부 분기가 없다). APPROVED·COMMENT 면 develop-3-approve.toml 로 간다.
 
 노드 배치:
-  wave 1 (1)  repair_and_verify_2                            claude/opus  · workspace-write
+  wave 1 (1)  repair_and_verify_2                            codex/terra  · workspace-write
   wave 2 (6)  intent_ac_2 tests_2 side_effects_2 deploy_2 rollback_2 docs_final_2   codex/terra · read-only
   wave 3 (1)  final_summary                                  codex/terra  · read-only
   wave 4 (1)  review_and_draft 🚦                            사람
@@ -23,13 +23,14 @@ description = """
 """
 cwd = "."
 
-# ── wave 1 ── p0~p2 수정 + 재빌드·재테스트. 판단이 필요하므로 claude/opus.
+# ── wave 1 ── p0~p2 수정 + 재빌드·재테스트. 코드 작성은 codex 가 맡는다 (라우팅 표 참조).
 [[nodes]]
 id = "repair_and_verify_2"
-vendor = "claude"
-model = "opus"
-tools = ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
-permission_mode = "acceptEdits"
+vendor = "codex"
+model = "gpt-5.6-terra"
+# ⚠ codex 노드에는 .claude/settings.json 훅이 걸리지 않는다 (implement_1 주석 참조).
+sandbox = "workspace-write"
+output_schema = ".agent/orchestration/schemas/repair.json"
 timeout_seconds = 3600
 prompt = '''
 티켓 {{ticket}} 의 1차 검증에서 지적된 **p0~p2 를 수정**하고 재검증하세요. **코드 작성 작업입니다.**

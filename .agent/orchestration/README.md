@@ -70,10 +70,16 @@ $R $W/<workflow>.toml --run-dir <위 run-dir> --start-at <다음 노드>   # 재
 
 | 작업 성격 | 벤더·모델 | 이유 |
 |---|---|---|
-| **코드 작성** (구현·리팩터링) | `claude` / `opus` | 설계 판단과 다중 파일 편집 품질이 결과를 좌우한다 |
+| **코드 작성** (구현·리팩터링) | `codex` / `gpt-5.6-terra` | 출력 스키마를 강제할 수 있어 구현 보고(변경 파일·빌드 결과·deviations)가 형식으로 고정된다 |
 | **코드 리뷰** | `codex` / `gpt-5.6-terra` | 판정 기준이 문서로 고정돼 있고, 스키마 강제(`--output-schema`)로 형식이 안정된다 |
 | **문서 작성·점검** (스펙·드리프트) | `codex` / `gpt-5.6-terra` | 위와 같음. 읽기 전용이라 병렬로 넓게 돌릴 수 있다 |
+| **코드베이스 탐색** (evidence) | `claude` / `sonnet` | 도구 조합 탐색이고, 프로젝트 MCP 가 필요할 수 있다 |
 | **MCP 가 필요한 조회** (context7 라이브러리 문서 등) | `claude` + `mcp_config` | codex 노드는 프로젝트 MCP 에 접근할 수 없다 |
+
+> ⚠ **쓰기 노드를 codex 로 두면 `.claude/settings.json` 훅이 걸리지 않는다.** JDK 정합 가드·시크릿
+> 가드·`git push` 차단·mainline 머지 차단은 Claude Code 훅이라 codex CLI 에는 적용되지 않는다.
+> 노드 프롬프트의 금지 항목(커밋·push 금지, `JAVA_HOME` 선행 설정)이 유일한 방어선이므로 지우지 않는다.
+> 게이트에서 사람이 `git status` 로 **커밋이 생기지 않았는지** 확인한다.
 
 ### 벤더가 소진되면 대체 벤더로 1회 넘어간다
 
@@ -157,11 +163,11 @@ develop-2-implement   implement_1(claude) → [5축 병렬](codex) → review_su
 | ① 코드베이스 근거 수집 | `develop-1-spec` → `evidence` | claude/sonnet |
 | ② 스펙 생성 | `develop-1-spec` → `spec` | codex/terra |
 | **③ 구현 승인 🚦** | `develop-1-spec` → `approve_spec` (exit 2) | 사람 |
-| ④ 구현 ⟲ 로컬 검증 | `develop-2-implement` → `implement_1` | claude/opus (write) |
+| ④ 구현 ⟲ 로컬 검증 | `develop-2-implement` → `implement_1` | codex/terra (write) |
 | ④ 1차 5축 검증 | `intent_ac_1`·`tests_1`·`side_effects_1`·`deploy_1`·`rollback_1` | codex/terra 병렬 |
 | ④ verdict 확정 | `review_summary_1` | codex/terra |
 | **⑤ verdict 분기 판정** | (워크플로우 밖) `review_summary_1.json` 을 읽어 선택 | 메인 Claude |
-| ⑥ 수정 + 2차 6축 (REQUEST_CHANGES) | `develop-3-repair` | claude/opus (write) + codex/terra 병렬 |
+| ⑥ 수정 + 2차 6축 (REQUEST_CHANGES) | `develop-3-repair` | codex/terra (write) + codex/terra 병렬 |
 | ⑥ 문서 점검 (APPROVED·COMMENT) | `develop-3-approve` → `docs_final_1` | codex/terra |
 | ⑥ 최종 판정 | `develop-3-*` → `final_summary` | codex/terra |
 | **⑦ 최종 검토 🚦** | `develop-3-*` → `review_and_draft` (exit 2) | 사람 |
