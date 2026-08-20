@@ -17,8 +17,11 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.PullResult
+import org.eclipse.jgit.api.errors.TransportException
+import org.eclipse.jgit.internal.JGitText
 import org.eclipse.jgit.lib.BranchConfig
 import org.eclipse.jgit.lib.Constants
+import org.eclipse.jgit.lib.ObjectId
 import org.eclipse.jgit.lib.ProgressMonitor
 import org.eclipse.jgit.lib.Ref
 import org.eclipse.jgit.lib.Repository
@@ -27,6 +30,7 @@ import org.eclipse.jgit.transport.RefLeaseSpec
 import org.eclipse.jgit.transport.RefSpec
 import org.eclipse.jgit.transport.RemoteRefUpdate
 import java.io.File
+import java.text.MessageFormat
 import kotlin.coroutines.CoroutineContext
 
 private val ACCEPTED_STATUSES = setOf(RemoteRefUpdate.Status.OK, RemoteRefUpdate.Status.UP_TO_DATE)
@@ -137,36 +141,49 @@ class RemoteGatewayImpl(
      * force push 로 지워질 원격 tip 을 로컬 백업 ref 로 먼저 가져온다 — 커밋 객체까지 함께 받아 두므로
      * 덮어쓴 뒤에도 `git reset --hard <백업 ref>` 로 되돌릴 수 있다.
      *
+     * 네트워크 왕복은 **fetch 한 번뿐**이다. 존재 확인을 `lsRemote` 로 따로 하면 그 왕복에는
+     * [ProgressMonitor] 를 물릴 수 없어 취소가 응답 대기까지 전파되지 않는다 — fetch 의 advertise 결과가
+     * 같은 정보를 주므로 왕복을 하나로 줄이고 전 구간을 취소 가능하게 둔다.
+     *
      * 원격에 아직 그 참조가 없으면(신규 브랜치) 덮어쓸 이력이 없으므로 백업을 생략하고 `null` 을 준다.
      * 백업이 확인되지 않으면 [UndineException.GitOperationFailed] 로 멈춘다 — **복구 경로 없이 덮어쓰지 않는다.**
-     *
-     * [monitor] 를 조회에도 물려 진행 표시와 취소가 백업 구간에서 끊기지 않게 한다. 취소는 단계 사이에서
-     * 확인한다 — 한 번의 advertise 왕복은 중간에 끊을 수 없다.
      *
      * @return push 의 lease 로 쓸 백업 ref 이름. 신규 브랜치면 `null`.
      */
     private fun backupRemoteTip(git: Git, remote: String, destination: String, monitor: ProgressMonitor): String? {
         monitor.ensureNotCancelled("원격 백업 전에 취소되었습니다")
-        val remoteTip = git.lsRemote()
-            .setRemote(remote)
-            .setCredentialsProvider(credentialsProvider)
-            .call()
-            .firstOrNull { advertised -> advertised.name == destination }
-            ?.objectId
-            ?: return null
-        monitor.ensureNotCancelled("원격 백업 중 취소되었습니다")
         val backupRef = "$FORCE_PUSH_BACKUP_PREFIX/$remote/${destination.removePrefix(Constants.R_HEADS)}-${now()}"
-        git.fetch()
-            .setRemote(remote)
-            .setRefSpecs(RefSpec("+$destination:$backupRef"))
-            .setProgressMonitor(monitor)
-            .setCredentialsProvider(credentialsProvider)
-            .call()
+        val remoteTip = fetchIntoBackup(git, remote, destination, backupRef, monitor) ?: return null
         if (git.repository.resolve(backupRef) != remoteTip) {
             throw UndineException.GitOperationFailed("remote.push.backup")
         }
         return backupRef
     }
+
+    /**
+     * [destination] 을 [backupRef] 로 가져오고 원격이 광고한 tip 을 돌려준다.
+     * 원격에 그 참조가 없으면 `null` — 덮어쓸 이력이 없는 신규 브랜치다.
+     */
+    private fun fetchIntoBackup(
+        git: Git,
+        remote: String,
+        destination: String,
+        backupRef: String,
+        monitor: ProgressMonitor,
+    ): ObjectId? =
+        try {
+            git.fetch()
+                .setRemote(remote)
+                .setRefSpecs(RefSpec("+$destination:$backupRef"))
+                .setProgressMonitor(monitor)
+                .setCredentialsProvider(credentialsProvider)
+                .call()
+                .getAdvertisedRef(destination)
+                ?.objectId
+        } catch (absent: TransportException) {
+            if (!absent.isMissingSource(destination)) throw absent
+            null
+        }
 
     /** clone 은 저장소가 없는 경로를 대상으로 하므로 [GitAccess] 를 거치지 않고 직접 IO 로 넘긴다. */
     private suspend fun <T> runDetached(
@@ -223,7 +240,14 @@ class RemoteGatewayImpl(
     }
 }
 
-/** JGit 명령 사이에서 취소를 확인한다 — 한 번의 왕복은 중간에 끊을 수 없다. */
+/**
+ * 원격이 그 참조를 광고하지 않아 refspec 을 채울 수 없다는 실패인지 본다.
+ * 메시지 문자열을 직접 적지 않고 JGit 의 원문 템플릿과 대조한다 — 로케일이 바뀌어도 성립한다.
+ */
+private fun TransportException.isMissingSource(source: String): Boolean =
+    message == MessageFormat.format(JGitText.get().remoteDoesNotHaveSpec, source)
+
+/** 명령 시작 전에 취소를 확인한다 — 시작한 왕복은 [ProgressMonitor] 가 끊는다. */
 private fun ProgressMonitor.ensureNotCancelled(detail: String) {
     if (isCancelled) throw CancellationException(detail)
 }

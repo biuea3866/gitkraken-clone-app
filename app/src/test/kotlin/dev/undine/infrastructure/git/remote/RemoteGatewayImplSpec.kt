@@ -14,6 +14,7 @@ import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.types.shouldBeInstanceOf
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -351,6 +352,46 @@ class RemoteGatewayImplSpec : FunSpec({
         interleaved shouldBe true
         result shouldBe PushResult.Rejected(PushResult.RejectReason.REMOTE_REJECTED)
         resolve(originDirectory, MAIN_REF) shouldBe thirdHead
+        secondAccess.close()
+    }
+
+    test("force push 백업 도중 취소하면 CancellationException 이 전파되고 원격은 그대로다") {
+        val root = tempdir()
+        val originDirectory = File(root, "origin.git")
+        val firstDirectory = File(root, "first")
+        val secondDirectory = File(root, "second")
+        seedRepository(File(root, "seed"))
+        cloneRepository(File(root, "seed"), originDirectory, bare = true)
+        cloneRepository(originDirectory, firstDirectory)
+        cloneRepository(originDirectory, secondDirectory)
+        Git.open(firstDirectory).use { first -> commit(first, "b.txt", "second") }
+        val firstAccess = accessTo(firstDirectory)
+        gatewayOf(firstAccess).push(RefName(MAIN_REF), force = false, onProgress = NO_PROGRESS)
+        firstAccess.close()
+        val remoteHeadBefore = resolve(originDirectory, MAIN_REF)
+        Git.open(secondDirectory).use { second -> commit(second, "c.txt", "third") }
+        val secondAccess = accessTo(secondDirectory)
+
+        // 백업 fetch 가 진행률을 처음 보고하는 순간 = 네트워크 구간 한가운데다.
+        val reachedNetwork = CompletableDeferred<Unit>()
+        val escaped = CompletableDeferred<Throwable>()
+        coroutineScope {
+            val caller = launch(Dispatchers.Default) {
+                try {
+                    gatewayOf(secondAccess).push(RefName(MAIN_REF), force = true) {
+                        reachedNetwork.complete(Unit)
+                    }
+                } catch (thrown: Throwable) {
+                    escaped.complete(thrown)
+                }
+            }
+            reachedNetwork.await()
+            caller.cancel()
+            caller.join()
+        }
+
+        escaped.await().shouldBeInstanceOf<CancellationException>()
+        resolve(originDirectory, MAIN_REF) shouldBe remoteHeadBefore
         secondAccess.close()
     }
 
