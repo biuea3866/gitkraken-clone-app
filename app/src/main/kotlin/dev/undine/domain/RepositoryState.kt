@@ -17,5 +17,8 @@ enum class RepositoryState {
     EMPTY,
     MERGING,
     REBASING,
+
+    /** revert 가 충돌해 진행 중이다. continue 또는 abort 로만 빠져나온다. */
+    REVERTING,
     DETACHED,
 }
