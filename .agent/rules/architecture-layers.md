@@ -47,4 +47,6 @@ app/src/main/kotlin/dev/undine/
 └── presentation/    # Compose 화면·컴포넌트·상태 홀더
 ```
 
-도메인 패키지끼리의 교차 참조는 금지한다 — 공통 타입은 `domain/common` 에 둔다.
+**`domain` 루트가 공통 패키지다.** 하위 패키지(`domain/graph` 등)가 루트의 공통 타입
+(`Commit`·`CommitId` 등)을 참조하는 것은 정상이다. 금지되는 것은 **하위 패키지끼리의 교차 참조**다
+(`domain/graph` → `domain/merge`). 공통으로 쓸 타입은 루트로 올린다.
