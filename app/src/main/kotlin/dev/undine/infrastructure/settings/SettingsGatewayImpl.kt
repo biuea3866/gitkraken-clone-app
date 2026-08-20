@@ -102,8 +102,9 @@ class SettingsGatewayImpl(
     private fun writeSettings(settings: Settings) {
         settingsFile.parent?.let { Files.createDirectories(it) }
         preserveNewerSchemaFile()
+        // 상대 경로로 넘어와도 부모가 있어야 한다 — createTempFile 은 디렉토리가 null 이면 NPE 다.
         val temporaryFile = Files.createTempFile(
-            settingsFile.parent,
+            settingsFile.toAbsolutePath().parent,
             settingsFile.fileName.toString(),
             TEMPORARY_SUFFIX,
         )
