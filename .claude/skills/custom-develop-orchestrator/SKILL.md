@@ -119,6 +119,9 @@ $R $W/develop-1-spec.toml --run-dir $RUN \
   --set ticket=UND-NN --set requirements_file=.claude-local/UND-NN.md \
   --set decisions_file=<결정 문서 경로 또는 없음>
 ```
+- **워크트리에서 돌리기 전에 `.claude-local/` 을 복사한다** — gitignore 라 새 워크트리에는 없고,
+  노드는 자기 cwd 기준으로 경로를 푼다. 없으면 실패가 아니라 **조용히 티켓 md 만 보고 쓴다.**
+  `cp $MAIN/.claude-local/UND-NN.md $MAIN/.claude-local/WAVE*-DECISIONS.md <워크트리>/.claude-local/`
 - **`decisions_file` 을 빠뜨리지 않는다.** 스펙이 정정 이전 결정으로 AC 를 굳히면, 정정을 따른 구현을
   이후 5축이 **AC 위반으로 지적**한다 — 오탐이 파이프라인을 막는다 (wave 2 에서 UND-03·UND-07 이 그렇게 막혔다).
 - `evidence`(claude/sonnet — 코드베이스 조사) → `spec`(codex/terra) → `approve_spec` 게이트에서 **exit 2**.
