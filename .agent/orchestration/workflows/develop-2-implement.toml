@@ -101,6 +101,12 @@ prompt = '''
 - 등급 기준: .agent/docs/review-grading.md
 - 오탐 기준: .agent/docs/review-false-positives.md — **finding 을 적기 전에 먼저 읽고 대조**하세요.
 
+**같은 원인의 변형을 전부 찾아 한 번에 보고하세요.** finding 하나를 적었으면 그 원인이 만드는
+**다른 입력·다른 경로**를 스스로 뒤져 같은 finding 에 묶습니다 — 한 라운드에 하나씩만 내면 수정·재검증이
+그 횟수만큼 반복되고, 그 사이 사람이 "고쳤다" 고 판단합니다.
+(실제 사례: `schemaVersion` 해석 실패 하나가 Int 절삭 → Double 폴백 → 명시적 null 로 세 라운드에 나뉘어
+나왔습니다. 셋은 같은 결함이며 한 번에 나왔어야 합니다.)
+
 점검:
 1. 스펙의 인수 조건을 항목별로 코드와 대조합니다 (파일:라인 또는 테스트명을 근거로).
 2. `implement_1` 의 deviations 가 정당한지, 스펙을 임의로 축소·확대하지 않았는지 봅니다.
@@ -127,6 +133,12 @@ prompt = '''
 - 구현 보고: 업스트림 `implement_1` 산출물 (tests_added · build 결과).
 - 변경 내용: `git status --porcelain` · `git diff`
 - 등급 기준: .agent/docs/review-grading.md · 오탐 기준: .agent/docs/review-false-positives.md (선행 대조)
+
+**같은 원인의 변형을 전부 찾아 한 번에 보고하세요.** finding 하나를 적었으면 그 원인이 만드는
+**다른 입력·다른 경로**를 스스로 뒤져 같은 finding 에 묶습니다 — 한 라운드에 하나씩만 내면 수정·재검증이
+그 횟수만큼 반복되고, 그 사이 사람이 "고쳤다" 고 판단합니다.
+(실제 사례: `schemaVersion` 해석 실패 하나가 Int 절삭 → Double 폴백 → 명시적 null 로 세 라운드에 나뉘어
+나왔습니다. 셋은 같은 결함이며 한 번에 나왔어야 합니다.)
 
 점검:
 1. 신규 클래스/함수에 대응 테스트가 있는지 짝을 맞춥니다 (`*Spec.kt` / `*Test.kt` grep).
@@ -155,6 +167,12 @@ prompt = '''
 - 변경 내용: `git status --porcelain` · `git diff`
 - 레이어 규칙: .agent/rules/architecture-layers.md · JGit 규칙: .agent/rules/jgit-usage.md
 - 등급 기준: .agent/docs/review-grading.md · 오탐 기준: .agent/docs/review-false-positives.md (선행 대조)
+
+**같은 원인의 변형을 전부 찾아 한 번에 보고하세요.** finding 하나를 적었으면 그 원인이 만드는
+**다른 입력·다른 경로**를 스스로 뒤져 같은 finding 에 묶습니다 — 한 라운드에 하나씩만 내면 수정·재검증이
+그 횟수만큼 반복되고, 그 사이 사람이 "고쳤다" 고 판단합니다.
+(실제 사례: `schemaVersion` 해석 실패 하나가 Int 절삭 → Double 폴백 → 명시적 null 로 세 라운드에 나뉘어
+나왔습니다. 셋은 같은 결함이며 한 번에 나왔어야 합니다.)
 
 점검 (서브에이전트를 호출할 수 없으므로 **직접 grep 해서** 판정합니다):
 1. **1-hop 호출 그래프** — 변경된 public 함수·모델을 심볼로 grep 해 호출자를 찾고,
@@ -188,6 +206,12 @@ prompt = '''
 - 프로세스 게이트: .agent/docs/conventions.md · 버전 카탈로그: gradle/libs.versions.toml
 - 등급 기준: .agent/docs/review-grading.md · 오탐 기준: .agent/docs/review-false-positives.md (선행 대조)
 
+**같은 원인의 변형을 전부 찾아 한 번에 보고하세요.** finding 하나를 적었으면 그 원인이 만드는
+**다른 입력·다른 경로**를 스스로 뒤져 같은 finding 에 묶습니다 — 한 라운드에 하나씩만 내면 수정·재검증이
+그 횟수만큼 반복되고, 그 사이 사람이 "고쳤다" 고 판단합니다.
+(실제 사례: `schemaVersion` 해석 실패 하나가 Int 절삭 → Double 폴백 → 명시적 null 로 세 라운드에 나뉘어
+나왔습니다. 셋은 같은 결함이며 한 번에 나왔어야 합니다.)
+
 점검:
 1. **의존성 추가** — 새 라이브러리가 `gradle/libs.versions.toml` 을 경유하는지 봅니다.
    `build.gradle.kts` 에 버전을 하드코딩했으면 p2 입니다.
@@ -219,6 +243,12 @@ prompt = '''
 - 변경 내용: `git status --porcelain` · `git diff`
 - 프로세스 게이트: .agent/docs/conventions.md (Rule 4 파괴적 변경 명시)
 - 등급 기준: .agent/docs/review-grading.md · 오탐 기준: .agent/docs/review-false-positives.md (선행 대조)
+
+**같은 원인의 변형을 전부 찾아 한 번에 보고하세요.** finding 하나를 적었으면 그 원인이 만드는
+**다른 입력·다른 경로**를 스스로 뒤져 같은 finding 에 묶습니다 — 한 라운드에 하나씩만 내면 수정·재검증이
+그 횟수만큼 반복되고, 그 사이 사람이 "고쳤다" 고 판단합니다.
+(실제 사례: `schemaVersion` 해석 실패 하나가 Int 절삭 → Double 폴백 → 명시적 null 로 세 라운드에 나뉘어
+나왔습니다. 셋은 같은 결함이며 한 번에 나왔어야 합니다.)
 
 점검:
 1. **revert 단위** — 티켓 범위 밖 변경이 같은 커밋에 섞여 되돌리기 불가해졌는지 봅니다.

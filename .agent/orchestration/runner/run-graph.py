@@ -255,6 +255,23 @@ def descendants_of(start: str, nodes: list[dict]) -> set[str]:
 # ---------------------------------------------------------------- 프롬프트 조립
 
 
+INPUT_FILE_SUFFIXES = (".md", ".json", ".toml", ".txt", ".log", ".yaml", ".yml")
+
+
+def looks_like_path(value: str) -> bool:
+    """파일 경로로 넘긴 값인지 본다. `없음` 같은 자리 채움 값은 검사 대상이 아니다."""
+    stripped = value.strip()
+    if not stripped or stripped in {"없음", "none", "N/A", "-"}:
+        return False
+    return stripped.endswith(INPUT_FILE_SUFFIXES)
+
+
+def resolve_input(value: str, graph_cwd: pathlib.Path) -> pathlib.Path:
+    """절대 경로는 그대로, 상대 경로는 그래프 cwd 기준으로 푼다 — 노드가 보는 것과 같은 기준이다."""
+    candidate = pathlib.Path(value.strip())
+    return candidate if candidate.is_absolute() else graph_cwd / candidate
+
+
 def substitute(text: str, variables: dict[str, str], where: str) -> str:
     """프롬프트의 {{key}} 를 --set 값으로 치환한다. 미해결 자리표시자는 실행 전에 실패시킨다."""
     for key, value in variables.items():
@@ -573,9 +590,28 @@ def main() -> int:
     waves = topological_waves(nodes)
     graph_name = graph.get("name", args.graph.stem)
 
+    graph_cwd = REPO_ROOT / graph.get("cwd", ".")
+
     # 실행 전에 자리표시자를 전수 검증한다 — 노드 실행 중 실패하면 이미 쓴 비용이 날아간다.
     for node in nodes:
         substitute(node["prompt"], variables, f"노드 '{node['id']}' prompt")
+
+    # 파일 경로로 넘긴 --set 값의 존재를 확인한다.
+    #
+    # 없는 경로는 **실패가 아니라 침묵**이다 — 노드는 "파일이 없다" 고만 적고 남은 입력으로 계속 쓴다.
+    # 산출물은 멀쩡해 보이는데 근거가 빠진 채 만들어진다 (wave 3 스펙 11건이 이 상태로 돌았다).
+    # cwd 는 그래프의 cwd(= 워크트리)라, 메인 트리에만 있는 gitignore 파일을 상대 경로로 넘기면 여기서 걸린다.
+    missing = [
+        f"{key}={value}"
+        for key, value in variables.items()
+        if looks_like_path(value) and not resolve_input(value, graph_cwd).exists()
+    ]
+    if missing:
+        fail(
+            "--set 으로 넘긴 파일을 찾지 못했습니다 (cwd: %s):\n  %s\n"
+            "경로는 그래프 cwd 기준입니다. 값이 없다는 뜻이면 파일명 대신 '없음' 을 넘기세요."
+            % (graph_cwd, "\n  ".join(missing))
+        )
 
     print(f"workflow: {graph_name}  노드 {len(nodes)}개  wave {len(waves)}개")
     for index, wave in enumerate(waves, start=1):
@@ -597,7 +633,6 @@ def main() -> int:
         / f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{graph_name}"
     )
     run_dir.mkdir(parents=True, exist_ok=True)
-    graph_cwd = REPO_ROOT / graph.get("cwd", ".")
     print(f"run-dir: {run_dir}\n")
 
     results: list[dict] = []
