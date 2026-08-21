@@ -20,6 +20,12 @@ dependencies {
     testImplementation(libs.kotest.runner.junit5)
     testImplementation(libs.kotest.assertions.core)
     testImplementation(libs.mockk)
+    // Compose 화면 렌더링 테스트(testing.md). 버전은 compose 플러그인이 정하므로 카탈로그 항목이 없다.
+    // 아티팩트 이름에 JUnit4 가 들어가지만 테스트는 Kotest 의 runComposeUiTest 로 구동한다 —
+    // 테스트 코드에 org.junit.* 를 import 하지 않는다.
+    @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
+    testImplementation(compose.uiTest)
+    testImplementation(compose.desktop.currentOs)
 }
 
 compose.desktop {
