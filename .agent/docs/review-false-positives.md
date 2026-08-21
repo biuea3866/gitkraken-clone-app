@@ -28,6 +28,14 @@
 8. **(FP-A8) 이미 처리 로직이 있는 경우** 재지적 금지 — 변경 전 처리 유무를 diff 에서 확인한다.
 9. **(FP-A9) Compose 리컴포지션 성능을 측정 없이 단정 금지.** `remember` 부재가 항상 문제는 아니다 —
    계산이 실제로 무거운 경로(레인 배치·대량 diff)에서만 지적한다.
+10. **(FP-A10) 스펙 AC 와 결정 문서가 어긋날 때 코드를 AC 위반으로 지적 금지.** 결정 문서(`정정` 절)가
+   요구사항·스펙보다 **뒤에 확정된 상위 근거**다. AC 가 정정 이전 서술을 굳혀 둔 경우, 지적 대상은
+   코드가 아니라 **스펙**이다 — finding 이 아니라 `open_questions`/게이트 보고로 올린다.
+   판별법: 그 AC 문구가 결정 문서의 어느 절을 인용했는지 찾고, 그 절에 `이 결정으로 대체된다` 류
+   정정이 붙어 있는지 확인한다. (근거: wave 2 에서 A1→C1 정정을 놓쳐 UND-03·UND-07 이 오탐 p1 로 막혔다.)
+11. **(FP-A11) JGit·라이브러리 내부 동작을 소스 확인 없이 단정 금지.** "이 API 는 정렬을 깨뜨린다"
+   같은 지적은 해당 클래스의 실제 구현(디컴파일·소스 jar)을 확인한 근거를 함께 적는다.
+   (근거: `DirCacheBuilder` 가 순서 이탈을 스스로 재정렬하는데도 정렬 파괴로 p1 이 올라왔다.)
 
 ## B. 의도된 패턴 — 버그 아님
 
@@ -42,6 +50,9 @@
 | FP-B5 | `sealed interface` 의 `when` 에 `else` 부재 | exhaustive 강제가 의도 — 새 케이스를 컴파일 에러로 잡는다 |
 | FP-B6 | UI 상태 홀더가 `StateFlow` 를 노출하고 Composable 이 `collectAsState` | 표준 단방향 데이터 흐름 |
 | FP-B7 | 임시 저장소를 만드는 테스트가 느림 | 실제 Git 동작 검증이 목적 — Mock 대체는 [`testing`](../rules/testing.md) 규칙 1 위반이다 |
+| FP-B8 | `~GatewayImpl` 이 `Repository` 가 아니라 `GitAccess` 를 생성자로 받음 | `Repository` 는 스레드 안전하지 않아 직렬화·`Dispatchers.IO` 경계를 `GitAccess` 가 공유한다. 결정문 C1 이 "생성자로 `Repository` 를 받는다"(A1)를 **대체**했다 — Impl 이 락·`withContext` 를 다시 걸지 않는 것도 같은 이유다 |
+| FP-B10 | `commit(amend = true)` 가 원격 포함 여부를 **재작성 뒤**에 `CommitResult.existsOnRemote` 로 알려줌 | preflight 를 추가하면 `StagingGateway`(UND-01 계약)와 UND-17·UND-26 이 함께 움직여야 한다. 결정문 C6 이 **domain 계약 유지 + 백업 ref 로 복구 지점 확보 + UI 사전 확인은 UND-17 소유**로 확정했다 — UND-06 범위에서 계약 변경을 요구하지 않는다 |
+| FP-B9 | `DirCacheBuilder.add()` 를 정렬 순서와 무관하게 호출 | `commit()` → `finish()` 가 `sorted` 플래그를 보고 `resort()` 한다 (JGit 7.3 확인). 엔트리를 뒤에 덧붙여도 인덱스 순서는 깨지지 않는다 |
 
 ## C. 코멘트 작성 형태
 

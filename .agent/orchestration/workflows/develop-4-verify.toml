@@ -1,0 +1,267 @@
+name = "develop-4-verify"
+description = """
+개발 루프 4단계 — **사람이 게이트 ⑦ 이후 직접 고친 diff** 를 5축으로 재검증한다.
+수정 노드가 없다. 지금 워킹트리에 있는 최종 diff 가 그대로 대상이다.
+
+왜 필요한가. develop-3-repair·approve 는 게이트 ⑦ 에서 끝나고, 그 뒤 사람이 넣은 수정
+(오탐 기각·설계 결정 반영·직접 패치)은 **어떤 축 노드도 보지 않은 채** 커밋·PR 로 나간다.
+wave 2 에서 실제로 그렇게 나갔다 — 이 워크플로우가 그 구멍을 막는다.
+
+노드 배치:
+  wave 1 (6)  intent_ac_v tests_v side_effects_v deploy_v rollback_v docs_final_v   codex/terra · read-only
+  wave 2 (1)  final_summary_v                                                       codex/terra · read-only
+  wave 3 (1)  verify_and_draft 🚦                                                    사람
+
+사용법 (같은 run-dir 에 이어 쓴다 — 커밋 **전에** 돌린다):
+  .agent/orchestration/runner/run-graph.py .agent/orchestration/workflows/develop-4-verify.toml \\
+    --run-dir .agent/orchestration/runs/UND-14 \\
+    --set ticket=UND-14 \\
+    --set spec_file=.agent/orchestration/runs/UND-14/spec.json \\
+    --set review_file=.agent/orchestration/runs/UND-14/final_summary.json \\
+    --set decisions_file=<결정 문서 경로 또는 없음> \\
+    --set build_log=<run-dir>/human-build.log --max-parallel 6
+
+**빌드 증적을 먼저 남긴다.** 축 노드는 사람의 터미널을 볼 수 없다 — 재검증 직전에
+`./gradlew build > <run-dir>/human-build.log 2>&1` 로 출력을 파일에 남기고 그 경로를 넘긴다.
+넘기지 않으면 축 2 가 "빌드 통과 증거 없음" 으로 판정해 `pr_ready` 가 서지 않는다.
+
+review_file 은 **직전 라운드의 final_summary.json** 을 넘긴다 — 사람이 무엇을 기각하고
+무엇을 고쳤는지 대조할 기준이 된다.
+
+**재실행 시 주의**: `final_summary_v.json` 을 그대로 `review_file` 로 넘기지 않는다. 이 워크플로우가
+같은 파일을 덮어쓰므로 노드가 읽을 시점에는 사라진다. 다시 돌릴 때는 먼저 스냅샷을 뜬다:
+
+  cp $RUN/final_summary_v.json $RUN/final_summary_v.prev.json
+  ... --set review_file=$RUN/final_summary_v.prev.json
+"""
+cwd = "."
+
+# ── wave 1 ── 5축 + 문서 드리프트. 수정 노드가 없으므로 의존 없이 곧바로 병렬로 돈다.
+[[nodes]]
+id = "intent_ac_v"
+vendor = "codex"
+model = "gpt-5.6-terra"
+sandbox = "read-only"
+needs = []
+role_file = ".agent/skills/custom-self-code-review/SKILL.md"
+output_schema = ".agent/orchestration/schemas/axis-review.json"
+prompt = '''
+티켓 {{ticket}} 의 **사람 수정분을 포함한 최종 diff** 를 **축 1 (변경 의도와 티켓 정합성) 만** 재검증하세요.
+코드를 수정하지 않습니다. axis 는 "intent_ac" 로 고정합니다.
+
+입력:
+- 스펙: {{spec_file}} · 직전 판정: {{review_file}}
+- 최종 변경: 먼저 `git status --porcelain` 을 봅니다. 변경이 남아 있으면 그것이 대상이고,
+  비어 있으면 **이미 커밋된 상태**이므로 `git diff origin/main...HEAD` 를 대상으로 삼습니다.
+  둘 다 비면 검증할 diff 가 없다는 사실을 그대로 보고합니다 (통과로 처리하지 않습니다).
+- 등급 기준: .agent/docs/review-grading.md · 오탐 기준: .agent/docs/review-false-positives.md (선행 대조)
+
+점검:
+1. 직전 라운드의 축 1 findings 가 실제로 해소됐는지 파일:라인으로 확인합니다. 미해소면 그대로 다시 올립니다.
+2. `disputed` 항목은 근거를 읽고 **타당하면 기각**, 부당하면 유지합니다 (판단과 근거를 checked 에 남깁니다).
+3. 수정 과정에서 **스코프가 번지지 않았는지** 봅니다 — p3~p4 를 손대거나 무관 리팩터링이 들어왔으면 지적합니다.
+4. 인수 조건 대조를 최종 diff 기준으로 다시 합니다.
+'''
+
+[[nodes]]
+id = "tests_v"
+vendor = "codex"
+model = "gpt-5.6-terra"
+sandbox = "read-only"
+needs = []
+role_file = ".agent/skills/custom-self-code-review/SKILL.md"
+output_schema = ".agent/orchestration/schemas/axis-review.json"
+prompt = '''
+티켓 {{ticket}} 의 **사람 수정분을 포함한 최종 diff** 를 **축 2 (테스트 커버) 만** 재검증하세요.
+코드를 수정하지 않습니다. axis 는 "tests" 로 고정합니다.
+
+입력:
+- 스펙: {{spec_file}} (test_plan) · 직전 판정: {{review_file}}
+- 최종 변경: 먼저 `git status --porcelain` 을 봅니다. 변경이 남아 있으면 그것이 대상이고,
+  비어 있으면 **이미 커밋된 상태**이므로 `git diff origin/main...HEAD` 를 대상으로 삼습니다.
+  둘 다 비면 검증할 diff 가 없다는 사실을 그대로 보고합니다 (통과로 처리하지 않습니다).
+- 등급 기준: .agent/docs/review-grading.md · 오탐 기준: .agent/docs/review-false-positives.md (선행 대조)
+
+점검:
+1. **수정된 p0~p2 에 대응하는 회귀 테스트**가 추가됐는지 확인합니다 — 고치기만 하고 테스트가 없으면 p2 입니다.
+2. 사람 수정 **이후에** 빌드·테스트를 실제로 다시 돌린 흔적이 있는지 확인합니다 —
+   `{{build_log}}` 를 읽어 `BUILD SUCCESSFUL` 과 실행 태스크를 확인하고,
+   `app/build/test-results/test/*.xml` 의 실행 시각이 수정된 소스 파일의 mtime 보다 뒤인지 봅니다.
+   둘 다 확인되지 않을 때만 p2 로 올립니다 (서술만으로 통과를 인정하지 않습니다).
+   `{{build_log}}` 값이 `없음` 이면 XML 시각만으로 판단합니다.
+3. 수정 과정에서 기존 테스트가 약화·삭제되지 않았는지 diff 로 확인합니다.
+4. 스펙 test_plan 의 실패·엣지 케이스 커버를 최종 상태로 다시 대조합니다.
+'''
+
+[[nodes]]
+id = "side_effects_v"
+vendor = "codex"
+model = "gpt-5.6-terra"
+sandbox = "read-only"
+needs = []
+role_file = ".agent/skills/custom-self-code-review/SKILL.md"
+output_schema = ".agent/orchestration/schemas/axis-review.json"
+prompt = '''
+티켓 {{ticket}} 의 **사람 수정분을 포함한 최종 diff** 를 **축 3 (사이드 이펙트 — 레이어 경계·호출 그래프·자원 수명) 만** 재검증하세요.
+코드를 수정하지 않습니다. axis 는 "side_effects" 로 고정합니다.
+
+입력:
+- 직전 판정: {{review_file}} — 수정 노드가 없습니다. 사람이 직접 고친 diff 가 대상입니다.
+- 최종 변경: 먼저 `git status --porcelain` 을 봅니다. 변경이 남아 있으면 그것이 대상이고,
+  비어 있으면 **이미 커밋된 상태**이므로 `git diff origin/main...HEAD` 를 대상으로 삼습니다.
+  둘 다 비면 검증할 diff 가 없다는 사실을 그대로 보고합니다 (통과로 처리하지 않습니다).
+- 등급 기준: .agent/docs/review-grading.md · 오탐 기준: .agent/docs/review-false-positives.md (선행 대조)
+
+점검 (서브에이전트를 호출할 수 없으므로 직접 grep 해서 판정합니다):
+1. 직전 라운드의 축 3 findings 해소 여부를 파일:라인으로 확인합니다.
+2. **수정이 새 사이드 이펙트를 만들었는지** — 수정된 함수의 호출자를 다시 grep 합니다.
+   직전 라운드에 없던 영향은 여기서 처음 잡힙니다.
+3. 레이어 경계 · interface↔구현 양끝 · JGit 자원 수명 · 스레드 경계를 최종 상태로 다시 봅니다.
+
+diff 밖 파일을 근거로 단정하지 마세요 — 읽고 확인한 것만 적습니다 (오탐 SSOT A절).
+'''
+
+[[nodes]]
+id = "deploy_v"
+vendor = "codex"
+model = "gpt-5.6-terra"
+sandbox = "read-only"
+needs = []
+role_file = ".agent/skills/custom-self-code-review/SKILL.md"
+output_schema = ".agent/orchestration/schemas/axis-review.json"
+prompt = '''
+티켓 {{ticket}} 의 **사람 수정분을 포함한 최종 diff** 를 **축 4 (빌드·툴체인 의존성) 만** 재검증하세요.
+코드를 수정하지 않습니다. axis 는 "deploy" 로 고정합니다.
+
+입력:
+- 직전 판정: {{review_file}} — 수정 노드가 없습니다. 사람이 직접 고친 diff 가 대상입니다.
+- 최종 변경: 먼저 `git status --porcelain` 을 봅니다. 변경이 남아 있으면 그것이 대상이고,
+  비어 있으면 **이미 커밋된 상태**이므로 `git diff origin/main...HEAD` 를 대상으로 삼습니다.
+  둘 다 비면 검증할 diff 가 없다는 사실을 그대로 보고합니다 (통과로 처리하지 않습니다).
+- 프로세스 게이트: .agent/docs/conventions.md · CI 규칙: .github/workflows/ci.yml
+- 등급 기준: .agent/docs/review-grading.md · 오탐 기준: .agent/docs/review-false-positives.md (선행 대조)
+
+점검:
+1. 직전 라운드의 축 4 findings 해소 여부를 확인합니다.
+2. **수정이 빌드 계약을 바꿨는지** — 의존성·툴체인·패키징·설정 스키마가 수정 과정에서 새로 건드려졌는지 봅니다.
+3. 하위 호환 처리를 최종 상태로 확정합니다.
+4. 의존성 카탈로그 경유·JDK 툴체인 정합을 최종 상태로 확인합니다.
+5. 변경 모듈이 ci.yml paths 에 커버되는지 다시 확인합니다 (수정으로 모듈이 늘었을 수 있습니다).
+'''
+
+[[nodes]]
+id = "rollback_v"
+vendor = "codex"
+model = "gpt-5.6-terra"
+sandbox = "read-only"
+needs = []
+role_file = ".agent/skills/custom-self-code-review/SKILL.md"
+output_schema = ".agent/orchestration/schemas/axis-review.json"
+prompt = '''
+티켓 {{ticket}} 의 **사람 수정분을 포함한 최종 diff** 를 **축 5 (롤백 가능성) 만** 재검증하세요.
+코드를 수정하지 않습니다. axis 는 "rollback" 로 고정합니다.
+
+입력:
+- 직전 판정: {{review_file}} — 수정 노드가 없습니다. 사람이 직접 고친 diff 가 대상입니다.
+- 최종 변경: 먼저 `git status --porcelain` 을 봅니다. 변경이 남아 있으면 그것이 대상이고,
+  비어 있으면 **이미 커밋된 상태**이므로 `git diff origin/main...HEAD` 를 대상으로 삼습니다.
+  둘 다 비면 검증할 diff 가 없다는 사실을 그대로 보고합니다 (통과로 처리하지 않습니다).
+- 등급 기준: .agent/docs/review-grading.md · 오탐 기준: .agent/docs/review-false-positives.md (선행 대조)
+
+점검:
+1. 직전 라운드의 축 5 findings 해소 여부를 확인합니다 (특히 설정 역방향 호환·파괴적 연산 가드).
+2. **수정이 롤백 경로를 깨뜨렸는지** — 되돌릴 수 없는 상태 전이나 데이터 해석 불가 경로가 새로 생겼는지 봅니다.
+3. 설정 스키마 역방향 호환을 최종 상태로 확인합니다.
+4. 롤백 시 데이터 유실 경로가 있으면 p0 후보로 올립니다.
+'''
+
+[[nodes]]
+id = "docs_final_v"
+vendor = "codex"
+model = "gpt-5.6-terra"
+sandbox = "read-only"
+needs = []
+output_schema = ".agent/orchestration/schemas/doc-drift.json"
+prompt = '''
+티켓 {{ticket}} 의 **최종 diff** 가 문서 드리프트를 만드는지 점검하세요.
+**문서 작성 작업이며 파일을 수정하지 않습니다 — 제안만 냅니다.**
+
+입력:
+- 최종 변경: 먼저 `git status --porcelain` 을 봅니다. 변경이 남아 있으면 그것이 대상이고,
+  비어 있으면 **이미 커밋된 상태**이므로 `git diff origin/main...HEAD` 를 대상으로 삼습니다.
+  (수정 전 상태를 근거로 제안하면 이미 해소된 드리프트를 다시 올리게 됩니다.)
+- 점검 대상 문서:
+  - `docs/design/*.md` — 설계 문서
+  - `tickets/UND-*.md` — 티켓 정의
+  - `.agent/docs/ssot-map.md` · `README.md`
+
+해야 할 일:
+1. 변경된 심볼·경로·엔드포인트·토픽·엔티티 이름을 뽑아 **문서 전반에 grep** 합니다. 매치가 곧 후보입니다.
+2. 특히 Gateway 계약·화면 진입점·설정 스키마가 추가/제거/이동됐다면 해당 문서를 반드시 확인합니다.
+3. 제안 서술은 **최종 상태만** 기술합니다. `~로 이관됨`·`UND-NN 이후`·`더 이상 ~하지 않음` 같은
+   변경 이력 서술을 문서 본문에 넣지 마세요 (이력은 PR·커밋이 담당합니다).
+4. 코드가 같은 모듈 안에서 다른 배포단위로 이동했다면(예: API consumer → worker) 항목을 삭제하지 말고
+   **어느 컴포넌트가 수행하는지**를 갱신하는 제안을 냅니다. 모듈이 그 동작을 전혀 안 하게 된 경우에만 삭제입니다.
+5. 갱신 대상이 없으면 drift_found=false 로 두고 근거를 summary_ko 에 씁니다 (grep 했는데 매치 없음 등).
+6. 개인 memory(`~/.claude/projects/**/memory`)는 점검 대상이 아닙니다 — 레포 밖 개인 자산입니다.
+'''
+
+# ── wave 2 ── 최종 verdict 확정. 재검증 6축을 병합한다.
+[[nodes]]
+id = "final_summary_v"
+vendor = "codex"
+model = "gpt-5.6-terra"
+sandbox = "read-only"
+needs = ["intent_ac_v", "tests_v", "side_effects_v", "deploy_v", "rollback_v", "docs_final_v"]
+output_schema = ".agent/orchestration/schemas/final-summary.json"
+prompt = '''
+티켓 {{ticket}} 의 **최종 상태**를 판정하세요. 코드를 수정하지 않습니다.
+
+입력:
+- 재검증 5축 산출물: 업스트림 `intent_ac_v` · `tests_v` · `side_effects_v` · `deploy_v` · `rollback_v`
+- 문서 제안: 업스트림 `docs_final_v`
+- 스펙: {{spec_file}} · 직전 판정: {{review_file}}
+- 등급·verdict 규칙: .agent/docs/review-grading.md
+
+해야 할 일:
+1. 재검증 findings 를 중복 제거해 병합합니다 (같은 파일:라인 + 같은 원인은 1건, 최고 레벨 채택).
+2. `rounds_run` 은 직전 라운드 수 + 1 입니다 (사람 수정분 재검증 라운드).
+3. `remaining_blocking` 에 **최종 diff 에 남아 있는 p0~p2 만** 넣습니다. 해소된 직전 라운드 findings 는 넣지 않습니다.
+4. `advisory` 에 p3~p4 를 남깁니다 (자동 수정 대상이 아니며, 사람이 판단할 몫입니다).
+5. `ac_results` 를 최종 diff 기준으로 채웁니다.
+6. `doc_proposals` 는 `docs_final_v` 의 proposals 개수입니다.
+7. `pr_ready` 는 **remaining_blocking 이 비어 있고 · 모든 AC 가 met 이고 · 빌드/테스트가 pass** 일 때만 true 입니다.
+   빌드 통과 여부는 `tests_v` 의 판정을 따릅니다 — 같은 증적을 두 번 요구하지 않습니다.
+   하나라도 불확실하면 false 로 두고 이유를 summary_ko 에 씁니다.
+8. `next_steps_ko` 에는 사람이 게이트에서 할 일을 적습니다 — 남은 blocking 처리, 커밋, Draft PR 순서.
+   **노드는 커밋·PR 을 수행하지 않습니다.**
+9. **축 산출물**이 누락·파싱 실패면 verdict 를 REQUEST_CHANGES 로 두고 그 사실을 적습니다 (fail-closed).
+   fail-closed 는 **증거인 축 산출물에만** 적용합니다 — `{{review_file}}`(직전 판정)은 메타데이터라
+   읽지 못해도 그것만으로 REQUEST_CHANGES 로 만들지 않습니다. 그때는 `rounds_run` 을 0 으로 두고
+   그 사실을 `summary_ko` 에 적은 뒤, **축 findings 만으로** verdict 를 정합니다.
+'''
+
+
+# ── wave 3 ── 게이트 — 재검증 결과를 보고 커밋·PR 로 넘어간다.
+[[nodes]]
+id = "verify_and_draft"
+type = "gate"
+needs = ["final_summary_v"]
+prompt = '''
+게이트 ⑧ — 사람 수정분 재검증 결과. 티켓 {{ticket}} 를 확인하세요.
+
+확인할 것:
+1. `final_summary_v.json` 의 `remaining_blocking` 이 비어 있는가. 남았다면 커밋하지 않는다.
+2. 직전 라운드에서 **사람이 기각한 finding** 을 축 노드가 다시 올렸는가 —
+   다시 올라왔다면 기각 근거를 `.agent/docs/review-false-positives.md` 에 남겨
+   다음 라운드부터 재발하지 않게 한다.
+   **주의**: 축 노드는 그 오탐 문서를 **검증 대상 체크아웃**에서 읽는다. 다른 브랜치에 항목을
+   추가해도 이 브랜치에 들어오기 전까지는 계속 올라온다 — 재발 자체를 새 신호로 읽지 말고,
+   등재해 둔 항목인지 먼저 확인한다.
+3. 사람 수정분에 **대응 회귀 테스트**가 있는가 (`tests_v` 의 findings).
+4. `./gradlew build` 출력을 직접 확인했는가 — 서술만으로 통과를 인정하지 않는다.
+
+승인 후 사람이 수행합니다 (노드가 하지 않습니다):
+  - 커밋 (`[{{ticket}}] - <type>: <제목>` 형식)
+  - Draft PR (`/custom-pr-create`)
+'''
