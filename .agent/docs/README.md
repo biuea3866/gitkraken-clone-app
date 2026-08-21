@@ -13,6 +13,7 @@
 | `job-lifecycle.md` | 잡 라이프사이클·archiving·CLOSE 게이트 |
 | `review-grading.md` | 리뷰 등급(p0~p5)·verdict 산출·판정 규율·fail-closed 정본 |
 | `review-false-positives.md` | 리뷰 오탐 패턴 카탈로그 (FP-ID) — 게이트를 통과해도 여기 걸리면 기각 |
+| `pipeline-tuning.md` | 파이프라인 실행 시간 튜닝 — 측정값·적용한 조치·품질 때문에 하지 않은 것 |
 | `review-discipline.md` | 리뷰 규율 정본 — 검산 게이트·출력 템플릿·PR 이해 브리핑·보안/메모리 릭 체크리스트 |
 
 ## 의존 방향
