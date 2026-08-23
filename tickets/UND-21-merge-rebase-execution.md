@@ -26,6 +26,16 @@
 
 `abort` 는 항상 가능해야 한다. 저장소가 어떤 진행 중 상태에 있든 시작 전으로 돌아가는 경로를 보장한다.
 
+**파괴적 연산은 확인 없이 실행되지 않는다.** `abort` 는 충돌 해결 중 쓴 워킹트리 편집을, `skip` 은
+건너뛴 커밋의 변경을 되돌릴 수 없게 지운다. 둘 다 확인을 **타입으로** 받아 호출부가 절차를 건너뛰면
+컴파일되지 않게 한다 — `AbortConfirmation`(사라질 경로 목록) · `SkipConfirmation`(사라질 커밋).
+`MergeService` 는 확인이 지금 사라질 대상과 어긋나면(확인 뒤 편집이 늘었거나, 멈춘 커밋이 바뀌었거나,
+대상을 읽을 수 없으면) Gateway 를 호출하지 않는다.
+
+**확인 토큰은 Gateway 계약까지 내려간다.** 서비스 안에서만 검사하면 Gateway 를 직접 부르는 경로가
+검사를 건너뛰고, 검사와 실행이 다른 임계구역이라 그 사이 상태가 바뀔 수 있다. `abortMerge`·`abortRebase`·
+`skipRebaseCommit` 이 토큰을 인자로 받고, 구현이 **실행 직전 같은 임계구역에서** 다시 대조한다.
+
 **롤백**: 병합·리베이스는 `ORIG_HEAD` 로 되돌릴 수 있다 — 중단(abort) 경로를 반드시 제공하고, 진행 중 상태를 저장소에서 읽어 복구한다.
 
 ## 다이어그램
@@ -34,7 +44,7 @@
 
 ```mermaid
 sequenceDiagram
-    participant UC as MergeUseCase
+    participant UC as MergeBranchUseCase
     participant DS as MergeService
     participant GW as Gateway
     UC->>DS: merge(targetBranch)
@@ -50,8 +60,8 @@ sequenceDiagram
             DS-->>UC: 새 CommitId
         end
     end
-    UC->>DS: abort()
-    DS->>GW: ORIG_HEAD 로 복구
+    UC->>DS: abort(AbortConfirmation)
+    DS->>GW: 확인 목록 대조 후 ORIG_HEAD 로 복구
 ```
 
 ### 클래스 의존
@@ -61,23 +71,26 @@ flowchart LR
     subgraph domain["domain/merge"]
         Gateway[MergeGateway]
         Svc[MergeService]
-        Result[MergeResult]
-        State[OperationState]
+        Result[MergeResult · RebaseResult]
+        State[RepositoryState]
+        Confirm[AbortConfirmation · SkipConfirmation]
     end
     subgraph app["application/merge"]
-        MergeUC[MergeUseCase]
-        RebaseUC[RebaseUseCase]
-        ControlUC[ContinueAbortUseCase]
+        MergeUC[MergeBranchUseCase · RebaseBranchUseCase]
+        ContinueUC[ContinueMergeUseCase · ContinueRebaseUseCase]
+        ControlUC[SkipRebaseCommitUseCase · AbortMergeOrRebaseUseCase]
     end
     subgraph infra["infrastructure/git/merge"]
         Impl[MergeGatewayImpl]
     end
     MergeUC --> Svc
-    RebaseUC --> Svc
+    ContinueUC --> Svc
     ControlUC --> Svc
+    ControlUC --> Confirm
     Svc --> Gateway
     Svc --> Result
     Svc --> State
+    Svc --> Confirm
     Impl -.->|implements| Gateway
 ```
 
@@ -88,7 +101,12 @@ flowchart LR
 - 충돌은 예외가 아니라 `Conflicted` 결과와 충돌 파일 목록으로 반환된다
 - 워킹트리가 더티하면 병합·리베이스를 시작하지 않는다
 - 충돌 후 `abort` 하면 시작 전 상태로 정확히 복구된다
+- 확인한 뒤에 편집이 더 생기면 `abort` 하지 않는다 (낡은 확인)
 - 충돌 해결 후 `continue` 하면 리베이스가 남은 커밋을 이어서 적용한다
 - 리베이스 중 `skip` 하면 해당 커밋이 결과 이력에서 빠진다
+- 확인한 커밋과 지금 멈춘 커밋이 다르면 `skip` 하지 않는다 (낡은 확인)
+- 멈춘 커밋을 읽을 수 없으면 `skip` 하지 않는다 (대조 불가)
+- 서비스를 거치지 않고 Gateway 를 직접 불러도 낡은 확인은 거부된다
+- 확인과 실행 사이에 편집이 생기면 Gateway 가 중단하지 않는다
 - 이미 병합된 브랜치를 다시 병합하면 변경 없음으로 보고된다
 - 리베이스 진행 중 상태가 저장소에서 읽혀 복구된다 (앱 재시작 후에도)
