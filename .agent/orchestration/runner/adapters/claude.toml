@@ -50,6 +50,11 @@ exhaustion_patterns = [
   "insufficient credits",
   "\"status\"\\s*:\\s*429",
   "429 too many requests",
+  # 2026-08-21 UND-13~22 관측 봉투: 세션 한도는 키가 api_error_status 라 위의 "status":429 가
+  # 앞의 " 리터럴 때문에 못 잡고, 문구도 "You've hit your session limit" 이라 usage limit reached 와 다르다.
+  # 이 두 줄이 없으면 9개 노드가 11분씩 태우고 codex 재시도 없이 전멸한다.
+  "\"api_error_status\"\\s*:\\s*429",
+  "hit your (session|usage) limit",
 ]
 
 # 벤더 전환 시 안전 의미를 잃지 않도록 키·값을 명시 변환한다.
