@@ -1,0 +1,63 @@
+# app 모듈 변경을 PR·push 에서 자동 검증한다.
+# JDK 버전은 gradle.properties 의 undine.jvm 이 SSOT — 아래 setup-java 도 그 값을 읽는다.
+name: CI
+
+on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'gradle/**'
+      - 'config/detekt/**'
+      - '*.gradle.kts'
+      - 'gradle.properties'
+      - 'gradlew'
+      - '.github/workflows/ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'gradle/**'
+      - 'config/detekt/**'
+      - '*.gradle.kts'
+      - 'gradle.properties'
+      - 'gradlew'
+      - '.github/workflows/ci.yml'
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # JDK 핀을 gradle.properties 에서 읽는다 — 워크플로우에 숫자를 쓰지 않는다.
+      - name: Resolve JDK version
+        id: jdk
+        run: echo "version=$(grep -E '^undine\.jvm=' gradle.properties | cut -d= -f2)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ steps.jdk.outputs.version }}
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Compose Desktop UI 테스트(runComposeUiTest)는 디스플레이를 요구한다 — Linux 러너에서 Xvfb 로 제공한다.
+      - name: Install Xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb libxrender1 libxtst6 libxi6
+
+      - name: Build (test + detekt)
+        run: xvfb-run -a ./gradlew build --no-daemon --stacktrace
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            app/build/reports/
+            app/build/test-results/
+          if-no-files-found: ignore
