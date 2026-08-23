@@ -14,11 +14,13 @@ hunk 단위 스테이징이 이 티켓의 난이도 대부분을 차지한다. J
 되돌리는 비용이 크다.
 
 amend 는 별도 경로로 둔다. 이미 push 된 커밋을 amend 하면 이력이 갈라지므로,
-Gateway 는 amend 대상이 원격에 존재하는지 여부를 함께 반환해 UI 가 경고할 수 있게 한다.
+Gateway 는 amend **실행 전에** 대상과 원격 존재 여부를 조회해 UI 가 확인을 받을 수 있게 한다.
+사전 확인 계약과 실행 직전 재검사는 [UND-53](UND-53-amend-preflight-contract.md) 이 소유한다 —
+원격 존재 여부는 커밋 결과가 아니라 amend preflight 결과로 돌아온다.
 
 빈 커밋과 빈 메시지는 거부한다.
 
-**롤백**: 커밋은 직전 커밋으로 soft reset 해 되돌리고 스테이징 이동은 반대 동작으로 복구한다 — amend 는 원본이 이미 원격에 있으면 되돌릴 수 없으므로 그 사실을 결과에 담는다.
+**롤백**: 커밋은 직전 커밋으로 soft reset 해 되돌리고 스테이징 이동은 반대 동작으로 복구한다 — amend 는 UND-53 이 남기는 백업 ref 가 복구 지점이다.
 
 ## 다이어그램
 
@@ -39,7 +41,7 @@ sequenceDiagram
     else 스테이징 비어 있음
         GW-->>UC: NothingToCommitException
     else
-        GW-->>UC: CommitId + 원격 존재 여부
+        GW-->>UC: CommitId
     end
 ```
 
@@ -67,11 +69,11 @@ flowchart LR
 ## 테스트 케이스
 
 - 파일을 stage 하면 staged 목록에 나타나고 unstaged 목록에서 사라진다
-- 변경을 stage 한 뒤 커밋하면 새 CommitId 가 반환되고 이력에 반영되며 원격 존재 여부가 함께 돌아온다
+- 변경을 stage 한 뒤 커밋하면 새 CommitId 가 반환되고 이력에 반영된다
 - hunk 1개만 stage 하면 인덱스에는 반영되고 **워킹트리 파일은 변경되지 않는다**
 - 작성자 설정이 없으면 커밋하지 않고 `UndineException.AuthorNotConfigured` 를 던진다
 - 스테이징이 비어 있으면 커밋을 거부한다
 - 빈 메시지로 커밋하면 거부된다
-- amend 대상 커밋이 원격에 존재하면 그 사실이 결과에 포함된다
+- amend 대상 커밋이 원격에 존재하면 그 사실이 preflight 결과에 포함된다 (UND-53)
 - 삭제된 파일을 stage 하면 인덱스에서도 삭제로 기록된다
 - unstage 후 다시 stage 해도 결과가 동일하다 (멱등)

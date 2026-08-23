@@ -1,5 +1,7 @@
 package dev.undine.infrastructure.git.staging
 
+import dev.undine.domain.AmendConfirmation
+import dev.undine.domain.CommitId
 import dev.undine.domain.DiffHunk
 import dev.undine.domain.DiffLine
 import dev.undine.domain.DiffLineType
@@ -16,6 +18,7 @@ import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -60,6 +63,33 @@ private fun Git.commitAll(message: String) {
     commit().setMessage(message).call()
 }
 
+private fun Git.headCommit(): String = repository.resolve(Constants.HEAD).name
+
+private fun Git.backupRefs() = repository.refDatabase.getRefsByPrefix(AMEND_BACKUP_REF_PREFIX)
+
+/**
+ * 로컬 파일 경로를 원격으로 등록해 현재 브랜치를 push 하고 remote-tracking ref 를 만든다.
+ * 네트워크를 타지 않아야 CI 에서 흔들리지 않는다.
+ */
+private fun Git.pushToLocalRemote(remoteDirectory: File) {
+    Git.init().setBare(true).setDirectory(remoteDirectory).call().use { }
+    remoteAdd().setName(Constants.DEFAULT_REMOTE_NAME).setUri(URIish(remoteDirectory.absolutePath)).call()
+    push()
+        .setRemote(Constants.DEFAULT_REMOTE_NAME)
+        .setRefSpecs(RefSpec("refs/heads/$MAIN_BRANCH:refs/heads/$MAIN_BRANCH"))
+        .call()
+    fetch().setRemote(Constants.DEFAULT_REMOTE_NAME).call()
+}
+
+/** 업스트림 설정은 push 와 분리한다 — "원격에 올라가 있지만 추적하지 않는" 상태를 만들 수 있어야 한다. */
+private fun Git.trackUpstream() {
+    repository.config.apply {
+        setString("branch", MAIN_BRANCH, "remote", Constants.DEFAULT_REMOTE_NAME)
+        setString("branch", MAIN_BRANCH, "merge", "refs/heads/$MAIN_BRANCH")
+        save()
+    }
+}
+
 /**
  * [GitAccess] 는 자기 핸들을 열므로 테스트 저장소 경로로 열고, 끝나면 닫는다.
  * Gateway 는 이 공유 경계를 통해서만 저장소를 만진다.
@@ -87,6 +117,28 @@ private fun Repository.indexContentOf(path: String): String {
 
 private fun Repository.indexObjectIdOf(path: String): String =
     readDirCache().getEntry(path)?.objectId?.name ?: error("인덱스에 항목이 없습니다: $path")
+
+/**
+ * 거부 경로 검증용 저장소 상태. amend 가 거부됐다면 세 축(HEAD·인덱스·워킹트리)이 **모두** 그대로여야 한다 —
+ * HEAD 만 보면 인덱스를 건드리고 실패한 amend 를 통과시킨다.
+ */
+private data class RepositorySnapshot(
+    val head: String,
+    val indexObjectIds: Map<String, String>,
+    val workingTreeContents: Map<String, String>,
+)
+
+private fun Git.snapshotOf(vararg paths: String) = RepositorySnapshot(
+    head = headCommit(),
+    indexObjectIds = paths.associateWith { repository.indexObjectIdOf(it) },
+    workingTreeContents = paths.associateWith { File(repository.workTree, it).readText() },
+)
+
+/** 백업 ref 실패는 두 확인 값 모두에서 amend 를 막아야 한다 — 확인 여부와 무관한 가드다. */
+private val BACKUP_FAILURE_CONFIRMATIONS: List<Pair<String, (CommitId) -> AmendConfirmation>> = listOf(
+    "확인이 필요 없는 amend" to { _ -> AmendConfirmation.NotRequired },
+    "대상을 확인한 amend" to { target -> AmendConfirmation.ConfirmedRemoteTarget(target) },
+)
 
 /** 첫 줄만 고치는 hunk — `@@ -1,2 +1,2 @@`. */
 private val FIRST_LINE_HUNK = DiffHunk(
@@ -267,11 +319,10 @@ class StagingGatewayImplSpec : FunSpec({
 
             val result = git.withStagingGateway { gateway ->
                 gateway.stage(listOf(FILE_PATH))
-                gateway.commit("둘째 줄 추가", amend = false)
+                gateway.commit("둘째 줄 추가")
             }
 
-            result.existsOnRemote shouldBe false
-            git.repository.resolve(Constants.HEAD).name shouldBe result.commitId.value
+            git.headCommit() shouldBe result.commitId.value
             git.log().setMaxCount(1).call().first().fullMessage shouldBe "둘째 줄 추가"
             git.status().call().isClean shouldBe true
         }
@@ -286,7 +337,7 @@ class StagingGatewayImplSpec : FunSpec({
                 gateway.stage(listOf(FILE_PATH))
                 val indexEntryCount = git.repository.readDirCache().entryCount
 
-                shouldThrow<UndineException.AuthorNotConfigured> { gateway.commit("메시지", amend = false) }
+                shouldThrow<UndineException.AuthorNotConfigured> { gateway.commit("메시지") }
 
                 git.repository.resolve(Constants.HEAD) shouldBe null
                 git.repository.readDirCache().entryCount shouldBe indexEntryCount
@@ -302,10 +353,10 @@ class StagingGatewayImplSpec : FunSpec({
             val headBefore = git.repository.resolve(Constants.HEAD).name
 
             git.withStagingGateway { gateway ->
-                shouldThrow<UndineException.NothingToCommit> { gateway.commit("변경 없는 커밋", amend = false) }
+                shouldThrow<UndineException.NothingToCommit> { gateway.commit("변경 없는 커밋") }
             }
 
-            git.repository.resolve(Constants.HEAD).name shouldBe headBefore
+            git.headCommit() shouldBe headBefore
         }
     }
 
@@ -316,7 +367,7 @@ class StagingGatewayImplSpec : FunSpec({
 
             val exception = git.withStagingGateway { gateway ->
                 gateway.stage(listOf(FILE_PATH))
-                shouldThrow<UndineException.StateViolation> { gateway.commit("   ", amend = false) }
+                shouldThrow<UndineException.StateViolation> { gateway.commit("   ") }
             }
 
             exception.detail shouldBe "커밋 메시지가 비어 있습니다"
@@ -324,51 +375,201 @@ class StagingGatewayImplSpec : FunSpec({
         }
     }
 
-    test("amend 대상 커밋이 업스트림 remote-tracking ref 에 있으면 existsOnRemote 가 참이다") {
-        val remoteDirectory = tempdir()
-        Git.init().setBare(true).setDirectory(remoteDirectory).call().use { }
+    test("업스트림 remote-tracking ref 가 HEAD 를 포함하면 preflight 가 원격 포함으로 판정한다") {
         initRepository().use { git ->
             git.configureAuthor()
             git.writeFile(FILE_PATH, "first\n")
             git.commitAll("초기 커밋")
-            git.remoteAdd().setName(Constants.DEFAULT_REMOTE_NAME).setUri(URIish(remoteDirectory.absolutePath)).call()
-            git.push()
-                .setRemote(Constants.DEFAULT_REMOTE_NAME)
-                .setRefSpecs(RefSpec("refs/heads/$MAIN_BRANCH:refs/heads/$MAIN_BRANCH"))
-                .call()
-            git.fetch().setRemote(Constants.DEFAULT_REMOTE_NAME).call()
-            git.repository.config.apply {
-                setString("branch", MAIN_BRANCH, "remote", Constants.DEFAULT_REMOTE_NAME)
-                setString("branch", MAIN_BRANCH, "merge", "refs/heads/$MAIN_BRANCH")
-                save()
-            }
-            val amendedCommit = git.repository.resolve(Constants.HEAD).name
+            git.pushToLocalRemote(tempdir())
+            git.trackUpstream()
+            val headBefore = git.headCommit()
+
+            val preflight = git.withStagingGateway { gateway -> gateway.inspectAmend() }
+
+            preflight.target shouldBe CommitId.of(headBefore)
+            preflight.existsOnRemote shouldBe true
+            git.headCommit() shouldBe headBefore
+        }
+    }
+
+    test("업스트림이 없으면 원격에 올라가 있어도 preflight 가 원격 미포함으로 판정한다") {
+        initRepository().use { git ->
+            git.configureAuthor()
+            git.writeFile(FILE_PATH, "first\n")
+            git.commitAll("초기 커밋")
+            // push 는 했지만 branch.*.remote 설정이 없다 — 판정 범위는 업스트림 하나다.
+            git.pushToLocalRemote(tempdir())
+
+            val preflight = git.withStagingGateway { gateway -> gateway.inspectAmend() }
+
+            preflight.existsOnRemote shouldBe false
+        }
+    }
+
+    test("로컬 전용 HEAD 는 preflight 뒤 확인 없이 amend 되고 HEAD 가 새 커밋을 가리킨다") {
+        initRepository().use { git ->
+            git.configureAuthor()
+            git.writeFile(FILE_PATH, "first\n")
+            git.commitAll("초기 커밋")
+            val amendedCommit = git.headCommit()
             git.writeFile(FILE_PATH, "first\nsecond\n")
 
             val result = git.withStagingGateway { gateway ->
                 gateway.stage(listOf(FILE_PATH))
-                gateway.commit("초기 커밋 고침", amend = true)
+                gateway.inspectAmend().existsOnRemote shouldBe false
+                gateway.amend("초기 커밋 고침", AmendConfirmation.NotRequired)
             }
 
-            result.existsOnRemote shouldBe true
             result.commitId.value shouldNotBe amendedCommit
-            git.repository.resolve(Constants.HEAD).name shouldBe result.commitId.value
+            git.headCommit() shouldBe result.commitId.value
+            git.log().call().count() shouldBe 1
         }
     }
 
-    test("업스트림이 없는 amend 는 existsOnRemote 가 거짓이다") {
+    test("원격 포함 대상은 같은 대상을 확인하면 amend 되고 원본 커밋이 백업 ref 로 남는다") {
         initRepository().use { git ->
             git.configureAuthor()
             git.writeFile(FILE_PATH, "first\n")
             git.commitAll("초기 커밋")
+            git.pushToLocalRemote(tempdir())
+            git.trackUpstream()
+            val amendedCommit = git.headCommit()
             git.writeFile(FILE_PATH, "first\nsecond\n")
+
+            val result = git.withStagingGateway { gateway ->
+                gateway.stage(listOf(FILE_PATH))
+                val preflight = gateway.inspectAmend()
+                preflight.existsOnRemote shouldBe true
+                gateway.amend("초기 커밋 고침", AmendConfirmation.ConfirmedRemoteTarget(preflight.target))
+            }
+
+            result.commitId.value shouldNotBe amendedCommit
+            git.headCommit() shouldBe result.commitId.value
+            git.backupRefs().single().objectId.name shouldBe amendedCommit
+        }
+    }
+
+    test("원격 포함 대상을 확인 없이 amend 하면 거부하고 HEAD·인덱스·워킹트리를 그대로 둔다") {
+        initRepository().use { git ->
+            git.configureAuthor()
+            git.writeFile(FILE_PATH, "first\n")
+            git.commitAll("초기 커밋")
+            git.pushToLocalRemote(tempdir())
+            git.trackUpstream()
+            val headBefore = git.headCommit()
+            val indexBefore = git.repository.indexObjectIdOf(FILE_PATH)
+            val workingTreeContent = "first\nsecond\n"
+            git.writeFile(FILE_PATH, workingTreeContent)
+
+            val exception = git.withStagingGateway { gateway ->
+                shouldThrow<UndineException.AmendConfirmationRequired> {
+                    gateway.amend("확인 없는 고치기", AmendConfirmation.NotRequired)
+                }
+            }
+
+            exception.reason shouldBe UndineException.AmendConfirmationRequired.Reason.NOT_CONFIRMED
+            exception.target shouldBe CommitId.of(headBefore)
+            git.headCommit() shouldBe headBefore
+            git.repository.indexObjectIdOf(FILE_PATH) shouldBe indexBefore
+            File(git.repository.workTree, FILE_PATH).readText() shouldBe workingTreeContent
+            git.backupRefs().shouldBeEmpty()
+        }
+    }
+
+    test("preflight 뒤 HEAD 가 바뀌면 이전 대상 확인으로는 amend 할 수 없다") {
+        initRepository().use { git ->
+            git.configureAuthor()
+            git.writeFile(FILE_PATH, "first\n")
+            git.commitAll("초기 커밋")
+            git.pushToLocalRemote(tempdir())
+            git.trackUpstream()
+
+            val exception = git.withStagingGateway { gateway ->
+                val staleTarget = gateway.inspectAmend().target
+
+                // preflight 와 실행 사이에 다른 커밋이 HEAD 가 된다.
+                git.writeFile(OTHER_FILE_PATH, "other\n")
+                git.commitAll("사이에 낀 커밋")
+                // 스냅샷은 끼어든 커밋 **뒤** 상태다 — 거부가 그 상태를 그대로 두는지가 관심사다.
+                val before = git.snapshotOf(FILE_PATH, OTHER_FILE_PATH)
+
+                val failure = shouldThrow<UndineException.AmendConfirmationRequired> {
+                    gateway.amend("낡은 확인으로 고치기", AmendConfirmation.ConfirmedRemoteTarget(staleTarget))
+                }
+                git.snapshotOf(FILE_PATH, OTHER_FILE_PATH) shouldBe before
+                failure
+            }
+
+            exception.reason shouldBe UndineException.AmendConfirmationRequired.Reason.TARGET_MISMATCH
+            git.backupRefs().shouldBeEmpty()
+        }
+    }
+
+    test("다른 대상을 확인한 값으로는 amend 할 수 없다") {
+        initRepository().use { git ->
+            git.configureAuthor()
+            git.writeFile(FILE_PATH, "first\n")
+            git.commitAll("첫 커밋")
+            val otherCommit = git.headCommit()
+            git.writeFile(OTHER_FILE_PATH, "other\n")
+            git.commitAll("둘째 커밋")
+            git.writeFile(FILE_PATH, "first\nsecond\n")
+            val before = git.snapshotOf(FILE_PATH, OTHER_FILE_PATH)
+
+            val exception = git.withStagingGateway { gateway ->
+                shouldThrow<UndineException.AmendConfirmationRequired> {
+                    gateway.amend("엉뚱한 확인", AmendConfirmation.ConfirmedRemoteTarget(CommitId.of(otherCommit)))
+                }
+            }
+
+            exception.reason shouldBe UndineException.AmendConfirmationRequired.Reason.TARGET_MISMATCH
+            git.snapshotOf(FILE_PATH, OTHER_FILE_PATH) shouldBe before
+            git.backupRefs().shouldBeEmpty()
+        }
+    }
+
+    test("preflight 뒤 원격 포함으로 바뀌면 확인 없는 amend 를 거부한다") {
+        initRepository().use { git ->
+            git.configureAuthor()
+            git.writeFile(FILE_PATH, "first\n")
+            git.commitAll("초기 커밋")
+            git.pushToLocalRemote(tempdir())
+            git.writeFile(FILE_PATH, "first\nsecond\n")
+            val before = git.snapshotOf(FILE_PATH)
+
+            git.withStagingGateway { gateway ->
+                // 업스트림이 없어 이 시점 판정은 원격 미포함이다.
+                gateway.inspectAmend().existsOnRemote shouldBe false
+
+                git.trackUpstream()
+
+                shouldThrow<UndineException.AmendConfirmationRequired> {
+                    gateway.amend("낡은 판정으로 고치기", AmendConfirmation.NotRequired)
+                }.reason shouldBe UndineException.AmendConfirmationRequired.Reason.NOT_CONFIRMED
+            }
+
+            git.snapshotOf(FILE_PATH) shouldBe before
+            git.backupRefs().shouldBeEmpty()
+        }
+    }
+
+    test("HEAD 가 없는 저장소는 preflight 도 amend 도 StateViolation 이고 ref 를 만들지 않는다") {
+        initRepository().use { git ->
+            git.configureAuthor()
+            git.writeFile(FILE_PATH, "first\n")
 
             git.withStagingGateway { gateway ->
                 gateway.stage(listOf(FILE_PATH))
-                gateway.commit("초기 커밋 고침", amend = true).existsOnRemote shouldBe false
+
+                shouldThrow<UndineException.StateViolation> { gateway.inspectAmend() }
+                    .detail shouldBe "고칠 이전 커밋이 없습니다"
+                shouldThrow<UndineException.StateViolation> {
+                    gateway.amend("고칠 커밋 없음", AmendConfirmation.NotRequired)
+                }.detail shouldBe "고칠 이전 커밋이 없습니다"
             }
 
-            git.log().call().count() shouldBe 1
+            git.repository.resolve(Constants.HEAD) shouldBe null
+            git.repository.refDatabase.getRefsByPrefix("refs/undine/").shouldBeEmpty()
         }
     }
 
@@ -438,17 +639,17 @@ class StagingGatewayImplSpec : FunSpec({
             git.configureAuthor()
             git.writeFile(FILE_PATH, "first\n")
             git.commitAll("초기 커밋")
-            val amendedCommit = git.repository.resolve(Constants.HEAD).name
+            val amendedCommit = git.headCommit()
             git.writeFile(FILE_PATH, "first\nsecond\n")
 
             val result = git.withStagingGateway { gateway ->
                 gateway.stage(listOf(FILE_PATH))
-                gateway.commit("초기 커밋 고침", amend = true)
+                gateway.amend("초기 커밋 고침", AmendConfirmation.NotRequired)
             }
 
-            val backups = git.repository.refDatabase.getRefsByPrefix("refs/undine/amend-backup/")
+            val backups = git.backupRefs()
             backups shouldHaveSize 1
-            backups.single().name shouldBe "refs/undine/amend-backup/$MAIN_BRANCH-$FIXED_NOW-${amendedCommit.take(8)}"
+            backups.single().name shouldBe "$AMEND_BACKUP_REF_PREFIX$MAIN_BRANCH-$FIXED_NOW-${amendedCommit.take(8)}"
             backups.single().objectId.name shouldBe amendedCommit
             result.commitId.value shouldNotBe amendedCommit
         }
@@ -463,7 +664,7 @@ class StagingGatewayImplSpec : FunSpec({
 
             git.withStagingGateway { gateway ->
                 gateway.stage(listOf(FILE_PATH))
-                gateway.commit("두번째 커밋", amend = false)
+                gateway.commit("두번째 커밋")
             }
 
             git.repository.refDatabase.getRefsByPrefix("refs/undine/").shouldBeEmpty()
@@ -475,50 +676,53 @@ class StagingGatewayImplSpec : FunSpec({
             git.configureAuthor()
             git.writeFile(FILE_PATH, "first\n")
             git.commitAll("초기 커밋")
-            val firstTarget = git.repository.resolve(Constants.HEAD).name
+            val firstTarget = git.headCommit()
             git.writeFile(FILE_PATH, "first\nsecond\n")
 
             // 시각을 고정해 이름 충돌 조건을 강제한다 — 커밋 약어가 없으면 앞선 백업이 덮어써진다.
             val secondTarget = git.withStagingGateway { gateway ->
                 gateway.stage(listOf(FILE_PATH))
-                gateway.commit("한 번 고침", amend = true).commitId.value
+                gateway.amend("한 번 고침", AmendConfirmation.NotRequired).commitId.value
             }
             git.writeFile(FILE_PATH, "first\nsecond\nthird\n")
             git.withStagingGateway { gateway ->
                 gateway.stage(listOf(FILE_PATH))
-                gateway.commit("두 번 고침", amend = true)
+                gateway.amend("두 번 고침", AmendConfirmation.NotRequired)
             }
 
-            val backups = git.repository.refDatabase.getRefsByPrefix("refs/undine/amend-backup/")
+            val backups = git.backupRefs()
             backups shouldHaveSize 2
             backups.map { it.objectId.name }.toSet() shouldBe setOf(firstTarget, secondTarget)
         }
     }
 
-    test("백업 ref 를 만들지 못하면 amend 하지 않고 HEAD·인덱스·워킹트리를 그대로 둔다") {
-        initRepository().use { git ->
-            git.configureAuthor()
-            git.writeFile(FILE_PATH, "first\n")
-            git.commitAll("초기 커밋")
-            val headBefore = git.repository.resolve(Constants.HEAD).name
-            val indexBefore = git.repository.indexObjectIdOf(FILE_PATH)
-            val workingTreeContent = "first\nsecond\n"
-            git.writeFile(FILE_PATH, workingTreeContent)
-            // 백업 ref 경로를 디렉터리로 선점해 ref 생성을 실패시킨다.
-            val blocker = git.repository.updateRef(
-                "refs/undine/amend-backup/$MAIN_BRANCH-$FIXED_NOW-${headBefore.take(8)}/blocker",
-            )
-            blocker.setNewObjectId(git.repository.resolve(Constants.HEAD))
-            blocker.setForceUpdate(true)
-            blocker.update()
+    BACKUP_FAILURE_CONFIRMATIONS.forEach { (label, confirmationFor) ->
+        test("백업 ref 를 만들지 못하면 ${label}도 실행하지 않고 HEAD·인덱스·워킹트리를 그대로 둔다") {
+            initRepository().use { git ->
+                git.configureAuthor()
+                git.writeFile(FILE_PATH, "first\n")
+                git.commitAll("초기 커밋")
+                val headBefore = git.headCommit()
+                git.writeFile(FILE_PATH, "first\nsecond\n")
+                val before = git.snapshotOf(FILE_PATH)
+                // 백업 ref 경로를 디렉터리로 선점해 ref 생성을 실패시킨다.
+                val blocker = git.repository.updateRef(
+                    "$AMEND_BACKUP_REF_PREFIX$MAIN_BRANCH-$FIXED_NOW-${headBefore.take(8)}/blocker",
+                )
+                blocker.setNewObjectId(git.repository.resolve(Constants.HEAD))
+                blocker.setForceUpdate(true)
+                blocker.update()
 
-            shouldThrow<UndineException.StateViolation> {
-                git.withStagingGateway { gateway -> gateway.commit("고치기 시도", amend = true) }
+                val exception = shouldThrow<UndineException.StateViolation> {
+                    git.withStagingGateway { gateway ->
+                        gateway.amend("고치기 시도", confirmationFor(CommitId.of(headBefore)))
+                    }
+                }
+
+                // 다른 원인의 StateViolation 으로 통과하지 않게 실패 사유를 못 박는다.
+                exception.detail shouldContain "amend 대상을 백업하지 못해"
+                git.snapshotOf(FILE_PATH) shouldBe before
             }
-
-            git.repository.resolve(Constants.HEAD).name shouldBe headBefore
-            git.repository.indexObjectIdOf(FILE_PATH) shouldBe indexBefore
-            File(git.repository.workTree, FILE_PATH).readText() shouldBe workingTreeContent
         }
     }
 })
