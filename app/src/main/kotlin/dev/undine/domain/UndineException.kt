@@ -86,4 +86,26 @@ sealed class UndineException(message: String, cause: Throwable? = null) : Except
     /** 스테이징된 변경이 없어 커밋할 것이 없다. */
     class NothingToCommit :
         UndineException("스테이징된 변경이 없습니다.")
+
+    /**
+     * 원격에 이미 있는 커밋을 고쳐 쓰려는데 사용자의 명시적 확인이 없거나 낡았다.
+     *
+     * [StateViolation] 을 재사용하지 않는 이유: 화면이 취해야 할 행동이 다르다 —
+     * 상태 위반은 "왜 불가능한지" 설명이고, 이건 **확인 절차를 다시 밟으면 진행할 수 있다**.
+     * 두 사유 모두 새 [AmendPreflight] 조회부터 다시 해야 한다.
+     */
+    class AmendConfirmationRequired(val target: CommitId, val reason: Reason) :
+        UndineException(
+            "원격에 있는 커밋 '${target.value}' 을(를) 고치려면 확인이 필요합니다(${reason.name}). " +
+                "대상을 다시 조회한 뒤 확인하세요.",
+        ) {
+
+        enum class Reason {
+            /** 확인 없이 실행하려 했다 — 조회 시점엔 원격 미포함이었더라도 실행 직전엔 포함이다. */
+            NOT_CONFIRMED,
+
+            /** 확인한 커밋이 지금의 amend 대상과 다르다 — 조회 뒤 HEAD 가 바뀌었다. */
+            TARGET_MISMATCH,
+        }
+    }
 }
