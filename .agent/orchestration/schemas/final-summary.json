@@ -65,7 +65,7 @@
     },
     "advisory": {
       "type": "array",
-      "description": "p3~p4. 보고에만 남기고 자동 수정 대상이 아니다.",
+      "description": "차단하지 않는 지적. p3~p4 nit 과, 차단 자격이 없어 강등된 항목(review-grading.md C1~C6)을 함께 담는다. 강등 항목은 심각도를 낮추지 않고 non_blocking_reason 을 붙인다 — 기존 p0 를 p4 로 기록하면 후속 티켓에서 위험을 잃는다.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -73,12 +73,17 @@
           "level",
           "file",
           "line",
-          "problem"
+          "problem",
+          "non_blocking_reason",
+          "followup_ko"
         ],
         "properties": {
           "level": {
             "type": "string",
             "enum": [
+              "p0",
+              "p1",
+              "p2",
               "p3",
               "p4"
             ]
@@ -91,6 +96,22 @@
           },
           "problem": {
             "type": "string"
+          },
+          "non_blocking_reason": {
+            "type": "string",
+            "enum": [
+              "none",
+              "C1_pre_existing",
+              "C2_unachievable",
+              "C4_decided",
+              "C5_artifact",
+              "C6_test_depth"
+            ],
+            "description": "차단 자격을 못 갖춘 사유 (review-grading.md C1·C2·C4·C5·C6). 강등이 아닌 단순 p3~p4 nit 이면 \"none\". C3 은 철회된 결번이다."
+          },
+          "followup_ko": {
+            "type": "string",
+            "description": "후속 티켓으로 다룰 내용 (C1·C2 에서 권장). 없으면 빈 문자열."
           }
         }
       }

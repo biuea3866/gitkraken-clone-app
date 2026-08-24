@@ -28,6 +28,13 @@ wave 2 에서 실제로 그렇게 나갔다 — 이 워크플로우가 그 구�
 review_file 은 **직전 라운드의 final_summary.json** 을 넘긴다 — 사람이 무엇을 기각하고
 무엇을 고쳤는지 대조할 기준이 된다.
 
+**decisions_file 은 축 프롬프트가 실제로 읽는다** (사용법 예시에만 있는 값이 아니다). 사람이 결정
+문서로 확정한 범위·설계를 축이 다시 finding 으로 올리는 것을 막는다 — 없으면 `없음` 을 넘긴다.
+
+**차단 자격**: 이 워크플로우의 축·요약 노드는 `.agent/docs/review-grading.md` "차단 판정의
+전제" 를 적용한다. 이번 diff 가 원인이 아닌 기존 결함·달성 불가한 요구·결정된 사항은 `findings` 가
+아니라 `advisory` 로 간다. 이 경계가 없으면 라운드가 수렴하지 않는다 (wave 3 관측: 한 티켓 5라운드).
+
 **재실행 시 주의**: `final_summary_v.json` 을 그대로 `review_file` 로 넘기지 않는다. 이 워크플로우가
 같은 파일을 덮어쓰므로 노드가 읽을 시점에는 사라진다. 다시 돌릴 때는 먼저 스냅샷을 뜬다:
 
@@ -54,6 +61,8 @@ prompt = '''
 - 최종 변경: 먼저 `git status --porcelain` 을 봅니다. 변경이 남아 있으면 그것이 대상이고,
   비어 있으면 **이미 커밋된 상태**이므로 `git diff origin/main...HEAD` 를 대상으로 삼습니다.
   둘 다 비면 검증할 diff 가 없다는 사실을 그대로 보고합니다 (통과로 처리하지 않습니다).
+- **결정 문서: {{decisions_file}}** — 사람이 확정한 범위·설계다. 여기서 정해진 것을 finding 으로
+  올리지 않습니다 (C4). 값이 `없음` 이면 결정 문서가 없다는 뜻입니다.
 - 등급 기준: .agent/docs/review-grading.md · 오탐 기준: .agent/docs/review-false-positives.md (선행 대조)
 
 **같은 원인의 변형을 전부 찾아 한 번에 보고하세요.** finding 하나를 적었으면 그 원인이 만드는
@@ -61,6 +70,13 @@ prompt = '''
 그 횟수만큼 반복되고, 그 사이 사람이 "고쳤다" 고 판단합니다.
 (실제 사례: `schemaVersion` 해석 실패 하나가 Int 절삭 → Double 폴백 → 명시적 null 로 세 라운드에 나뉘어
 나왔습니다. 셋은 같은 결함이며 한 번에 나왔어야 합니다.)
+
+**단, 넓히는 범위는 이번 diff 가 원인인 것까지입니다.** 같은 부류를 이 diff 밖 기존 코드로 넓혀
+차단하지 마세요 — 그것이 라운드를 끝나지 않게 만든 실제 원인입니다. 차단(`findings`)에 올릴 자격은
+`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1·C2·C4·C5·C6 이 정합니다 (C3 은 철회된 결번).
+**애매하면 차단으로 둡니다** — 자격 판정이 느슨하면 진짜 회귀가 advisory 로 빠져 그대로 머지됩니다. 자격이
+없으면 **심각도를 낮추지 말고 `advisory` 에 `non_blocking_reason` 과 함께** 넣고, 필요하면
+`followup_ko` 에 후속 티켓 내용을 적습니다.
 
 점검:
 1. 직전 라운드의 축 1 findings 가 실제로 해소됐는지 파일:라인으로 확인합니다. 미해소면 그대로 다시 올립니다.
@@ -86,6 +102,8 @@ prompt = '''
 - 최종 변경: 먼저 `git status --porcelain` 을 봅니다. 변경이 남아 있으면 그것이 대상이고,
   비어 있으면 **이미 커밋된 상태**이므로 `git diff origin/main...HEAD` 를 대상으로 삼습니다.
   둘 다 비면 검증할 diff 가 없다는 사실을 그대로 보고합니다 (통과로 처리하지 않습니다).
+- **결정 문서: {{decisions_file}}** — 사람이 확정한 범위·설계다. 여기서 정해진 것을 finding 으로
+  올리지 않습니다 (C4). 값이 `없음` 이면 결정 문서가 없다는 뜻입니다.
 - 등급 기준: .agent/docs/review-grading.md · 오탐 기준: .agent/docs/review-false-positives.md (선행 대조)
 
 **같은 원인의 변형을 전부 찾아 한 번에 보고하세요.** finding 하나를 적었으면 그 원인이 만드는
@@ -93,6 +111,13 @@ prompt = '''
 그 횟수만큼 반복되고, 그 사이 사람이 "고쳤다" 고 판단합니다.
 (실제 사례: `schemaVersion` 해석 실패 하나가 Int 절삭 → Double 폴백 → 명시적 null 로 세 라운드에 나뉘어
 나왔습니다. 셋은 같은 결함이며 한 번에 나왔어야 합니다.)
+
+**단, 넓히는 범위는 이번 diff 가 원인인 것까지입니다.** 같은 부류를 이 diff 밖 기존 코드로 넓혀
+차단하지 마세요 — 그것이 라운드를 끝나지 않게 만든 실제 원인입니다. 차단(`findings`)에 올릴 자격은
+`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1·C2·C4·C5·C6 이 정합니다 (C3 은 철회된 결번).
+**애매하면 차단으로 둡니다** — 자격 판정이 느슨하면 진짜 회귀가 advisory 로 빠져 그대로 머지됩니다. 자격이
+없으면 **심각도를 낮추지 말고 `advisory` 에 `non_blocking_reason` 과 함께** 넣고, 필요하면
+`followup_ko` 에 후속 티켓 내용을 적습니다.
 
 점검:
 1. **수정된 p0~p2 에 대응하는 회귀 테스트**가 추가됐는지 확인합니다 — 고치기만 하고 테스트가 없으면 p2 입니다.
@@ -122,6 +147,8 @@ prompt = '''
 - 최종 변경: 먼저 `git status --porcelain` 을 봅니다. 변경이 남아 있으면 그것이 대상이고,
   비어 있으면 **이미 커밋된 상태**이므로 `git diff origin/main...HEAD` 를 대상으로 삼습니다.
   둘 다 비면 검증할 diff 가 없다는 사실을 그대로 보고합니다 (통과로 처리하지 않습니다).
+- **결정 문서: {{decisions_file}}** — 사람이 확정한 범위·설계다. 여기서 정해진 것을 finding 으로
+  올리지 않습니다 (C4). 값이 `없음` 이면 결정 문서가 없다는 뜻입니다.
 - 등급 기준: .agent/docs/review-grading.md · 오탐 기준: .agent/docs/review-false-positives.md (선행 대조)
 
 **같은 원인의 변형을 전부 찾아 한 번에 보고하세요.** finding 하나를 적었으면 그 원인이 만드는
@@ -130,10 +157,18 @@ prompt = '''
 (실제 사례: `schemaVersion` 해석 실패 하나가 Int 절삭 → Double 폴백 → 명시적 null 로 세 라운드에 나뉘어
 나왔습니다. 셋은 같은 결함이며 한 번에 나왔어야 합니다.)
 
+**단, 넓히는 범위는 이번 diff 가 원인인 것까지입니다.** 같은 부류를 이 diff 밖 기존 코드로 넓혀
+차단하지 마세요 — 그것이 라운드를 끝나지 않게 만든 실제 원인입니다. 차단(`findings`)에 올릴 자격은
+`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1·C2·C4·C5·C6 이 정합니다 (C3 은 철회된 결번).
+**애매하면 차단으로 둡니다** — 자격 판정이 느슨하면 진짜 회귀가 advisory 로 빠져 그대로 머지됩니다. 자격이
+없으면 **심각도를 낮추지 말고 `advisory` 에 `non_blocking_reason` 과 함께** 넣고, 필요하면
+`followup_ko` 에 후속 티켓 내용을 적습니다.
+
 점검 (서브에이전트를 호출할 수 없으므로 직접 grep 해서 판정합니다):
 1. 직전 라운드의 축 3 findings 해소 여부를 파일:라인으로 확인합니다.
 2. **수정이 새 사이드 이펙트를 만들었는지** — 수정된 함수의 호출자를 다시 grep 합니다.
-   직전 라운드에 없던 영향은 여기서 처음 잡힙니다.
+   직전 라운드에 없던 차단을 올릴 때는 그것이 **직전 수정이 새로 만든 회귀**임을 변경 라인으로
+   보여야 합니다. 보일 수 없으면 (수정과 무관한 기존 구조라면) `advisory` 입니다 — C1.
 3. 레이어 경계 · interface↔구현 양끝 · JGit 자원 수명 · 스레드 경계를 최종 상태로 다시 봅니다.
 
 diff 밖 파일을 근거로 단정하지 마세요 — 읽고 확인한 것만 적습니다 (오탐 SSOT A절).
@@ -157,6 +192,8 @@ prompt = '''
   비어 있으면 **이미 커밋된 상태**이므로 `git diff origin/main...HEAD` 를 대상으로 삼습니다.
   둘 다 비면 검증할 diff 가 없다는 사실을 그대로 보고합니다 (통과로 처리하지 않습니다).
 - 프로세스 게이트: .agent/docs/conventions.md · CI 규칙: .github/workflows/ci.yml
+- **결정 문서: {{decisions_file}}** — 사람이 확정한 범위·설계다. 여기서 정해진 것을 finding 으로
+  올리지 않습니다 (C4). 값이 `없음` 이면 결정 문서가 없다는 뜻입니다.
 - 등급 기준: .agent/docs/review-grading.md · 오탐 기준: .agent/docs/review-false-positives.md (선행 대조)
 
 **같은 원인의 변형을 전부 찾아 한 번에 보고하세요.** finding 하나를 적었으면 그 원인이 만드는
@@ -164,6 +201,13 @@ prompt = '''
 그 횟수만큼 반복되고, 그 사이 사람이 "고쳤다" 고 판단합니다.
 (실제 사례: `schemaVersion` 해석 실패 하나가 Int 절삭 → Double 폴백 → 명시적 null 로 세 라운드에 나뉘어
 나왔습니다. 셋은 같은 결함이며 한 번에 나왔어야 합니다.)
+
+**단, 넓히는 범위는 이번 diff 가 원인인 것까지입니다.** 같은 부류를 이 diff 밖 기존 코드로 넓혀
+차단하지 마세요 — 그것이 라운드를 끝나지 않게 만든 실제 원인입니다. 차단(`findings`)에 올릴 자격은
+`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1·C2·C4·C5·C6 이 정합니다 (C3 은 철회된 결번).
+**애매하면 차단으로 둡니다** — 자격 판정이 느슨하면 진짜 회귀가 advisory 로 빠져 그대로 머지됩니다. 자격이
+없으면 **심각도를 낮추지 말고 `advisory` 에 `non_blocking_reason` 과 함께** 넣고, 필요하면
+`followup_ko` 에 후속 티켓 내용을 적습니다.
 
 점검:
 1. 직전 라운드의 축 4 findings 해소 여부를 확인합니다.
@@ -190,6 +234,8 @@ prompt = '''
 - 최종 변경: 먼저 `git status --porcelain` 을 봅니다. 변경이 남아 있으면 그것이 대상이고,
   비어 있으면 **이미 커밋된 상태**이므로 `git diff origin/main...HEAD` 를 대상으로 삼습니다.
   둘 다 비면 검증할 diff 가 없다는 사실을 그대로 보고합니다 (통과로 처리하지 않습니다).
+- **결정 문서: {{decisions_file}}** — 사람이 확정한 범위·설계다. 여기서 정해진 것을 finding 으로
+  올리지 않습니다 (C4). 값이 `없음` 이면 결정 문서가 없다는 뜻입니다.
 - 등급 기준: .agent/docs/review-grading.md · 오탐 기준: .agent/docs/review-false-positives.md (선행 대조)
 
 **같은 원인의 변형을 전부 찾아 한 번에 보고하세요.** finding 하나를 적었으면 그 원인이 만드는
@@ -197,6 +243,13 @@ prompt = '''
 그 횟수만큼 반복되고, 그 사이 사람이 "고쳤다" 고 판단합니다.
 (실제 사례: `schemaVersion` 해석 실패 하나가 Int 절삭 → Double 폴백 → 명시적 null 로 세 라운드에 나뉘어
 나왔습니다. 셋은 같은 결함이며 한 번에 나왔어야 합니다.)
+
+**단, 넓히는 범위는 이번 diff 가 원인인 것까지입니다.** 같은 부류를 이 diff 밖 기존 코드로 넓혀
+차단하지 마세요 — 그것이 라운드를 끝나지 않게 만든 실제 원인입니다. 차단(`findings`)에 올릴 자격은
+`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1·C2·C4·C5·C6 이 정합니다 (C3 은 철회된 결번).
+**애매하면 차단으로 둡니다** — 자격 판정이 느슨하면 진짜 회귀가 advisory 로 빠져 그대로 머지됩니다. 자격이
+없으면 **심각도를 낮추지 말고 `advisory` 에 `non_blocking_reason` 과 함께** 넣고, 필요하면
+`followup_ko` 에 후속 티켓 내용을 적습니다.
 
 점검:
 1. 직전 라운드의 축 5 findings 해소 여부를 확인합니다 (특히 설정 역방향 호환·파괴적 연산 가드).
@@ -251,21 +304,30 @@ prompt = '''
 - 재검증 5축 산출물: 업스트림 `intent_ac_v` · `tests_v` · `side_effects_v` · `deploy_v` · `rollback_v`
 - 문서 제안: 업스트림 `docs_final_v`
 - 스펙: {{spec_file}} · 직전 판정: {{review_file}}
-- 등급·verdict 규칙: .agent/docs/review-grading.md
+- 등급·verdict·차단 자격(C1·C2·C4·C5·C6) 규칙: .agent/docs/review-grading.md
+- **결정 문서: {{decisions_file}}** — 여기서 정해진 것은 finding 이 아닙니다 (C4).
 
 해야 할 일:
 1. 재검증 findings 를 중복 제거해 병합합니다 (같은 파일:라인 + 같은 원인은 1건, 최고 레벨 채택).
 2. `rounds_run` 은 직전 라운드 수 + 1 입니다 (사람 수정분 재검증 라운드).
-3. `remaining_blocking` 에 **최종 diff 에 남아 있는 p0~p2 만** 넣습니다. 해소된 직전 라운드 findings 는 넣지 않습니다.
-4. `advisory` 에 p3~p4 를 남깁니다 (자동 수정 대상이 아니며, 사람이 판단할 몫입니다).
-5. `ac_results` 를 최종 diff 기준으로 채웁니다.
-6. `doc_proposals` 는 `docs_final_v` 의 proposals 개수입니다.
-7. `pr_ready` 는 **remaining_blocking 이 비어 있고 · 모든 AC 가 met 이고 · 빌드/테스트가 pass** 일 때만 true 입니다.
+3. **차단 자격을 재심사합니다 (백스톱).** 축이 `findings` 에 올렸더라도
+   `.agent/docs/review-grading.md` "차단 판정의 전제" 를 못 갖춘 항목은 여기서 `advisory` 로
+   옮깁니다 — verdict 를 정하는 것이 이 노드이므로 경계도 여기서 확정합니다. 각 항목의 근거
+   라인이 **이번 diff 의 변경 라인인지** 확인하고, 변경되지 않은 라인만 인용됐으면 C1 입니다.
+4. `remaining_blocking` 에 **차단 자격을 갖춘 p0~p2 만** 넣습니다. 해소된 직전 라운드 findings 는 넣지 않습니다.
+5. `advisory` 에 (a) p3~p4 nit 과 (b) 3번에서 강등한 항목을 넣습니다. 강등 항목은 **심각도를 낮추지 말고**
+   `non_blocking_reason` 을 붙이고, C1·C2 면 `followup_ko` 에 후속 티켓 내용을 적습니다.
+6. **수렴을 확인합니다.** 직전 라운드보다 `remaining_blocking` 이 늘었다면, 늘어난 각 항목이
+   **직전 수정이 만든 회귀**인지 변경 라인으로 확인합니다. 회귀가 아니면 3번으로 돌아가 강등합니다.
+   라운드가 진행될수록 차단은 줄어야 합니다 — 늘어난다면 경계가 새는 것입니다.
+7. `ac_results` 를 최종 diff 기준으로 채웁니다.
+8. `doc_proposals` 는 `docs_final_v` 의 proposals 개수입니다.
+9. `pr_ready` 는 **remaining_blocking 이 비어 있고 · 모든 AC 가 met 이고 · 빌드/테스트가 pass** 일 때만 true 입니다.
    빌드 통과 여부는 `tests_v` 의 판정을 따릅니다 — 같은 증적을 두 번 요구하지 않습니다.
    하나라도 불확실하면 false 로 두고 이유를 summary_ko 에 씁니다.
-8. `next_steps_ko` 에는 사람이 게이트에서 할 일을 적습니다 — 남은 blocking 처리, 커밋, Draft PR 순서.
+10. `next_steps_ko` 에는 사람이 게이트에서 할 일을 적습니다 — 남은 blocking 처리, 커밋, Draft PR 순서.
    **노드는 커밋·PR 을 수행하지 않습니다.**
-9. **축 산출물**이 누락·파싱 실패면 verdict 를 REQUEST_CHANGES 로 두고 그 사실을 적습니다 (fail-closed).
+11. **축 산출물**이 누락·파싱 실패면 verdict 를 REQUEST_CHANGES 로 두고 그 사실을 적습니다 (fail-closed).
    fail-closed 는 **증거인 축 산출물에만** 적용합니다 — `{{review_file}}`(직전 판정)은 메타데이터라
    읽지 못해도 그것만으로 REQUEST_CHANGES 로 만들지 않습니다. 그때는 `rounds_run` 을 0 으로 두고
    그 사실을 `summary_ko` 에 적은 뒤, **축 findings 만으로** verdict 를 정합니다.

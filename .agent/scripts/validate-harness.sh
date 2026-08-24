@@ -130,6 +130,17 @@ else
   printf '%s\n' "$sync_out" | sed 's/^/        /'
 fi
 
+echo "== 6. 오케스트레이션 스키마 strict 규칙 =="
+# 벤더 구조화 출력은 모든 object 의 required 가 properties 전체를 담기를 요구한다.
+# 위반하면 dry-run 은 통과하고 유료 호출에서 400 으로 노드가 전멸한다.
+schema_out=$("$H/scripts/validate-schemas.py" 2>&1)
+if [ $? -eq 0 ]; then
+  ok "$(printf '%s' "$schema_out" | tail -1 | sed 's/^✓ //')"
+else
+  note "output_schema 가 strict 규칙 위반 — .agent/scripts/validate-schemas.py 출력 참조"
+  printf '%s\n' "$schema_out" | sed 's/^/        /'
+fi
+
 echo
 if [ "$warn" -eq 0 ]; then
   printf '\033[32m✓ harness 정합: 경고 0\033[0m\n'; exit 0

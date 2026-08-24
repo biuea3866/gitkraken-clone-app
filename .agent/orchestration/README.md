@@ -196,10 +196,14 @@ $R $W/develop-3-repair.toml --run-dir $RUN \
 # ⑦  사람이 final_summary.json / docs_final_*.json 검토 → 문서 반영
 
 # ⑧  ⑦에서 코드를 고쳤으면 재검증 (고치지 않았으면 건너뛴다) → 통과 후 커밋 → Draft PR
+# 축 노드는 사람의 터미널을 볼 수 없다 — 빌드 증적을 파일로 남겨 넘긴다.
+(cd <워크트리> && ./gradlew build > $RUN/human-build.log 2>&1)
+
 $R $W/develop-4-verify.toml --run-dir $RUN \
   --set ticket=UND-14 --set spec_file=$RUN/spec.json \
   --set review_file=$RUN/final_summary.json \
-  --set decisions_file=<결정 문서 또는 없음> --max-parallel 6
+  --set decisions_file=<결정 문서 또는 없음> \
+  --set build_log=$RUN/human-build.log --max-parallel 6
 ```
 
 의도적으로 지키는 것 3개:
