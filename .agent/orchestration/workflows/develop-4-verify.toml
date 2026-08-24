@@ -31,7 +31,7 @@ review_file 은 **직전 라운드의 final_summary.json** 을 넘긴다 — 사
 **decisions_file 은 축 프롬프트가 실제로 읽는다** (사용법 예시에만 있는 값이 아니다). 사람이 결정
 문서로 확정한 범위·설계를 축이 다시 finding 으로 올리는 것을 막는다 — 없으면 `없음` 을 넘긴다.
 
-**차단 자격(C1~C6)**: 이 워크플로우의 축·요약 노드는 `.agent/docs/review-grading.md` "차단 판정의
+**차단 자격**: 이 워크플로우의 축·요약 노드는 `.agent/docs/review-grading.md` "차단 판정의
 전제" 를 적용한다. 이번 diff 가 원인이 아닌 기존 결함·달성 불가한 요구·결정된 사항은 `findings` 가
 아니라 `advisory` 로 간다. 이 경계가 없으면 라운드가 수렴하지 않는다 (wave 3 관측: 한 티켓 5라운드).
 
@@ -73,7 +73,8 @@ prompt = '''
 
 **단, 넓히는 범위는 이번 diff 가 원인인 것까지입니다.** 같은 부류를 이 diff 밖 기존 코드로 넓혀
 차단하지 마세요 — 그것이 라운드를 끝나지 않게 만든 실제 원인입니다. 차단(`findings`)에 올릴 자격은
-`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1~C6 이 정합니다. 자격이
+`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1·C2·C4·C5·C6 이 정합니다 (C3 은 철회된 결번).
+**애매하면 차단으로 둡니다** — 자격 판정이 느슨하면 진짜 회귀가 advisory 로 빠져 그대로 머지됩니다. 자격이
 없으면 **심각도를 낮추지 말고 `advisory` 에 `non_blocking_reason` 과 함께** 넣고, 필요하면
 `followup_ko` 에 후속 티켓 내용을 적습니다.
 
@@ -113,7 +114,8 @@ prompt = '''
 
 **단, 넓히는 범위는 이번 diff 가 원인인 것까지입니다.** 같은 부류를 이 diff 밖 기존 코드로 넓혀
 차단하지 마세요 — 그것이 라운드를 끝나지 않게 만든 실제 원인입니다. 차단(`findings`)에 올릴 자격은
-`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1~C6 이 정합니다. 자격이
+`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1·C2·C4·C5·C6 이 정합니다 (C3 은 철회된 결번).
+**애매하면 차단으로 둡니다** — 자격 판정이 느슨하면 진짜 회귀가 advisory 로 빠져 그대로 머지됩니다. 자격이
 없으면 **심각도를 낮추지 말고 `advisory` 에 `non_blocking_reason` 과 함께** 넣고, 필요하면
 `followup_ko` 에 후속 티켓 내용을 적습니다.
 
@@ -157,7 +159,8 @@ prompt = '''
 
 **단, 넓히는 범위는 이번 diff 가 원인인 것까지입니다.** 같은 부류를 이 diff 밖 기존 코드로 넓혀
 차단하지 마세요 — 그것이 라운드를 끝나지 않게 만든 실제 원인입니다. 차단(`findings`)에 올릴 자격은
-`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1~C6 이 정합니다. 자격이
+`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1·C2·C4·C5·C6 이 정합니다 (C3 은 철회된 결번).
+**애매하면 차단으로 둡니다** — 자격 판정이 느슨하면 진짜 회귀가 advisory 로 빠져 그대로 머지됩니다. 자격이
 없으면 **심각도를 낮추지 말고 `advisory` 에 `non_blocking_reason` 과 함께** 넣고, 필요하면
 `followup_ko` 에 후속 티켓 내용을 적습니다.
 
@@ -201,7 +204,8 @@ prompt = '''
 
 **단, 넓히는 범위는 이번 diff 가 원인인 것까지입니다.** 같은 부류를 이 diff 밖 기존 코드로 넓혀
 차단하지 마세요 — 그것이 라운드를 끝나지 않게 만든 실제 원인입니다. 차단(`findings`)에 올릴 자격은
-`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1~C6 이 정합니다. 자격이
+`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1·C2·C4·C5·C6 이 정합니다 (C3 은 철회된 결번).
+**애매하면 차단으로 둡니다** — 자격 판정이 느슨하면 진짜 회귀가 advisory 로 빠져 그대로 머지됩니다. 자격이
 없으면 **심각도를 낮추지 말고 `advisory` 에 `non_blocking_reason` 과 함께** 넣고, 필요하면
 `followup_ko` 에 후속 티켓 내용을 적습니다.
 
@@ -242,7 +246,8 @@ prompt = '''
 
 **단, 넓히는 범위는 이번 diff 가 원인인 것까지입니다.** 같은 부류를 이 diff 밖 기존 코드로 넓혀
 차단하지 마세요 — 그것이 라운드를 끝나지 않게 만든 실제 원인입니다. 차단(`findings`)에 올릴 자격은
-`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1~C6 이 정합니다. 자격이
+`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1·C2·C4·C5·C6 이 정합니다 (C3 은 철회된 결번).
+**애매하면 차단으로 둡니다** — 자격 판정이 느슨하면 진짜 회귀가 advisory 로 빠져 그대로 머지됩니다. 자격이
 없으면 **심각도를 낮추지 말고 `advisory` 에 `non_blocking_reason` 과 함께** 넣고, 필요하면
 `followup_ko` 에 후속 티켓 내용을 적습니다.
 
@@ -299,19 +304,19 @@ prompt = '''
 - 재검증 5축 산출물: 업스트림 `intent_ac_v` · `tests_v` · `side_effects_v` · `deploy_v` · `rollback_v`
 - 문서 제안: 업스트림 `docs_final_v`
 - 스펙: {{spec_file}} · 직전 판정: {{review_file}}
-- 등급·verdict·차단 자격(C1~C6) 규칙: .agent/docs/review-grading.md
+- 등급·verdict·차단 자격(C1·C2·C4·C5·C6) 규칙: .agent/docs/review-grading.md
 - **결정 문서: {{decisions_file}}** — 여기서 정해진 것은 finding 이 아닙니다 (C4).
 
 해야 할 일:
 1. 재검증 findings 를 중복 제거해 병합합니다 (같은 파일:라인 + 같은 원인은 1건, 최고 레벨 채택).
 2. `rounds_run` 은 직전 라운드 수 + 1 입니다 (사람 수정분 재검증 라운드).
 3. **차단 자격을 재심사합니다 (백스톱).** 축이 `findings` 에 올렸더라도
-   `.agent/docs/review-grading.md` "차단 판정의 전제" C1~C6 을 못 갖춘 항목은 여기서 `advisory` 로
+   `.agent/docs/review-grading.md` "차단 판정의 전제" 를 못 갖춘 항목은 여기서 `advisory` 로
    옮깁니다 — verdict 를 정하는 것이 이 노드이므로 경계도 여기서 확정합니다. 각 항목의 근거
    라인이 **이번 diff 의 변경 라인인지** 확인하고, 변경되지 않은 라인만 인용됐으면 C1 입니다.
 4. `remaining_blocking` 에 **차단 자격을 갖춘 p0~p2 만** 넣습니다. 해소된 직전 라운드 findings 는 넣지 않습니다.
 5. `advisory` 에 (a) p3~p4 nit 과 (b) 3번에서 강등한 항목을 넣습니다. 강등 항목은 **심각도를 낮추지 말고**
-   `non_blocking_reason`(C1~C6)을 붙이고, C1·C2 면 `followup_ko` 에 후속 티켓 내용을 적습니다.
+   `non_blocking_reason` 을 붙이고, C1·C2 면 `followup_ko` 에 후속 티켓 내용을 적습니다.
 6. **수렴을 확인합니다.** 직전 라운드보다 `remaining_blocking` 이 늘었다면, 늘어난 각 항목이
    **직전 수정이 만든 회귀**인지 변경 라인으로 확인합니다. 회귀가 아니면 3번으로 돌아가 강등합니다.
    라운드가 진행될수록 차단은 줄어야 합니다 — 늘어난다면 경계가 새는 것입니다.

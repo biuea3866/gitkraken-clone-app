@@ -103,12 +103,11 @@
               "none",
               "C1_pre_existing",
               "C2_unachievable",
-              "C3_class_closed",
               "C4_decided",
               "C5_artifact",
               "C6_test_depth"
             ],
-            "description": "차단 자격을 못 갖춘 사유 (review-grading.md C1~C6). 강등이 아닌 단순 p3~p4 nit 이면 \"none\"."
+            "description": "차단 자격을 못 갖춘 사유 (review-grading.md C1·C2·C4·C5·C6). 강등이 아닌 단순 p3~p4 nit 이면 \"none\". C3 은 철회된 결번이다."
           },
           "followup_ko": {
             "type": "string",

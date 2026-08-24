@@ -109,7 +109,8 @@ prompt = '''
 
 **단, 넓히는 범위는 이번 diff 가 원인인 것까지입니다.** 같은 부류를 이 diff 밖 기존 코드로 넓혀
 차단하지 마세요 — 그것이 라운드를 끝나지 않게 만든 실제 원인입니다. 차단(`findings`)에 올릴 자격은
-`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1~C6 이 정합니다. 자격이
+`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1·C2·C4·C5·C6 이 정합니다 (C3 은 철회된 결번).
+**애매하면 차단으로 둡니다** — 자격 판정이 느슨하면 진짜 회귀가 advisory 로 빠져 그대로 머지됩니다. 자격이
 없으면 **심각도를 낮추지 말고 `advisory` 에 `non_blocking_reason` 과 함께** 넣고, 필요하면
 `followup_ko` 에 후속 티켓 내용을 적습니다.
 
@@ -148,7 +149,8 @@ prompt = '''
 
 **단, 넓히는 범위는 이번 diff 가 원인인 것까지입니다.** 같은 부류를 이 diff 밖 기존 코드로 넓혀
 차단하지 마세요 — 그것이 라운드를 끝나지 않게 만든 실제 원인입니다. 차단(`findings`)에 올릴 자격은
-`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1~C6 이 정합니다. 자격이
+`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1·C2·C4·C5·C6 이 정합니다 (C3 은 철회된 결번).
+**애매하면 차단으로 둡니다** — 자격 판정이 느슨하면 진짜 회귀가 advisory 로 빠져 그대로 머지됩니다. 자격이
 없으면 **심각도를 낮추지 말고 `advisory` 에 `non_blocking_reason` 과 함께** 넣고, 필요하면
 `followup_ko` 에 후속 티켓 내용을 적습니다.
 
@@ -188,7 +190,8 @@ prompt = '''
 
 **단, 넓히는 범위는 이번 diff 가 원인인 것까지입니다.** 같은 부류를 이 diff 밖 기존 코드로 넓혀
 차단하지 마세요 — 그것이 라운드를 끝나지 않게 만든 실제 원인입니다. 차단(`findings`)에 올릴 자격은
-`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1~C6 이 정합니다. 자격이
+`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1·C2·C4·C5·C6 이 정합니다 (C3 은 철회된 결번).
+**애매하면 차단으로 둡니다** — 자격 판정이 느슨하면 진짜 회귀가 advisory 로 빠져 그대로 머지됩니다. 자격이
 없으면 **심각도를 낮추지 말고 `advisory` 에 `non_blocking_reason` 과 함께** 넣고, 필요하면
 `followup_ko` 에 후속 티켓 내용을 적습니다.
 
@@ -232,7 +235,8 @@ prompt = '''
 
 **단, 넓히는 범위는 이번 diff 가 원인인 것까지입니다.** 같은 부류를 이 diff 밖 기존 코드로 넓혀
 차단하지 마세요 — 그것이 라운드를 끝나지 않게 만든 실제 원인입니다. 차단(`findings`)에 올릴 자격은
-`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1~C6 이 정합니다. 자격이
+`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1·C2·C4·C5·C6 이 정합니다 (C3 은 철회된 결번).
+**애매하면 차단으로 둡니다** — 자격 판정이 느슨하면 진짜 회귀가 advisory 로 빠져 그대로 머지됩니다. 자격이
 없으면 **심각도를 낮추지 말고 `advisory` 에 `non_blocking_reason` 과 함께** 넣고, 필요하면
 `followup_ko` 에 후속 티켓 내용을 적습니다.
 
@@ -276,7 +280,8 @@ prompt = '''
 
 **단, 넓히는 범위는 이번 diff 가 원인인 것까지입니다.** 같은 부류를 이 diff 밖 기존 코드로 넓혀
 차단하지 마세요 — 그것이 라운드를 끝나지 않게 만든 실제 원인입니다. 차단(`findings`)에 올릴 자격은
-`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1~C6 이 정합니다. 자격이
+`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1·C2·C4·C5·C6 이 정합니다 (C3 은 철회된 결번).
+**애매하면 차단으로 둡니다** — 자격 판정이 느슨하면 진짜 회귀가 advisory 로 빠져 그대로 머지됩니다. 자격이
 없으면 **심각도를 낮추지 말고 `advisory` 에 `non_blocking_reason` 과 함께** 넣고, 필요하면
 `followup_ko` 에 후속 티켓 내용을 적습니다.
 
@@ -307,7 +312,7 @@ prompt = '''
 입력:
 - 5축 산출물: 업스트림 `intent_ac_1` · `tests_1` · `side_effects_1` · `deploy_1` · `rollback_1`
 - 스펙: {{spec_file}} — ac_results 의 기준입니다.
-- 등급·verdict·차단 자격(C1~C6) 규칙: .agent/docs/review-grading.md
+- 등급·verdict·차단 자격(C1·C2·C4·C5·C6) 규칙: .agent/docs/review-grading.md
 - 오탐 기준: .agent/docs/review-false-positives.md
 
 해야 할 일:
@@ -317,7 +322,7 @@ prompt = '''
    오탐 SSOT 에 해당하는 패턴이면 기각하고 findings 에서 제외합니다.
 3. 스펙의 인수 조건별 충족 여부를 ac_results 에 채웁니다 — 근거는 `intent_ac_1` 의 checked 를 씁니다.
 4. **차단 자격을 재심사합니다 (백스톱).** 축이 `findings` 에 올렸더라도
-   `.agent/docs/review-grading.md` "차단 판정의 전제" C1~C6 을 못 갖춘 항목은 `advisory` 로 옮깁니다.
+   `.agent/docs/review-grading.md` "차단 판정의 전제" 를 못 갖춘 항목은 `advisory` 로 옮깁니다.
    근거 라인이 **이번 diff 의 변경 라인**인지 확인하고, 변경되지 않은 라인만 인용됐으면 C1 입니다.
    강등 항목은 심각도를 낮추지 말고 `non_blocking_reason` 을 붙입니다.
 5. verdict 를 규칙대로 정합니다: **차단 자격을 갖춘** p0~p2 가 하나라도 있으면 REQUEST_CHANGES,
