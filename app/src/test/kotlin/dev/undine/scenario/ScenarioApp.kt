@@ -128,11 +128,27 @@ internal class ScenarioApp(val work: File) {
  */
 internal fun seedRepository(work: File, file: String = "base.txt", content: String = "base\n"): File {
     Git.init().setDirectory(work).setInitialBranch(MAIN_BRANCH).call().use { git ->
+        git.configureLocalIdentity()
         File(work, file).writeText(content)
         git.add().addFilepattern(".").call()
         git.commit().setMessage("initial").setAuthor(FIXED_IDENT).setCommitter(FIXED_IDENT).call()
     }
     return work
+}
+
+/**
+ * 저장소 **로컬** 작성자 설정. 앱의 커밋 경로는 작성자가 설정돼 있지 않으면 커밋하지 않는다
+ * (`AuthorNotConfigured`) — 임의로 채우면 잘못된 이름의 커밋이 쌓이기 때문이다.
+ *
+ * 전역 설정에 기대면 개발자 머신에서만 통과하고 CI 에서 깨진다 (실제로 그렇게 깨졌다).
+ * 시나리오는 자기 저장소에 자기 신원을 심어 **주변 환경과 무관하게** 돈다.
+ */
+private fun Git.configureLocalIdentity() {
+    repository.config.apply {
+        setString("user", null, "name", FIXED_IDENT.name)
+        setString("user", null, "email", FIXED_IDENT.emailAddress)
+        save()
+    }
 }
 
 /** 현재 HEAD 가 가리키는 커밋. 복구 검증의 기준점이다. */

@@ -5,6 +5,8 @@ import io.kotest.engine.spec.tempdir
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import org.eclipse.jgit.api.Git
+import org.eclipse.jgit.lib.UserConfig
 
 private const val NOTE = "note.md"
 
@@ -15,6 +17,19 @@ private const val NOTE = "note.md"
  * 하나를 열고 앱 UseCase 만으로 커밋까지 간다.
  */
 class CommitFlowScenarioSpec : FunSpec({
+
+    test("시나리오 저장소는 주변 환경과 무관하게 작성자가 설정돼 있다") {
+        // 앱의 커밋 경로는 작성자가 없으면 커밋하지 않는다. 전역 설정에 기대면 개발자 머신에서만
+        // 통과하고 CI 에서 깨진다 — 저장소 로컬 설정이 그 의존을 끊는다.
+        val work = seedRepository(tempdir())
+
+        Git.open(work).use { git ->
+            val user = git.repository.config.get(UserConfig.KEY)
+            user.isAuthorNameImplicit shouldBe false
+            user.isAuthorEmailImplicit shouldBe false
+            user.authorName shouldBe FIXED_IDENT.name
+        }
+    }
 
     test("파일을 추가해 커밋하면 이력과 워킹트리 상태가 함께 맞는다") {
         val app = ScenarioApp(seedRepository(tempdir()))
