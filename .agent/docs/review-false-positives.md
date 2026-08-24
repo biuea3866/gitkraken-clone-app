@@ -52,6 +52,9 @@
 | FP-B7 | 임시 저장소를 만드는 테스트가 느림 | 실제 Git 동작 검증이 목적 — Mock 대체는 [`testing`](../rules/testing.md) 규칙 1 위반이다 |
 | FP-B8 | `~GatewayImpl` 이 `Repository` 가 아니라 `GitAccess` 를 생성자로 받음 | `Repository` 는 스레드 안전하지 않아 직렬화·`Dispatchers.IO` 경계를 `GitAccess` 가 공유한다. 결정문 C1 이 "생성자로 `Repository` 를 받는다"(A1)를 **대체**했다 — Impl 이 락·`withContext` 를 다시 걸지 않는 것도 같은 이유다 |
 | FP-B10 | `commit(amend = true)` 가 원격 포함 여부를 **재작성 뒤**에 `CommitResult.existsOnRemote` 로 알려줌 | preflight 를 추가하면 `StagingGateway`(UND-01 계약)와 UND-17·UND-26 이 함께 움직여야 한다. 결정문 C6 이 **domain 계약 유지 + 백업 ref 로 복구 지점 확보 + UI 사전 확인은 UND-17 소유**로 확정했다 — UND-06 범위에서 계약 변경을 요구하지 않는다 |
+| FP-B11 | UI 티켓이 `application/<자기 slug>/` 와 `presentation/i18n/<자기>Strings.kt` 를 함께 소유 | 결정문 A1·A3 이 승인한 범위다 (`.claude-local/WAVE3-DECISIONS.md` §A1·§122–126). UND-13 → `application/sidebar/`, UND-16 → `application/diff/`, UND-19 → `application/welcome/` 식으로 각 UI 티켓이 자기 UseCase 를 소유한다 — "승인되지 않은 소유 범위 확장" 이 아니다 |
+| FP-B12 | 정적 소스 검사 테스트가 `Mutex`·`withContext`·`Dispatchers` 문자열을 훑음 | 그 테스트는 **금지 패턴이 실행 코드에 없음**을 지키는 것이고 현재 통과한다. 같은 낱말이 주석·KDoc 에 등장하는 것을 "오검출" 로 지적하지 않는다 — 검사 대상은 테스트가 정의하며, 실패하지 않는 검사를 결함으로 올리지 않는다 |
+| FP-B13 | 축 산출물(`axis-review.json`)에 `verdict` 키가 없음 | 그 스키마는 `verdict` 를 **선언하지 않는다** — 축은 `findings` 만 올리고 판정은 요약 노드가 한다. fail-closed 는 `verdict` 를 선언하는 스키마(`review.json`·`final-summary.json`·`ticket-review.json`)에만 적용된다 ([`review-grading`](./review-grading.md) "판정 불가 시"). 이것을 지적으로 올리면 코드에 문제가 없는 티켓도 APPROVED 에 도달하지 못한다 |
 | FP-B9 | `DirCacheBuilder.add()` 를 정렬 순서와 무관하게 호출 | `commit()` → `finish()` 가 `sorted` 플래그를 보고 `resort()` 한다 (JGit 7.3 확인). 엔트리를 뒤에 덧붙여도 인덱스 순서는 깨지지 않는다 |
 
 ## C. 코멘트 작성 형태
