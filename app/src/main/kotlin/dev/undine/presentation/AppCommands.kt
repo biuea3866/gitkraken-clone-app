@@ -21,19 +21,13 @@ import dev.undine.domain.RepositoryPath
  * 문자열은 아직 하드코딩이다 — 커맨드 표시명 키는 어느 티켓도 정의하지 않았고, 없는 키를 여기서
  * 만들면 `i18n` 네임스페이스 소유가 흐려진다. 표시명 i18n 은 후속 티켓 소관이다.
  */
-fun registerAppCommands(
-    registry: CommandRegistry,
-    onOpenPalette: () -> Unit,
-    onCloseRepository: () -> Unit,
-    onRefreshRefs: () -> Unit,
-    onToggleDiffView: () -> Unit,
-) {
+fun registerAppCommands(registry: CommandRegistry, handlers: AppCommandHandlers) {
     registry.register(
         Command(
             id = CommandId("palette.open"),
             title = "커맨드 팔레트 열기",
             shortcut = OPEN_COMMAND_PALETTE_SHORTCUT,
-            action = onOpenPalette,
+            action = handlers.onOpenPalette,
         ),
     )
     registry.register(
@@ -41,7 +35,7 @@ fun registerAppCommands(
             id = CommandId("repository.close"),
             title = "저장소 닫기",
             shortcut = Shortcut(Key.W, setOf(ShortcutModifier.PRIMARY)),
-            action = onCloseRepository,
+            action = handlers.onCloseRepository,
         ),
     )
     registry.register(
@@ -49,7 +43,15 @@ fun registerAppCommands(
             id = CommandId("refs.refresh"),
             title = "참조 목록 새로 읽기",
             shortcut = Shortcut(Key.R, setOf(ShortcutModifier.PRIMARY)),
-            action = onRefreshRefs,
+            action = handlers.onRefreshRefs,
+        ),
+    )
+    registry.register(
+        Command(
+            id = CommandId("rebase.openPlan"),
+            title = "리베이스 계획 열기",
+            shortcut = Shortcut(Key.I, setOf(ShortcutModifier.PRIMARY, ShortcutModifier.SHIFT)),
+            action = handlers.onOpenRebasePlan,
         ),
     )
     registry.register(
@@ -57,7 +59,7 @@ fun registerAppCommands(
             id = CommandId("diff.toggleView"),
             title = "Diff 보기 전환 (통합 ↔ 분할)",
             shortcut = Shortcut(Key.D, setOf(ShortcutModifier.PRIMARY)),
-            action = onToggleDiffView,
+            action = handlers.onToggleDiffView,
         ),
     )
 }

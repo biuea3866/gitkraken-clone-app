@@ -14,6 +14,9 @@ import dev.undine.application.staging.LoadWorkingTreeStatusUseCase
 import dev.undine.application.staging.StageFilesUseCase
 import dev.undine.application.staging.StageHunksUseCase
 import dev.undine.application.staging.UnstageFilesUseCase
+import dev.undine.application.rebase.ApplyRebasePlanUseCase
+import dev.undine.application.rebase.LoadRebaseProgressUseCase
+import dev.undine.application.rebase.LoadRebaseTargetsUseCase
 import dev.undine.application.search.SearchCommitsUseCase
 import dev.undine.application.sidebar.CheckoutBranchUseCase
 import dev.undine.application.sidebar.DeleteBranchUseCase
@@ -33,8 +36,10 @@ import dev.undine.domain.SettingsGateway
 import dev.undine.domain.conflict.ConflictGateway
 import dev.undine.domain.merge.MergeGateway
 import dev.undine.domain.merge.MergeService
+import dev.undine.domain.rebase.InteractiveRebaseGateway
 import dev.undine.infrastructure.git.conflict.ConflictGatewayImpl
 import dev.undine.infrastructure.git.merge.MergeGatewayImpl
+import dev.undine.infrastructure.git.rebase.InteractiveRebaseGatewayImpl
 import dev.undine.infrastructure.git.diff.DiffGatewayImpl
 import dev.undine.infrastructure.git.history.HistoryGatewayImpl
 import dev.undine.infrastructure.git.ref.RefGatewayImpl
@@ -45,6 +50,7 @@ import dev.undine.infrastructure.git.repository.RepositoryGatewayImpl
 import dev.undine.infrastructure.git.worktreeops.WorktreeOpsGatewayImpl
 import dev.undine.infrastructure.settings.SettingsGatewayImpl
 import dev.undine.presentation.conflict.ConflictActions
+import dev.undine.presentation.rebase.RebaseActions
 import dev.undine.presentation.staging.StagingActions
 import dev.undine.presentation.welcome.WelcomeActions
 import java.nio.file.Path
@@ -77,6 +83,7 @@ class AppComponent(settingsFile: Path) {
     private val stagingGateway = StagingGatewayImpl(gitAccess)
     private val conflictGateway: ConflictGateway = ConflictGatewayImpl(gitAccess)
     private val mergeGateway: MergeGateway = MergeGatewayImpl(gitAccess)
+    private val rebaseGateway: InteractiveRebaseGateway = InteractiveRebaseGatewayImpl(gitAccess)
     private val settingsGateway: SettingsGateway = SettingsGatewayImpl(settingsFile)
 
     /** 병합·리베이스의 규칙(시작 전 검사·진행 중 검사·확인 대조)을 갖는 도메인 서비스. */
@@ -125,6 +132,18 @@ class AppComponent(settingsFile: Path) {
         continueAfterResolve = ContinueAfterResolveUseCase(mergeService),
         abort = AbortConflictedOperationUseCase(mergeService),
         loadStatus = stagingActions.loadStatus,
+    )
+
+    /**
+     * 대화형 리베이스 계획 화면이 쓰는 동작 묶음.
+     *
+     * 계획 **편집**용 UseCase 는 없다 — 편집은 불변 `RebasePlan` 안에서 끝나고, 저장소는 적용
+     * 시점에만 바뀐다.
+     */
+    val rebaseActions = RebaseActions(
+        loadTargets = LoadRebaseTargetsUseCase(rebaseGateway),
+        applyPlan = ApplyRebasePlanUseCase(rebaseGateway),
+        loadProgress = LoadRebaseProgressUseCase(rebaseGateway),
     )
 
     val fetchRemote = FetchRemoteUseCase(remoteGateway)
