@@ -52,6 +52,8 @@ import dev.undine.presentation.palette.CommandPalette
 import dev.undine.presentation.palette.CommandRegistry
 import dev.undine.presentation.palette.commandShortcuts
 import dev.undine.presentation.palette.rememberCommandCenter
+import dev.undine.presentation.rebase.RebasePlanEditor
+import dev.undine.presentation.rebase.RebasePlanState
 import dev.undine.presentation.search.SearchPanel
 import dev.undine.presentation.search.rememberSearchState
 import dev.undine.presentation.shell.AppShell
@@ -246,6 +248,14 @@ private fun RepositoryArea(
             scope = scope,
         )
     }
+    // 리베이스 기준은 현재 브랜치의 upstream 이다 — upstream 이 없으면 비교 대상이 없어 대상도 없다.
+    val rebaseState = remember(repositoryPath) {
+        RebasePlanState(
+            actions = component.rebaseActions,
+            upstream = { latestContext.value.branches.firstOrNull { it.isCurrent }?.upstream },
+            scope = scope,
+        )
+    }
     val sidebarState = remember(repositoryPath) {
         SidebarState(
             loadRefs = component.loadSidebarRefs,
@@ -268,10 +278,13 @@ private fun RepositoryArea(
         CommandRegistry().also { target ->
             registerAppCommands(
                 registry = target,
-                onOpenPalette = { paletteRequested = true },
-                onCloseRepository = { shellState.selectRepository(null) },
-                onRefreshRefs = { sidebarState.refresh() },
-                onToggleDiffView = diffState::toggleViewMode,
+                handlers = AppCommandHandlers(
+                    onOpenPalette = { paletteRequested = true },
+                    onCloseRepository = { shellState.selectRepository(null) },
+                    onRefreshRefs = { sidebarState.refresh() },
+                    onToggleDiffView = diffState::toggleViewMode,
+                    onOpenRebasePlan = rebaseState::load,
+                ),
             )
         }
     }
@@ -351,6 +364,7 @@ private fun RepositoryArea(
                         ),
                         stagingState = stagingState,
                         conflictState = conflictState,
+                        rebaseState = rebaseState,
                         onSelectFile = { filePath -> shellState.selectFile(filePath) },
                     )
                 },
@@ -366,7 +380,10 @@ private fun RepositoryArea(
  * **충돌이 남아 있으면 충돌 에디터가 다른 무엇보다 앞선다** — 충돌을 해결하기 전에는 커밋도
  * 브랜치 이동도 할 수 없으므로, 지금 해야 하는 유일한 일을 보여준다.
  *
- * 충돌이 없고 커밋을 고르지 않았으면 **작업 중인 변경**(스테이징 패널)이다 — Git 클라이언트를 여는
+ * 그다음은 **열어 둔 리베이스 계획**이다. 계획은 사용자가 명시적으로 연 것이고 적용하거나 취소할
+ * 때까지 편집 중인 작업이므로, 커밋을 훑는 화면이 그것을 덮지 않는다.
+ *
+ * 둘 다 없고 커밋을 고르지 않았으면 **작업 중인 변경**(스테이징 패널)이다 — Git 클라이언트를 여는
  * 이유가 대개 그것이고, 빈 화면보다 지금 할 일을 보여주는 것이 맞다. 커밋을 고르면 그 커밋의
  * 상세로, 파일까지 고르면 그 파일의 diff 로 바뀐다.
  */
@@ -375,6 +392,7 @@ private fun BottomArea(
     inspection: CommitInspection,
     stagingState: StagingState,
     conflictState: ConflictState,
+    rebaseState: RebasePlanState,
     onSelectFile: (String) -> Unit,
 ) {
     val selectedCommit = inspection.commit
@@ -382,6 +400,9 @@ private fun BottomArea(
     when {
         !conflictState.isClean ->
             ConflictEditor(state = conflictState, modifier = Modifier.fillMaxSize())
+
+        rebaseState.plan != null ->
+            RebasePlanEditor(state = rebaseState, modifier = Modifier.fillMaxSize())
 
         selectedCommit == null ->
             StagingPanel(state = stagingState, modifier = Modifier.fillMaxSize())
