@@ -12,9 +12,10 @@ class DomainEnumSpec : FunSpec({
             listOf("NORMAL", "EMPTY", "MERGING", "REBASING", "REVERTING", "CHERRY_PICKING", "DETACHED")
     }
 
-    test("NotFound.Kind 는 참조·커밋·스태시·원격 네 종류로 닫혀 있다") {
+    test("NotFound.Kind 는 참조·커밋·스태시·원격·경로 다섯 종류로 닫혀 있다") {
+        // 경로는 UND-29(blame)가 추가했다 — 그 커밋에 그 파일이 없는 경우를 참조 부재로 뭉개지 않는다.
         UndineException.NotFound.Kind.entries.map { it.name } shouldContainExactly
-            listOf("REF", "COMMIT", "STASH", "REMOTE")
+            listOf("REF", "COMMIT", "STASH", "REMOTE", "PATH")
     }
 
     test("InvalidRepositoryPath.Reason 은 네 사유로 닫혀 있다") {
