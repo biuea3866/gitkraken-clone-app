@@ -1,0 +1,102 @@
+# 실행 구성 프로필 — SSOT
+#
+# 노드는 `profile` 이름만 선언하고 vendor/model/effort 를 직접 들지 않는다.
+# 해소 우선순위 (위가 이김):  노드 명시 키  >  프로필 키  >  어댑터 [defaults]
+#
+# 여기 두는 것 — 실행 예산·권한:  vendor · model · effort · sandbox · permission_mode
+#                                 tools · timeout_seconds
+# 노드에 남기는 것 — 과업 계약:   prompt · role_file · output_schema · needs · cwd
+#
+# 경계 근거: 프로필은 "얼마나 센 놈으로 얼마나 생각하게 할까" 를, 노드는 "무엇을 내놔야 하나" 를
+# 답한다. 둘을 섞으면 한쪽만 바꿀 수 없다 (축 모델만 올리려는데 출력 스키마가 따라온다).
+#
+# **LLM 이 고르지 않는다 — 결정적 조회다.** runs/ 실측에서 노드 하나의 최소 소요가 48초(p10 67초)
+# 이고 판단 노드는 다운스트림 전체의 배리어가 된다. 반면 구성 선택으로 아낄 수 있는 최대치는
+# wave 당 약 72초다 (docs/pipeline-tuning.md §4). 판단이 절감분을 먹으므로 테이블로 둔다.
+#
+# description · verifies 는 메타 키다 — argv 로 나가지 않는다.
+# verifies 는 "이 프로필이 대상 프로필의 산출물을 검증한다" 는 선언이고,
+# 러너가 로드 시점에 **벤더가 다른지** 검사한다 (검증자와 피검증자의 맹점 공유 차단).
+
+# ── 스펙 단계 ───────────────────────────────────────────────────────────────
+
+[profiles.evidence-gather]
+description = "티켓 근거 수집 — 판단이 아니라 조회·정리"
+vendor = "claude"
+model = "sonnet"
+tools = ["Read", "Grep", "Glob", "Bash"]
+timeout_seconds = 1200
+
+[profiles.spec-author]
+description = "근거 → 스펙 확정 (인수 조건 작성)"
+vendor = "codex"
+model = "gpt-5.6-terra"
+sandbox = "read-only"
+
+# ── 구현 ───────────────────────────────────────────────────────────────────
+
+[profiles.implement]
+description = "구현·수정 — 파일을 쓰는 유일한 프로필"
+vendor = "claude"
+model = "opus"
+tools = ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
+permission_mode = "acceptEdits"
+timeout_seconds = 3600
+
+# ── 검증 ── vendor 가 implement 와 달라야 한다 (러너가 강제) ─────────────────
+
+[profiles.axis-review]
+description = "5축 중 단일 축 검증 — p0~p5 등급 판정"
+vendor = "codex"
+model = "gpt-5.6-terra"
+sandbox = "read-only"
+verifies = ["implement"]
+# effort 미선언 — 벤더 기본값 유지.
+# 축별 추론 예산은 관측이 없어(runs/ 158노드 중 effort 기록 10건) 근거 없이 정하지 않는다.
+# 후속 측정 티켓에서 축 성격별 gradient 를 넣는다 (판단 축 high / 기계적 축 low).
+
+[profiles.doc-drift]
+description = "구현 ↔ 문서 드리프트 대조"
+vendor = "codex"
+model = "gpt-5.6-terra"
+sandbox = "read-only"
+verifies = ["implement"]
+
+[profiles.review-summary]
+description = "1차 축 결과 종합 → verdict"
+vendor = "codex"
+model = "gpt-5.6-terra"
+sandbox = "read-only"
+verifies = ["implement"]
+
+[profiles.final-summary]
+description = "최종 판정 — pr_ready · remaining_blocking 산출"
+vendor = "codex"
+model = "gpt-5.6-terra"
+sandbox = "read-only"
+verifies = ["implement"]
+
+# ── 하네스 감사 · 티켓 리뷰 ────────────────────────────────────────────────
+
+[profiles.fact-gather]
+description = "수량·경로 기계적 대조 (판단 없음)"
+vendor = "codex"
+model = "gpt-5.6-terra"
+effort = "low"
+sandbox = "read-only"
+
+[profiles.ticket-lens]
+description = "티켓을 단일 렌즈로 리뷰"
+vendor = "codex"
+model = "gpt-5.6-terra"
+sandbox = "read-only"
+timeout_seconds = 1800
+# effort 는 렌즈마다 다르다 — 판단 깊이가 그 렌즈의 성격이므로 노드가 정한다
+# (dependency·feasibility = high / structure·tests = medium / diagram = low).
+
+[profiles.synthesize]
+description = "병렬 렌즈·팩트 결과 종합"
+vendor = "claude"
+model = "opus"
+verifies = ["fact-gather", "ticket-lens"]
+# tools · timeout_seconds 는 워크플로우별로 달라 노드가 정한다.

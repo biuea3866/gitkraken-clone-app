@@ -6,6 +6,7 @@
 ```
 .agent/orchestration/
 ├── README.md                       # 본 문서
+├── profiles.toml                   # 실행 구성 SSOT — 프로필 → vendor·model·effort (결정적 조회)
 ├── workflows/                      # 워크플로우 정의 (DAG)
 │   ├── harness-audit.toml              # HARNESS.md 수량·경로 주장 감사 (rubric H 자동화)
 │   ├── develop-1-spec.toml             # 개발 ①②③ — 요구사항 → 근거 → 스펙 → 승인 게이트
@@ -41,6 +42,7 @@ $R $W/harness-audit.toml --dry-run            # wave 계획만 (자리표시자 
 $R $W/<workflow>.toml --only inventory,synthesize   # 부분 실행 (의존 무시)
 $R $W/<workflow>.toml --max-parallel 2        # 동시 실행 상한 (기본 4)
 $R $W/<workflow>.toml --no-failover           # 벤더 소진 시 대체 벤더 재시도 끄기 (기본 켜짐)
+$R $W/<workflow>.toml --explain               # 노드별 조립 argv 만 출력 (실행 없음 · --set 불필요)
 $R $W/<workflow>.toml --set ticket=UND-14      # 프롬프트의 {{ticket}} 치환 (반복 가능)
 ```
 
@@ -64,16 +66,60 @@ $R $W/<workflow>.toml --run-dir <위 run-dir> --start-at <다음 노드>   # 재
 넘긴 이전 실행 디렉토리에서 그대로 읽으므로, `--run-dir` 없이 쓰면 실패한다.
 게이트 노드는 단독 wave 여야 한다 (같은 wave 에 실행 노드가 섞이면 러너가 거부한다).
 
-## 벤더·모델 라우팅 정책
+## 실행 구성 라우팅 — `profiles.toml`
 
-작업 성격으로 정한다. 노드마다 `vendor`/`model` 을 명시하고, 새 워크플로우도 이 표를 따른다.
+노드는 **`profile` 이름만** 선언하고 `vendor`/`model`/`effort` 를 직접 들지 않는다.
+프로필 → 실행 구성 해소의 SSOT 는 [`profiles.toml`](profiles.toml) 이다.
 
-| 작업 성격 | 벤더·모델 | 이유 |
+```
+해소 우선순위 (위가 이김):   노드 명시 키   >   프로필 키   >   어댑터 [defaults]
+```
+
+| 두는 곳 | 키 |
+|---|---|
+| `profiles.toml` — 실행 예산·권한 | `vendor` · `model` · `effort` · `sandbox` · `permission_mode` · `tools` · `timeout_seconds` |
+| 워크플로우 노드 — 과업 계약 | `prompt` · `role_file` · `output_schema` · `needs` · `cwd` (구성 키는 프로필을 **덮어쓸 때만**) |
+
+경계 근거: 프로필은 "얼마나 센 놈으로 얼마나 생각하게 할까" 를, 노드는 "무엇을 내놔야 하나" 를
+답한다. 섞으면 한쪽만 바꿀 수 없다 (축 모델만 올리려는데 출력 스키마가 따라온다).
+
+**LLM 이 고르지 않는다 — 결정적 조회다.** `runs/` 실측에서 노드 하나의 최소 소요가 48초(p10 67초)
+이고 판단 노드는 다운스트림 전체의 배리어가 된다. 반면 구성 선택으로 아낄 수 있는 최대치는
+wave 당 약 72초다 ([`docs/pipeline-tuning.md`](../docs/pipeline-tuning.md) §4). 판단이 절감분을 먹는다.
+
+| 프로필 | 벤더 / 모델 | 성격 |
 |---|---|---|
-| **코드 작성** (구현·리팩터링) | `claude` / `opus` | 설계 판단과 다중 파일 편집 품질이 결과를 좌우한다 |
-| **코드 리뷰** | `codex` / `gpt-5.6-terra` | 판정 기준이 문서로 고정돼 있고, 스키마 강제(`--output-schema`)로 형식이 안정된다 |
-| **문서 작성·점검** (스펙·드리프트) | `codex` / `gpt-5.6-terra` | 위와 같음. 읽기 전용이라 병렬로 넓게 돌릴 수 있다 |
-| **MCP 가 필요한 조회** (context7 라이브러리 문서 등) | `claude` + `mcp_config` | codex 노드는 프로젝트 MCP 에 접근할 수 없다 |
+| `evidence-gather` | `claude` / `sonnet` | 근거 수집 — 판단이 아니라 조회·정리 |
+| `spec-author` | `codex` / `gpt-5.6-terra` | 근거 → 스펙 확정 |
+| `implement` | `claude` / `opus` | 구현·수정 — **파일을 쓰는 유일한 프로필** |
+| `axis-review` | `codex` / `gpt-5.6-terra` | 5축 중 단일 축 검증 |
+| `doc-drift` | `codex` / `gpt-5.6-terra` | 구현 ↔ 문서 드리프트 대조 |
+| `review-summary` | `codex` / `gpt-5.6-terra` | 1차 축 결과 종합 → verdict |
+| `final-summary` | `codex` / `gpt-5.6-terra` | 최종 판정 — `pr_ready` 산출 |
+| `fact-gather` | `codex` / `gpt-5.6-terra` (effort low) | 수량·경로 기계적 대조 |
+| `ticket-lens` | `codex` / `gpt-5.6-terra` | 티켓 단일 렌즈 리뷰 (effort 는 렌즈별로 노드가 정함) |
+| `synthesize` | `claude` / `opus` | 병렬 렌즈·팩트 결과 종합 |
+
+MCP 가 필요한 조회는 `claude` 프로필 + 노드의 `mcp_config` 로 처리한다 — codex 노드는 프로젝트
+MCP 에 접근할 수 없다.
+
+### 검증 프로필은 피검증 프로필과 벤더가 달라야 한다
+
+프로필에 `verifies = ["<프로필 id>"]` 를 선언하면 러너가 **로드 시점에** 벤더 상이성을 검사한다.
+같은 벤더면 검증자와 피검증자가 맹점을 공유한다 — 지금까지 claude 구현 → codex 검증은 관례였을
+뿐이라 새 노드에서 조용히 깨졌다. 위반 시 노드를 하나도 실행하지 않고 실패한다.
+
+### 구성을 고친 뒤엔 `--explain` 으로 argv 를 대조한다
+
+`--explain` 은 노드별 조립 argv 만 출력한다 (실행·`--set` 불필요). 프로필을 바꾸기 전후로
+이 출력을 `diff` 하면 의도한 노드만 바뀌었는지 증명된다.
+
+```bash
+$R $W/develop-4-verify.toml --explain | cut -f1,3 > before.txt
+# profiles.toml 수정
+$R $W/develop-4-verify.toml --explain | cut -f1,3 > after.txt
+diff before.txt after.txt
+```
 
 ### 벤더가 소진되면 대체 벤더로 1회 넘어간다
 
@@ -261,4 +307,6 @@ $R $W/develop-4-verify.toml --run-dir $RUN \
 1. 새 워크플로우는 `workflows/<name>.toml` 에 두고 본 README 트리에 한 줄 추가한다.
 2. `--dry-run` 으로 wave 너비를 먼저 확인한다. 모든 wave 가 너비 1 이면 병렬 이득이 없으니 분해를 다시 본다.
 3. 노드 프롬프트에 "추측 금지 · 근거(evidence) 필수" 를 넣는다. 근거 없는 fact 는 하위 노드에서 증폭된다.
-4. 새 LLM 에이전트(벤더)를 붙이려면 `runner/adapters/README.md` 를 따른다 — 러너 코드는 고치지 않는다.
+4. 노드에 `vendor`/`model` 을 새로 박지 않는다 — `profiles.toml` 의 프로필을 쓰거나 프로필을 추가한다.
+   검증 성격의 프로필에는 `verifies` 를 반드시 선언한다 (벤더 상이성이 검사 대상이 된다).
+5. 새 LLM 에이전트(벤더)를 붙이려면 `runner/adapters/README.md` 를 따른다 — 러너 코드는 고치지 않는다.

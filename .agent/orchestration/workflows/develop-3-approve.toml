@@ -24,9 +24,7 @@ cwd = "."
 # ── wave 1 ── 문서 드리프트 점검. 최종 diff 가 곧 1차 구현 결과다 (수정 라운드가 없었으므로).
 [[nodes]]
 id = "docs_final_1"
-vendor = "codex"
-model = "gpt-5.6-terra"
-sandbox = "read-only"
+profile = "doc-drift"
 output_schema = ".agent/orchestration/schemas/doc-drift.json"
 prompt = '''
 티켓 {{ticket}} 의 **최종 diff** 가 문서 드리프트를 만드는지 점검하세요.
@@ -54,9 +52,7 @@ prompt = '''
 # ── wave 2 ── 최종 판정. 1차 리뷰 결과를 그대로 승계한다 (재검증 라운드가 없으므로).
 [[nodes]]
 id = "final_summary"
-vendor = "codex"
-model = "gpt-5.6-terra"
-sandbox = "read-only"
+profile = "final-summary"
 needs = ["docs_final_1"]
 output_schema = ".agent/orchestration/schemas/final-summary.json"
 prompt = '''

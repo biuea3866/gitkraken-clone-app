@@ -29,12 +29,15 @@ from datetime import datetime
 
 RUNNER_DIR = pathlib.Path(__file__).resolve().parent
 ADAPTER_DIR = RUNNER_DIR / "adapters"
+PROFILES_PATH = RUNNER_DIR.parent / "profiles.toml"
 REPO_ROOT = RUNNER_DIR.parents[2]  # runner → orchestration → .agent → 레포 루트
 DEFAULT_TIMEOUT_SECONDS = 900
 
 # 러너가 직접 해석하는 노드 키. 그 외 키는 어댑터 [flags] 에 있어야 한다.
 RESERVED_NODE_KEYS = {
     "id", "vendor", "type", "needs", "prompt", "role_file", "cwd", "timeout_seconds", "label",
+    # 실행 구성 프로필 이름. 해소되면 값 자체는 argv 로 나가지 않고 run.json 기록용으로만 남는다.
+    "profile",
     # 러너 내부용 — --only / --start-at 이 프롬프트 주입용 원본 needs 를 여기 보관한다.
     # 예약어에 없으면 build_command 가 벤더 플래그로 오인해 "지원하지 않습니다" 로 죽는다.
     "_upstream",
@@ -178,7 +181,74 @@ def build_command(
 # ---------------------------------------------------------------- 워크플로우 로드
 
 
-def load_graph(spec_path: pathlib.Path, adapters: dict[str, dict]) -> dict:
+# ---------------------------------------------------------------- 실행 구성 프로필
+
+# 프로필의 메타 키 — 벤더 플래그가 아니므로 노드로 병합하지 않는다.
+PROFILE_META_KEYS = {"description", "verifies"}
+
+
+def load_profiles(adapters: dict[str, dict]) -> dict[str, dict]:
+    """profiles.toml 을 읽어 실행 구성 레지스트리를 만든다.
+
+    노드는 vendor/model/effort 를 직접 들지 않고 profile 이름만 선언한다.
+    **LLM 이 고르지 않는 결정적 조회**다 — 판단 노드를 하나 끼우면 그 자체가
+    다운스트림 배리어가 되고(runs/ 실측 최소 48s), 구성 선택으로 아끼는 최대치를 먹는다.
+    """
+    if not PROFILES_PATH.is_file():
+        fail(f"프로필 파일이 없습니다: {PROFILES_PATH}")
+    profiles = tomllib.loads(PROFILES_PATH.read_text()).get("profiles") or {}
+    if not profiles:
+        fail(f"{PROFILES_PATH}: [profiles.*] 가 비어 있습니다.")
+
+    for name, profile in profiles.items():
+        if profile.get("vendor") not in adapters:
+            fail(
+                f"프로필 '{name}': vendor '{profile.get('vendor')}' 어댑터가 없습니다"
+                f" (등록된 벤더: {sorted(adapters)})."
+            )
+
+    # 검증 프로필은 대상과 벤더가 달라야 한다 — 같으면 상관된 맹점이 생긴다.
+    # 지금까지 claude 구현 → codex 검증은 관례였을 뿐이라 새 노드에서 조용히 깨졌다.
+    for name, profile in profiles.items():
+        for target in profile.get("verifies", []):
+            if target not in profiles:
+                fail(f"프로필 '{name}': verifies 대상 '{target}' 프로필이 없습니다.")
+            if profiles[target]["vendor"] == profile["vendor"]:
+                fail(
+                    f"프로필 '{name}': 검증 대상 '{target}' 과 vendor 가 같습니다"
+                    f" ('{profile['vendor']}') — 검증자와 피검증자가 맹점을 공유합니다."
+                )
+    return profiles
+
+
+def resolve_profile(node: dict, profiles: dict[str, dict]) -> dict:
+    """프로필을 노드로 병합한다. 우선순위: 노드 명시 키 > 프로필 키 > 어댑터 [defaults].
+
+    profile 을 선언하지 않은 노드는 그대로 돌려준다 — 전환이 하위 호환이다.
+    """
+    name = node.get("profile")
+    if not name:
+        return node
+    if name not in profiles:
+        fail(
+            f"노드 '{node['id']}': 프로필 '{name}' 이 없습니다"
+            f" (등록된 프로필: {sorted(profiles)})."
+        )
+    merged = {
+        key: value
+        for key, value in profiles[name].items()
+        if key not in PROFILE_META_KEYS
+    }
+    merged.update(node)  # 노드가 이긴다 (탈출구)
+    return merged
+
+
+# ---------------------------------------------------------------- 워크플로우 로드
+
+
+def load_graph(
+    spec_path: pathlib.Path, adapters: dict[str, dict], profiles: dict[str, dict]
+) -> dict:
     with spec_path.open("rb") as handle:
         graph = tomllib.load(handle)
 
@@ -187,7 +257,7 @@ def load_graph(spec_path: pathlib.Path, adapters: dict[str, dict]) -> dict:
         fail(f"{spec_path}: [[nodes]] 가 비어 있습니다.")
 
     by_id: dict[str, dict] = {}
-    for node in nodes:
+    for index, node in enumerate(nodes):
         node_id = node.get("id")
         if not node_id:
             fail(f"{spec_path}: id 없는 노드가 있습니다.")
@@ -198,11 +268,17 @@ def load_graph(spec_path: pathlib.Path, adapters: dict[str, dict]) -> dict:
         if is_gate(node):
             if node.get("vendor"):
                 fail(f"노드 '{node_id}': gate 노드에는 vendor 를 두지 않습니다 (사람이 판단).")
-        elif node.get("vendor") not in adapters:
-            fail(
-                f"노드 '{node_id}': vendor '{node.get('vendor')}' 어댑터가 없습니다"
-                f" (등록된 벤더: {sorted(adapters)})."
-            )
+            if node.get("profile"):
+                fail(f"노드 '{node_id}': gate 노드에는 profile 을 두지 않습니다 (사람이 판단).")
+        else:
+            # 프로필을 먼저 해소한다 — 그래야 프로필이 준 vendor 가 아래 검증을 통과한다.
+            node = resolve_profile(node, profiles)
+            nodes[index] = node
+            if node.get("vendor") not in adapters:
+                fail(
+                    f"노드 '{node_id}': vendor '{node.get('vendor')}' 어댑터가 없습니다"
+                    f" (등록된 벤더: {sorted(adapters)})."
+                )
         by_id[node_id] = node
 
     for node in nodes:
@@ -406,6 +482,7 @@ def execute_attempt(
 
     result = {
         **base,
+        "profile": node.get("profile"),
         "model": node.get("model"),
         "effort": node.get("effort"),
         "exit_code": completed.returncode,
@@ -550,6 +627,11 @@ def main() -> int:
         help="벤더 소진 시 대체 벤더 재시도를 끈다 (기본은 켜짐 — 어댑터의 [failover] 선언을 따른다)",
     )
     parser.add_argument("--dry-run", action="store_true", help="wave 계획만 출력")
+    parser.add_argument(
+        "--explain",
+        action="store_true",
+        help="노드별 조립 argv 를 출력하고 종료한다 (프로필 전환 전후 diff 로 하위 호환 증명)",
+    )
     args = parser.parse_args()
 
     variables: dict[str, str] = {}
@@ -560,7 +642,8 @@ def main() -> int:
         variables[key.strip()] = value
 
     adapters = load_adapters()
-    graph = load_graph(args.graph, adapters)
+    profiles = load_profiles(adapters)
+    graph = load_graph(args.graph, adapters, profiles)
     nodes = graph["nodes"]
 
     if args.only and args.start_at:
@@ -591,6 +674,23 @@ def main() -> int:
     graph_name = graph.get("name", args.graph.stem)
 
     graph_cwd = REPO_ROOT / graph.get("cwd", ".")
+
+    # --explain 은 실행 없이 조립 결과만 본다. 프로필 전환 전후로 이 출력을 diff 해서
+    # "argv 가 한 글자도 안 바뀌었다" 를 증명한다 (프롬프트는 argv 조립 대상이 아니라 빠진다).
+    # --set 없이도 돌도록 자리표시자 검증보다 먼저 둔다.
+    if args.explain:
+        for node in nodes:
+            if is_gate(node):
+                print(f"{node['id']}\tgate\t-")
+                continue
+            command = build_command(
+                node,
+                adapters[node["vendor"]],
+                pathlib.Path("<RUN>") / f"{node['id']}.json",
+                pathlib.Path("<CWD>"),
+            )
+            print(f"{node['id']}\t{node.get('profile') or '-'}\t{shlex.join(command)}")
+        return 0
 
     # 실행 전에 자리표시자를 전수 검증한다 — 노드 실행 중 실패하면 이미 쓴 비용이 날아간다.
     for node in nodes:
