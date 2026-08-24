@@ -108,15 +108,8 @@ class AppComponent(settingsFile: Path) {
     suspend fun openRepository(path: RepositoryPath) =
         welcomeActions.openRepository.execute(path)
 
-    /**
-     * 원격 이름 목록.
-     *
-     * **지금은 비어 있다.** `RemoteGateway` 에 원격을 열거하는 계약이 없고, 결정문 A4 가
-     * "이미 있는 domain 최상위 계약 파일은 고치지 않는다 — 고쳐야 하면 구현하지 말고 보고한다" 로
-     * 못박아 두었다. 툴바는 빈 목록을 받으면 `NO_REMOTE` 사유를 표시하고 원격 버튼을 닫는다 —
-     * 잘못된 대상으로 fetch·push 하는 것보다 낫다. 계약 확장 여부는 사람 결정 대기 중이다.
-     */
-    fun knownRemotes(): List<String> = emptyList()
+    /** 등록된 원격 이름. 툴바가 fetch·pull 대상을 정하는 재료다. */
+    suspend fun listRemotes() = remoteGateway.listRemotes()
 
     /** 참조 목록. 그래프·검색이 어느 ref 를 훑을지와 참조 칩 색인의 재료다. */
     suspend fun listBranches() = refGateway.listBranches()

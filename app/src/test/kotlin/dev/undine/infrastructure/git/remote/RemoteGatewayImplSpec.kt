@@ -11,6 +11,8 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.engine.spec.tempdir
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldNotBeEmpty
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -76,6 +78,32 @@ private fun resolve(directory: File, ref: String): ObjectId? =
     Git.open(directory).use { git -> git.repository.resolve(ref) }
 
 class RemoteGatewayImplSpec : FunSpec({
+
+    test("등록된 원격 이름을 정렬해 돌려주고 원격이 없으면 빈 목록이다") {
+        val root = tempdir()
+        val bare = File(root, "origin")
+        val work = File(root, "work")
+        seedRepository(bare)
+        initRepository(work).use { git ->
+            commit(git, "a.txt", "first")
+
+            val gitAccess = GitAccess()
+            gitAccess.open(RepositoryPath(work.absolutePath)) { }
+            val gateway = gatewayOf(gitAccess)
+
+            // 원격을 등록하기 전에는 빈 목록이다 — 오류가 아니다.
+            gateway.listRemotes().shouldBeEmpty()
+
+            git.repository.config.apply {
+                setString("remote", "upstream", "url", bare.absolutePath)
+                setString("remote", "origin", "url", bare.absolutePath)
+                save()
+            }
+
+            // 정렬해 돌려준다 — 설정 파일 순서가 화면 순서를 흔들지 않게 한다.
+            gateway.listRemotes() shouldContainExactly listOf("origin", "upstream")
+        }
+    }
 
     test("로컬 경로 원격을 clone 하면 커밋 이력이 그대로 복제된다") {
         val root = tempdir()

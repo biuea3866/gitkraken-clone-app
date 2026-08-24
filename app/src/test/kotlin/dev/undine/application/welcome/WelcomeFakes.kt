@@ -77,9 +77,13 @@ internal class FakeRemoteGateway(
     private val suspendUntil: CompletableDeferred<Unit>? = null,
     private val onClone: (RepositoryPath) -> Unit = {},
     private val beforeFailure: () -> Unit = {},
+    /** listRemotes 가 돌려줄 이름. 원격 없음도 정상 시나리오라 기본값은 origin 하나다. */
+    private val remoteNames: List<String> = listOf("origin"),
 ) : RemoteGateway {
     var cloneCount: Int = 0
         private set
+
+    override suspend fun listRemotes(): List<String> = remoteNames
 
     override suspend fun clone(url: String, into: RepositoryPath, onProgress: (Progress) -> Unit) {
         cloneCount++

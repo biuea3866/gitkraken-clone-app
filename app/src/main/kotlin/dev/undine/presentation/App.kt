@@ -79,6 +79,7 @@ private data class RepositoryContext(
     val opened: OpenedRepository? = null,
     val branches: List<Branch> = emptyList(),
     val tags: List<Tag> = emptyList(),
+    val remotes: List<String> = emptyList(),
 )
 
 /**
@@ -156,6 +157,7 @@ private fun AppContent(component: AppComponent, errors: AppErrorState) {
                 opened = component.openRepository(path),
                 branches = component.listBranches(),
                 tags = component.listTags(),
+                remotes = component.listRemotes(),
             )
         } catch (failure: UndineException) {
             errors.report(failure, logPath = null)
@@ -242,7 +244,7 @@ private fun RepositoryArea(
         fetchRemote = component.fetchRemote,
         pullRemote = component.pullRemote,
         pushRemote = component.pushRemote,
-        remotes = component.knownRemotes(),
+        remotes = context.remotes,
         branch = context.branches.firstOrNull { it.isCurrent },
     )
 
