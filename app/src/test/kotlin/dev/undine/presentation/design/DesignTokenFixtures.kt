@@ -32,6 +32,7 @@ fun nonTextColorsOf(colors: ColorTokens): Map<String, Color> = mapOf(
 fun namedColorsOf(colors: ColorTokens): Map<String, Color> =
     mapOf(
         "background" to colors.background,
+        "divider" to colors.divider,
         "surface" to colors.surface,
         "additionSurface" to colors.additionSurface,
         "deletionSurface" to colors.deletionSurface,

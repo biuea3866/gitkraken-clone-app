@@ -38,7 +38,6 @@ internal fun LaneCanvas(
     modifier: Modifier = Modifier,
 ) {
     val palette = UndineTokens.color.lanePalette
-    val nodeFill = UndineTokens.color.background
 
     Canvas(modifier = modifier) {
         val laneWidth = size.width / maxOf(laneCount, 1)
@@ -64,8 +63,10 @@ internal fun LaneCanvas(
             .filter(GraphLaneGeometry::isDrawable)
             .forEach { drawParentEdge(it, laneWidth, stroke, commitColor) }
 
+        // 점을 채운다 — 속을 배경색으로 비우면 얇은 링만 남아 레인 색이 눈에 들어오지 않는다.
+        // 배경색 링을 두르지 않는다: 링이 연결선을 끊어 선이 점선처럼 보인다. 선이 점을 관통하고
+        // 그 위에 점이 얹히는 순서가 이력의 연속성을 그대로 보여 준다.
         drawCircle(commitColor, radius = NODE_RADIUS.toPx(), center = Offset(commitX, centerY))
-        drawCircle(nodeFill, radius = NODE_RADIUS.toPx() - stroke, center = Offset(commitX, centerY))
     }
 }
 

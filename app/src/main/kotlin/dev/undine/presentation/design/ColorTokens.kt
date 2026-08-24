@@ -10,6 +10,9 @@ import androidx.compose.ui.graphics.Color
  * 본문 텍스트([foregroundPrimary]·[foregroundSecondary]·[foregroundTertiary])는 [background]·[surface]
  * 양쪽에서 4.5:1 이상, 경계·강조·상태색은 3:1 이상이다. `ColorContrastSpec` 이 회귀를 막는다.
  *
+ * @property divider 영역을 나누는 선. **본문 대비 요구를 받지 않는다** — 읽는 대상이 아니라 구획
+ *   표시이며, [border] 만큼 밝으면 화면이 선으로 갈라져 보인다. 그래서 3:1 대비 검증 목록
+ *   (`nonTextColorsOf`)에 넣지 않는다. 상호작용하는 경계(칩·입력)는 여전히 [border] 를 쓴다.
  * @property lanePalette 그래프 레인 색. 슬롯은 순환 재사용되므로 **마지막↔첫 번째를 포함한 인접 쌍**이
  *   서로 3:1 이상이다. 이를 위해 어두운 색과 중간 밝기 색이 번갈아 배치돼 있으며, 그 결과 중간 밝기
  *   레인은 배경 대비가 약 2:1 로 낮다 — 인접 구분(요구사항)을 배경 대비보다 우선한 결과다.
@@ -18,6 +21,7 @@ data class ColorTokens(
     val background: Color,
     val surface: Color,
     val border: Color,
+    val divider: Color,
     val foregroundPrimary: Color,
     val foregroundSecondary: Color,
     val foregroundTertiary: Color,
@@ -36,6 +40,7 @@ data class ColorTokens(
             background = Color(0xFFFFFFFF),
             surface = Color(0xFFF1F3F5),
             border = Color(0xFF767E8A),
+            divider = Color(0xFFD8DDE3),
             foregroundPrimary = Color(0xFF12161C),
             foregroundSecondary = Color(0xFF3A424E),
             foregroundTertiary = Color(0xFF59626F),
@@ -66,6 +71,7 @@ data class ColorTokens(
             background = Color(0xFF12161C),
             surface = Color(0xFF1C222B),
             border = Color(0xFF7C8694),
+            divider = Color(0xFF2A313C),
             foregroundPrimary = Color(0xFFEEF1F5),
             foregroundSecondary = Color(0xFFBFC7D2),
             foregroundTertiary = Color(0xFF9AA4B2),
