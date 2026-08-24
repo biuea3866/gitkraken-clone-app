@@ -6,9 +6,10 @@ import io.kotest.matchers.collections.shouldContainExactly
 
 class DomainEnumSpec : FunSpec({
 
-    test("RepositoryState 는 정상·빈저장소·병합중·리베이스중·revert중·detached 여섯 값으로 닫혀 있다") {
+    test("RepositoryState 는 정상·빈저장소·병합·리베이스·revert·cherry-pick·detached 일곱 값으로 닫혀 있다") {
+        // cherry-pick 은 UND-28 이 그 상태를 필요로 해 추가했다 (enum KDoc 의 계약).
         RepositoryState.entries.map { it.name } shouldContainExactly
-            listOf("NORMAL", "EMPTY", "MERGING", "REBASING", "REVERTING", "DETACHED")
+            listOf("NORMAL", "EMPTY", "MERGING", "REBASING", "REVERTING", "CHERRY_PICKING", "DETACHED")
     }
 
     test("NotFound.Kind 는 참조·커밋·스태시·원격 네 종류로 닫혀 있다") {
@@ -22,7 +23,8 @@ class DomainEnumSpec : FunSpec({
     }
 
     test("RepositoryState 는 정의되지 않은 이름으로 만들 수 없다") {
-        shouldThrow<IllegalArgumentException> { RepositoryState.valueOf("CHERRY_PICKING") }
+        // bisect 는 아직 어느 티켓도 필요로 하지 않아 값이 없다 — 그 티켓이 추가할 때 이 이름을 바꾼다.
+        shouldThrow<IllegalArgumentException> { RepositoryState.valueOf("BISECTING") }
     }
 
     test("ResetMode 는 SOFT·MIXED 만 갖는다 — hard 는 플래그가 아니라 별도 메서드다") {

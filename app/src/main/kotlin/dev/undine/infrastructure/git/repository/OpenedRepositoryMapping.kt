@@ -17,6 +17,11 @@ private val MERGING_STATES = setOf(
     JGitRepositoryState.MERGING_RESOLVED,
 )
 
+private val CHERRY_PICKING_STATES = setOf(
+    JGitRepositoryState.CHERRY_PICKING,
+    JGitRepositoryState.CHERRY_PICKING_RESOLVED,
+)
+
 private val REBASING_STATES = setOf(
     JGitRepositoryState.REBASING,
     JGitRepositoryState.REBASING_REBASING,
@@ -41,14 +46,15 @@ internal fun Repository.toOpenedRepository(): OpenedRepository {
 }
 
 /**
- * 진행 중인 연산(revert·merge·rebase)이 HEAD 조건보다 우선한다 — "지금 무엇을 할 수 있는가" 를
+ * 진행 중인 연산(revert·cherry-pick·merge·rebase)이 HEAD 조건보다 우선한다 — "지금 무엇을 할 수 있는가" 를
  * 후행 티켓이 이 값으로 판단하므로, 충돌을 끝내야 하는 상태를 정상으로 보이게 하면 안 된다.
  *
- * cherry-pick·bisect 는 계약에 아직 없어 [RepositoryState.NORMAL] 로 떨어진다 — 그 상태를 필요로
- * 하는 티켓이 enum 과 함께 추가한다.
+ * bisect 는 계약에 아직 없어 [RepositoryState.NORMAL] 로 떨어진다 — 그 상태를 필요로 하는 티켓이
+ * enum 과 함께 추가한다.
  */
 private fun Repository.resolveState(head: Ref?): RepositoryState = when {
     isRevertInProgress() -> RepositoryState.REVERTING
+    repositoryState in CHERRY_PICKING_STATES -> RepositoryState.CHERRY_PICKING
     repositoryState in MERGING_STATES -> RepositoryState.MERGING
     repositoryState in REBASING_STATES -> RepositoryState.REBASING
     head == null || head.objectId == null -> RepositoryState.EMPTY
