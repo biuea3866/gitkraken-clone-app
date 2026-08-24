@@ -74,6 +74,15 @@ internal class FakeRemoteGateway(
     var lastProgressCallback: ((Progress) -> Unit)? = null
         private set
 
+    /**
+     * [lastProgressCallback] 이 등록된 순간 완료된다.
+     *
+     * 상태 홀더가 작업을 **자기 스코프에 launch** 하므로, `fetch()` 가 돌아온 시점에 그 본문이 아직
+     * 실행되지 않았을 수 있다 — `Unconfined` 스코프에서는 즉시 실행돼 가려지지만 전용 스레드
+     * 디스패처에서는 큐에 남는다. 콜백을 쓰는 테스트는 이 신호를 기다린다.
+     */
+    val progressCallbackRegistered = CompletableDeferred<(Progress) -> Unit>()
+
     override suspend fun clone(url: String, into: RepositoryPath, onProgress: (Progress) -> Unit) {
         error("툴바는 clone 을 호출하지 않는다")
     }
@@ -82,6 +91,7 @@ internal class FakeRemoteGateway(
         fetchCalls++
         lastRemote = remote
         lastProgressCallback = onProgress
+        progressCallbackRegistered.complete(onProgress)
         awaitGate()
         failure?.let { throw it }
         return fetchResult
@@ -91,6 +101,7 @@ internal class FakeRemoteGateway(
         pullCalls++
         lastRemote = remote
         lastProgressCallback = onProgress
+        progressCallbackRegistered.complete(onProgress)
         awaitGate()
         failure?.let { throw it }
     }
@@ -100,6 +111,7 @@ internal class FakeRemoteGateway(
         lastPushRef = ref
         lastPushForce = force
         lastProgressCallback = onProgress
+        progressCallbackRegistered.complete(onProgress)
         awaitGate()
         failure?.let { throw it }
         return pushResult

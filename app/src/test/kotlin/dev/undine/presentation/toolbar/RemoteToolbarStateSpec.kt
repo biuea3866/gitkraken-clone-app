@@ -394,11 +394,20 @@ class RemoteToolbarStateSpec : FunSpec({
         try {
             val state = toolbarStateWith(gateway, scope = CoroutineScope(uiDispatcher))
             withContext(uiDispatcher) { state.fetch() }
-            val callback = requireNotNull(gateway.lastProgressCallback)
+            // fetch 는 자기 스코프에 launch 하므로 돌아온 시점에 본문이 아직 큐에 있을 수 있다.
+            // 콜백이 실제로 등록될 때까지 기다린다 — 여기서 추측하면 전체 스위트 부하에서 깨진다.
+            val callback = gateway.progressCallbackRegistered.await()
 
             // 화면 스레드를 블로킹으로 점유한다 (suspend 로 비우면 큐가 그대로 소비된다).
+            // 점유가 **시작된 것을 확인한 뒤에** 콜백을 때린다 — launch 가 아직 큐에 있는 동안
+            // 때리면 갱신이 먼저 실행돼 아래 단정이 우연히 실패한다(경쟁).
+            val occupied = CountDownLatch(1)
             val release = CountDownLatch(1)
-            val holding = CoroutineScope(uiDispatcher).launch { release.await() }
+            val holding = CoroutineScope(uiDispatcher).launch {
+                occupied.countDown()
+                release.await()
+            }
+            occupied.await()
 
             withContext(Dispatchers.IO) { callback(Progress(0.4, "Receiving objects")) }
 
