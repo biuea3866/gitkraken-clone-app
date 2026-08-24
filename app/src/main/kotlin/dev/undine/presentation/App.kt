@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import dev.undine.BuildInfo
 import dev.undine.di.AppComponent
 import dev.undine.domain.Branch
 import dev.undine.domain.Commit
@@ -74,7 +75,8 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Clock
 
-private const val WINDOW_TITLE = "Undine"
+/** 창 제목에 버전을 붙인다 — 사용자가 어느 빌드를 쓰는지 물어볼 때 답할 데가 필요하다. */
+private val windowTitle: String = "Undine ${BuildInfo.VERSION}"
 
 /**
  * 저장소를 연 뒤 알게 되는 것들의 스냅샷. 함께 읽고 함께 바뀌므로 한 값으로 묶는다 —
@@ -457,7 +459,7 @@ fun main() = application {
 
     LaunchedEffect(Unit) { installGlobalExceptionHandler(errors, appDirectory) }
 
-    Window(onCloseRequest = ::exitApplication, title = WINDOW_TITLE) {
+    Window(onCloseRequest = ::exitApplication, title = windowTitle) {
         App(component = component, errors = errors)
     }
 }
