@@ -74,6 +74,7 @@ import dev.undine.presentation.welcome.WelcomeState
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Clock
+import kotlinx.coroutines.runBlocking
 
 /** 창 제목에 버전을 붙인다 — 사용자가 어느 빌드를 쓰는지 물어볼 때 답할 데가 필요하다. */
 private val windowTitle: String = "Undine ${BuildInfo.VERSION}"
@@ -459,7 +460,26 @@ fun main() = application {
 
     LaunchedEffect(Unit) { installGlobalExceptionHandler(errors, appDirectory) }
 
-    Window(onCloseRequest = ::exitApplication, title = windowTitle) {
+    Window(onCloseRequest = { closeAndExit(component, ::exitApplication) }, title = windowTitle) {
         App(component = component, errors = errors)
     }
+}
+
+/**
+ * 열린 JGit 자원을 닫고 나서 종료한다.
+ *
+ * `runBlocking` 을 쓰는 이유는 **닫기가 끝난 뒤에** 종료해야 하기 때문이다 — 코루틴으로 띄우면
+ * 프로세스가 먼저 내려가 pack 파일 핸들이 열린 채 남는다 (Windows 에서는 그 파일을 지울 수 없다).
+ * 종료 경로는 진입점과 같은 축이라 여기서만 허용한다 (`kotlin-idioms` 규칙 10).
+ *
+ * 닫기 실패로 종료를 막지 않는다 — 사용자가 창을 닫으려는데 앱이 남아 있는 것이 더 나쁘다.
+ * 대신 사유를 표준 오류로 남긴다.
+ */
+private fun closeAndExit(component: AppComponent, exit: () -> Unit) {
+    try {
+        runBlocking { component.closeRepository() }
+    } catch (failure: UndineException) {
+        System.err.println("종료 중 저장소를 닫지 못했습니다: ${failure.message}")
+    }
+    exit()
 }
