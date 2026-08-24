@@ -66,7 +66,7 @@ Undine 구현을 **53개 티켓 / 10개 wave** 로 분해한 결과다.
 | [UND-32](UND-32-submodule-management.md) | Submodule 관리 | M | 7 | UND-02 · UND-59 | `domain/submodule/` · `infrastructure/git/submodule/` |
 | [UND-33](UND-33-git-lfs.md) | Git LFS 연동 | M | 7 | UND-08 | `domain/lfs/` · `infrastructure/git/lfs/` |
 | [UND-34](UND-34-worktree-management.md) | Worktree 관리 | M | 7 | UND-02 · UND-59 | `domain/worktree/` · `infrastructure/git/worktree/` |
-| [UND-35](UND-35-bisect-session.md) | Bisect 세션 | M | 7 | UND-03 | `domain/bisect/` · `application/bisect/` · `infrastructure/git/bisect/` |
+| [UND-35](UND-35-bisect-session.md) | Bisect 세션 | M | 7 | UND-03 · UND-59 | `domain/bisect/` · `application/bisect/` · `infrastructure/git/bisect/` |
 | [UND-36](UND-36-commit-signing.md) | 커밋 서명 (GPG / SSH) | M | 7 | UND-06 | `domain/signing/` · `infrastructure/git/signing/` |
 | [UND-37](UND-37-git-identity-profiles.md) | Git identity 프로필 | S | 7 | UND-06 · UND-11 · UND-59 | `domain/identity/` · `application/identity/` · `infrastructure/identity/` |
 | [UND-38](UND-38-operation-history-undo.md) | 실행 이력 · Undo 스택 | L | 7 | UND-09 · UND-21 | `domain/undo/` · `application/undo/` |
@@ -160,16 +160,16 @@ flowchart LR
 | 4 | UND-17, UND-23, UND-24, UND-25 | 4 |
 | 5 | UND-26 | 1 |
 | 6 | UND-27 | 1 |
-| 7a | UND-28, UND-29, UND-30, UND-31, UND-33, UND-35, UND-36, UND-38, UND-59 | 9 |
-| 7b | UND-32, UND-34, UND-37, UND-39 | 4 |
+| 7a | UND-28, UND-29, UND-30, UND-31, UND-33, UND-36, UND-38, UND-59 | 8 |
+| 7b | UND-32, UND-34, UND-35, UND-37, UND-39 | 5 |
 | 8 | UND-40, UND-41, UND-42, UND-43, UND-44, UND-45, UND-46, UND-47, UND-48 | 9 |
 | 9 | UND-51 | 1 |
 | 10 | UND-50, UND-52 | 2 |
 
-- **너비 분포**: [1, 11, 11, 4, 1, 1, 9, 4, 9, 1, 2]
+- **너비 분포**: [1, 11, 11, 4, 1, 1, 8, 5, 9, 1, 2]
 - **평균 wave 너비**: 4.91
 - **판정: 통과** — 모든 wave 너비가 1~2 인 직선형 DAG 가 아니다.
-  wave 2·3·7a·8 에서 각각 11·11·9·9 개가 동시에 열린다.
+  wave 2·3·7a·8 에서 각각 11·11·8·9 개가 동시에 열린다.
 
 꼬리 wave 의 너비 1~2 는 **의도**다. 와이어업과 E2E 는 앞선 결과 전체를 전제로 하는
 단일 책임이라 쪼개면 오히려 충돌을 만든다.

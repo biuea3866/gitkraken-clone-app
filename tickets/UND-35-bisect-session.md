@@ -1,6 +1,6 @@
 # [UND-35] Bisect 세션
 
-> wave 7 · 사이즈 M · 의존 UND-03 · 소유 `domain/bisect/` · `application/bisect/` · `infrastructure/git/bisect/`
+> wave 7 · 사이즈 M · 의존 UND-03, UND-59 · 소유 `domain/bisect/` · `application/bisect/` · `infrastructure/git/bisect/`
 
 ## 작업 내용 (설계 의도)
 버그가 처음 들어온 커밋을 이분 탐색으로 찾는다. 세션이 여러 단계에 걸치므로 **상태 관리**가 본체다.
