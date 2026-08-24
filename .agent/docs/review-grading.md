@@ -40,6 +40,13 @@ p0~p4 가 없으면                 → APPROVED
 리뷰 산출물이 없거나 파싱 실패(`_parse_error`)거나 `verdict` 키가 없으면 **REQUEST_CHANGES 로
 취급**한다. 판정 불가를 통과로 읽으면 검증을 건너뛴 채 사람 게이트에 도달한다.
 
+**이 규칙은 `verdict` 를 선언하는 스키마의 산출물에만 적용된다** — `review.json` ·
+`final-summary.json` · `ticket-review.json` 이다. **축 산출물(`axis-review.json`)에는 `verdict`
+필드가 없다**: 축은 판정을 내리지 않고 `findings` 를 올리며, 판정은 그것을 모으는 요약 노드가 한다.
+축 산출물에 `verdict` 가 없다는 것을 fail-closed 사유로 올리지 않는다 — 스키마가 그렇게 정의돼 있어
+**모든 축이 영구히 걸리고**, 코드에 지적이 없는 티켓도 APPROVED 에 도달할 수 없다.
+축의 판정 불가는 파일 부재 또는 `_parse_error` 로만 판단한다.
+
 ## 참고
 
 - [`review-discipline.md`](./review-discipline.md) — 리뷰 게이트·출력·브리핑 규율
