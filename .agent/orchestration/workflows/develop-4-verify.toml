@@ -46,9 +46,7 @@ cwd = "."
 # ── wave 1 ── 5축 + 문서 드리프트. 수정 노드가 없으므로 의존 없이 곧바로 병렬로 돈다.
 [[nodes]]
 id = "intent_ac_v"
-vendor = "codex"
-model = "gpt-5.6-terra"
-sandbox = "read-only"
+profile = "axis-review"
 needs = []
 role_file = ".agent/skills/custom-self-code-review/SKILL.md"
 output_schema = ".agent/orchestration/schemas/axis-review.json"
@@ -87,9 +85,7 @@ prompt = '''
 
 [[nodes]]
 id = "tests_v"
-vendor = "codex"
-model = "gpt-5.6-terra"
-sandbox = "read-only"
+profile = "axis-review"
 needs = []
 role_file = ".agent/skills/custom-self-code-review/SKILL.md"
 output_schema = ".agent/orchestration/schemas/axis-review.json"
@@ -132,9 +128,7 @@ prompt = '''
 
 [[nodes]]
 id = "side_effects_v"
-vendor = "codex"
-model = "gpt-5.6-terra"
-sandbox = "read-only"
+profile = "axis-review"
 needs = []
 role_file = ".agent/skills/custom-self-code-review/SKILL.md"
 output_schema = ".agent/orchestration/schemas/axis-review.json"
@@ -176,9 +170,7 @@ diff 밖 파일을 근거로 단정하지 마세요 — 읽고 확인한 것만 
 
 [[nodes]]
 id = "deploy_v"
-vendor = "codex"
-model = "gpt-5.6-terra"
-sandbox = "read-only"
+profile = "axis-review"
 needs = []
 role_file = ".agent/skills/custom-self-code-review/SKILL.md"
 output_schema = ".agent/orchestration/schemas/axis-review.json"
@@ -219,9 +211,7 @@ prompt = '''
 
 [[nodes]]
 id = "rollback_v"
-vendor = "codex"
-model = "gpt-5.6-terra"
-sandbox = "read-only"
+profile = "axis-review"
 needs = []
 role_file = ".agent/skills/custom-self-code-review/SKILL.md"
 output_schema = ".agent/orchestration/schemas/axis-review.json"
@@ -260,9 +250,7 @@ prompt = '''
 
 [[nodes]]
 id = "docs_final_v"
-vendor = "codex"
-model = "gpt-5.6-terra"
-sandbox = "read-only"
+profile = "doc-drift"
 needs = []
 output_schema = ".agent/orchestration/schemas/doc-drift.json"
 prompt = '''
@@ -292,9 +280,7 @@ prompt = '''
 # ── wave 2 ── 최종 verdict 확정. 재검증 6축을 병합한다.
 [[nodes]]
 id = "final_summary_v"
-vendor = "codex"
-model = "gpt-5.6-terra"
-sandbox = "read-only"
+profile = "final-summary"
 needs = ["intent_ac_v", "tests_v", "side_effects_v", "deploy_v", "rollback_v", "docs_final_v"]
 output_schema = ".agent/orchestration/schemas/final-summary.json"
 prompt = '''

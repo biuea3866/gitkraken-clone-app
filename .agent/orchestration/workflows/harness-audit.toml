@@ -6,10 +6,7 @@ cwd = "."
 
 [[nodes]]
 id = "inventory"
-vendor = "codex"
-model = "gpt-5.6-terra"
-effort = "low"
-sandbox = "read-only"
+profile = "fact-gather"
 output_schema = ".agent/orchestration/schemas/facts.json"
 prompt = '''
 .agent/ 디렉토리의 실제 자산 수를 세어 보고하세요. 셸 명령으로 직접 세고, 추측하지 마세요.
@@ -26,10 +23,7 @@ evidence 에는 실제로 실행한 명령을 적으세요.
 
 [[nodes]]
 id = "doc-claims"
-vendor = "codex"
-model = "gpt-5.6-terra"
-effort = "low"
-sandbox = "read-only"
+profile = "fact-gather"
 output_schema = ".agent/orchestration/schemas/facts.json"
 prompt = '''
 .agent/HARNESS.md 를 읽고, 그 문서가 **주장하는** 자산 수량을 추출하세요. 실제 파일을 세지 마세요 — 문서에 적힌 숫자만 옮깁니다.
@@ -47,10 +41,7 @@ evidence 에는 그 숫자가 적힌 섹션명 또는 줄 내용을 적으세요
 
 [[nodes]]
 id = "settings-xref"
-vendor = "codex"
-model = "gpt-5.6-terra"
-effort = "low"
-sandbox = "read-only"
+profile = "fact-gather"
 output_schema = ".agent/orchestration/schemas/facts.json"
 prompt = '''
 .claude/settings.json (Claude 투영·손유지) 의 hooks 에 등록된 스크립트 경로와 실제 파일을 교차 검증하세요.
@@ -69,8 +60,7 @@ evidence 에는 실행한 명령을 적으세요.
 
 [[nodes]]
 id = "synthesize"
-vendor = "claude"
-model = "opus"
+profile = "synthesize"
 tools = ["Read"]
 needs = ["inventory", "doc-claims", "settings-xref"]
 prompt = '''

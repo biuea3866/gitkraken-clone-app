@@ -16,6 +16,10 @@ import dev.undine.testsupport.FIXED_NOW
 import dev.undine.testsupport.RecordingHistoryGateway
 import dev.undine.testsupport.commit
 import dev.undine.testsupport.commitId
+import dev.undine.domain.conflict.ConflictedFile
+import dev.undine.presentation.conflict.ConflictEditor
+import dev.undine.presentation.conflict.ConflictState
+import dev.undine.presentation.conflict.conflictStateForRender
 import dev.undine.presentation.staging.FakeRepositoryGateway
 import dev.undine.presentation.staging.RecordingStagingGateway
 import dev.undine.presentation.staging.statusOf
@@ -82,7 +86,58 @@ class ScreenshotRenderSpec : FunSpec({
         file.length() shouldBeGreaterThan 0
     }
 
+    test("충돌 에디터가 다크 테마로 렌더된다") {
+        val file = ScreenshotRenderer.render("conflict-dark", width = 1200, height = 720) {
+            val state = remember {
+                conflictStateForRender(
+                    files = listOf(
+                        ConflictedFile(CONFLICT_PATH, isBinary = false),
+                        ConflictedFile("docs/notes.md", isBinary = false),
+                    ),
+                    contents = mapOf(CONFLICT_PATH to CONFLICT_SAMPLE),
+                )
+            }
+            LaunchedConflict(state)
+        }
+
+        file.length() shouldBeGreaterThan 0
+    }
+
 })
+
+private const val CONFLICT_PATH = "app/src/main/kotlin/dev/undine/presentation/App.kt"
+
+/** 표식이 두 군데 남은 파일. 구간 탭과 세 원본 패널이 함께 보여야 배치를 판단할 수 있다. */
+private val CONFLICT_SAMPLE = listOf(
+    "fun main() {",
+    "<<<<<<< HEAD",
+    "    println(\"우리 쪽 인사\")",
+    "=======",
+    "    println(\"저쪽 인사\")",
+    ">>>>>>> feature/greeting",
+    "    val count = 2",
+    "<<<<<<< HEAD",
+    "    println(count + 1)",
+    "=======",
+    "    println(count * 2)",
+    ">>>>>>> feature/greeting",
+    "}",
+).joinToString("\n")
+
+/**
+ * 목록을 실은 뒤 첫 파일을 고른다 — 고르기 전에는 오른쪽이 비어 있다.
+ *
+ * 고르기를 **목록이 채워진 뒤로** 미룬다. `select` 는 그 경로가 목록에 있어야 내용을 읽으므로
+ * 한 효과에서 이어 부르면 목록보다 먼저 실행돼 아무것도 그려지지 않는다.
+ */
+@androidx.compose.runtime.Composable
+private fun LaunchedConflict(state: ConflictState) {
+    androidx.compose.runtime.LaunchedEffect(Unit) { state.refresh() }
+    androidx.compose.runtime.LaunchedEffect(state.files) {
+        if (state.selectedPath == null) state.files.firstOrNull()?.let { state.select(it.path) }
+    }
+    ConflictEditor(state = state, modifier = Modifier.fillMaxSize())
+}
 
 /** 첫 페이지를 실어야 행이 그려진다 — 렌더 전에 로드를 끝낸다. */
 @androidx.compose.runtime.Composable

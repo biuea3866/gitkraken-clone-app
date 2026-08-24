@@ -15,6 +15,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusTarget
@@ -27,12 +28,15 @@ import dev.undine.domain.DiffResult
 import dev.undine.domain.OpenedRepository
 import dev.undine.domain.RefName
 import dev.undine.domain.RepositoryPath
+import dev.undine.domain.RepositoryState
 import dev.undine.domain.Tag
 import dev.undine.domain.ThemeMode
 import dev.undine.domain.UndineException
 import dev.undine.presentation.commitdetail.CommitDetailPanel
 import dev.undine.presentation.commitdetail.CommitDetailState
 import dev.undine.presentation.commitdetail.rememberCommitDetailState
+import dev.undine.presentation.conflict.ConflictEditor
+import dev.undine.presentation.conflict.ConflictState
 import dev.undine.presentation.design.component.UndineToolbarButton
 import dev.undine.presentation.design.UndineTheme
 import dev.undine.presentation.design.UndineTokens
@@ -231,6 +235,17 @@ private fun RepositoryArea(
     val stagingState = remember(repositoryPath) {
         StagingState(actions = component.stagingActions, scope = scope)
     }
+    // 계속(continue)이 병합인지 리베이스인지는 **저장소를 열 때 읽은 상태**로 가른다. 홀더를 다시
+    // 만들지 않고 최신 값을 읽게 하려고 rememberUpdatedState 를 거친다 — remember 람다가 첫
+    // context 를 붙잡으면 저장소를 바꿔도 옛 상태로 계속을 시도한다.
+    val latestContext = rememberUpdatedState(context)
+    val conflictState = remember(repositoryPath) {
+        ConflictState(
+            actions = component.conflictActions,
+            repositoryState = { latestContext.value.opened?.state ?: RepositoryState.NORMAL },
+            scope = scope,
+        )
+    }
     val sidebarState = remember(repositoryPath) {
         SidebarState(
             loadRefs = component.loadSidebarRefs,
@@ -271,6 +286,7 @@ private fun RepositoryArea(
     LaunchedEffect(refs) {
         sidebarState.refresh()
         stagingState.refresh()
+        conflictState.refresh()
         graphState.loadInitialPage()
     }
 
@@ -334,6 +350,7 @@ private fun RepositoryArea(
                             filePath = selection.filePath,
                         ),
                         stagingState = stagingState,
+                        conflictState = conflictState,
                         onSelectFile = { filePath -> shellState.selectFile(filePath) },
                     )
                 },
@@ -346,40 +363,46 @@ private fun RepositoryArea(
 /**
  * 아래 영역.
  *
- * 커밋을 고르지 않았으면 **작업 중인 변경**(스테이징 패널)이다 — Git 클라이언트를 여는 이유가
- * 대개 그것이고, 빈 화면보다 지금 할 일을 보여주는 것이 맞다. 커밋을 고르면 그 커밋의 상세로,
- * 파일까지 고르면 그 파일의 diff 로 바뀐다.
+ * **충돌이 남아 있으면 충돌 에디터가 다른 무엇보다 앞선다** — 충돌을 해결하기 전에는 커밋도
+ * 브랜치 이동도 할 수 없으므로, 지금 해야 하는 유일한 일을 보여준다.
  *
- * 충돌 편집기(UND-23)는 아직 없다.
+ * 충돌이 없고 커밋을 고르지 않았으면 **작업 중인 변경**(스테이징 패널)이다 — Git 클라이언트를 여는
+ * 이유가 대개 그것이고, 빈 화면보다 지금 할 일을 보여주는 것이 맞다. 커밋을 고르면 그 커밋의
+ * 상세로, 파일까지 고르면 그 파일의 diff 로 바뀐다.
  */
 @Composable
 private fun BottomArea(
     inspection: CommitInspection,
     stagingState: StagingState,
+    conflictState: ConflictState,
     onSelectFile: (String) -> Unit,
 ) {
     val selectedCommit = inspection.commit
     val fileDiff = inspection.fileDiff
-    if (selectedCommit == null) {
-        StagingPanel(state = stagingState, modifier = Modifier.fillMaxSize())
-        return
-    }
-    if (fileDiff == null) {
-        CommitDetailPanel(
+    when {
+        !conflictState.isClean ->
+            ConflictEditor(state = conflictState, modifier = Modifier.fillMaxSize())
+
+        selectedCommit == null ->
+            StagingPanel(state = stagingState, modifier = Modifier.fillMaxSize())
+
+        fileDiff == null -> CommitDetailPanel(
             commit = selectedCommit,
             state = inspection.detailState,
             modifier = Modifier.fillMaxSize(),
             onSelectFile = onSelectFile,
         )
-        return
+
+        else -> DiffViewer(
+            result = fileDiff,
+            state = inspection.diffState,
+            // 인덱스 상태의 단일 소유자는 패널이다 — 뷰어는 의사만 올린다.
+            onStageHunk = { hunk ->
+                stagingState.stageHunk(inspection.filePath.orEmpty(), listOf(hunk))
+            },
+            modifier = Modifier.fillMaxSize(),
+        )
     }
-    DiffViewer(
-        result = fileDiff,
-        state = inspection.diffState,
-        // 인덱스 상태의 단일 소유자는 패널이다 — 뷰어는 의사만 올린다.
-        onStageHunk = { hunk -> stagingState.stageHunk(inspection.filePath.orEmpty(), listOf(hunk)) },
-        modifier = Modifier.fillMaxSize(),
-    )
 }
 
 /** 전역 실패 안내. 예외 원문이 아니라 종류와 로그 경로만 낸다. */

@@ -53,6 +53,7 @@
 | 하네스 자산 전체 (agents·skills·rules·hooks·docs·templates) | `.agent/` — `.claude/{agents,skills,rules}`·`.codex/agents` 는 생성 투영본 |
 | 벤더 투영 생성 규칙 | `.agent/tools/sync-vendors.py` (`--check` 로 드리프트 판정) |
 | 멀티 에이전트 워크플로우·러너·벤더 어댑터 | `.agent/orchestration/README.md` |
+| 노드 실행 구성 (vendor·model·effort·권한) | `.agent/orchestration/profiles.toml` — 워크플로우 노드는 `profile` 만 선언 |
 | 권한 화이트리스트 + hooks 등록 | `.claude/settings.json` (Claude) · `.codex/config.toml` (Codex) — 스크립트 본체는 `.agent/hooks/` |
 | 작업 가이드라인 | `.agent/guidelines/llm-collaboration.md` — **본문은 `custom-session-start.sh` hook 이 매 세션 echo** |
 | 프로세스 게이트 4개 룰 | `.agent/docs/conventions.md` |

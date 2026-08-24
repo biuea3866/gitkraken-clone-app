@@ -7,12 +7,9 @@ cwd = "."
 
 [[nodes]]
 id = "structure"
-vendor = "codex"
-model = "gpt-5.6-terra"
+profile = "ticket-lens"
 effort = "medium"
-sandbox = "read-only"
 output_schema = ".agent/orchestration/schemas/ticket-review.json"
-timeout_seconds = 1800
 prompt = '''
 `tickets/` 의 모든 티켓 md 를 **구조 렌즈**로만 리뷰하세요. lens 는 "structure" 로 고정합니다.
 티켓 파일을 수정하지 마세요 — 지적만 합니다.
@@ -40,12 +37,9 @@ prompt = '''
 
 [[nodes]]
 id = "tests"
-vendor = "codex"
-model = "gpt-5.6-terra"
+profile = "ticket-lens"
 effort = "medium"
-sandbox = "read-only"
 output_schema = ".agent/orchestration/schemas/ticket-review.json"
-timeout_seconds = 1800
 prompt = '''
 `tickets/` 의 모든 티켓 md 를 **테스트 케이스 렌즈**로만 리뷰하세요. lens 는 "tests" 로 고정합니다.
 티켓 파일을 수정하지 마세요 — 지적만 합니다.
@@ -72,12 +66,9 @@ prompt = '''
 
 [[nodes]]
 id = "dependency"
-vendor = "codex"
-model = "gpt-5.6-terra"
+profile = "ticket-lens"
 effort = "high"
-sandbox = "read-only"
 output_schema = ".agent/orchestration/schemas/ticket-review.json"
-timeout_seconds = 1800
 prompt = '''
 `tickets/` 전체를 **의존·wave 렌즈**로만 리뷰하세요. lens 는 "dependency" 로 고정합니다.
 티켓 파일을 수정하지 마세요 — 지적만 합니다.
@@ -101,12 +92,9 @@ prompt = '''
 
 [[nodes]]
 id = "feasibility"
-vendor = "codex"
-model = "gpt-5.6-terra"
+profile = "ticket-lens"
 effort = "high"
-sandbox = "read-only"
 output_schema = ".agent/orchestration/schemas/ticket-review.json"
-timeout_seconds = 1800
 prompt = '''
 `tickets/` 의 모든 티켓 md 를 **기술 타당성 렌즈**로만 리뷰하세요. lens 는 "feasibility" 로 고정합니다.
 티켓 파일을 수정하지 마세요 — 지적만 합니다.
@@ -133,12 +121,9 @@ prompt = '''
 
 [[nodes]]
 id = "diagram"
-vendor = "codex"
-model = "gpt-5.6-terra"
+profile = "ticket-lens"
 effort = "low"
-sandbox = "read-only"
 output_schema = ".agent/orchestration/schemas/ticket-review.json"
-timeout_seconds = 1800
 prompt = '''
 `tickets/` 의 모든 티켓 md 를 **다이어그램 렌즈**로만 리뷰하세요. lens 는 "diagram" 으로 고정합니다.
 티켓 파일을 수정하지 마세요 — 지적만 합니다.
@@ -162,8 +147,7 @@ prompt = '''
 
 [[nodes]]
 id = "synthesize"
-vendor = "claude"
-model = "opus"
+profile = "synthesize"
 tools = ["Read", "Grep", "Glob"]
 needs = ["structure", "tests", "dependency", "feasibility", "diagram"]
 timeout_seconds = 1800
