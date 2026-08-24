@@ -22,6 +22,7 @@ import org.eclipse.jgit.internal.JGitText
 import org.eclipse.jgit.lib.BranchConfig
 import org.eclipse.jgit.lib.Constants
 import org.eclipse.jgit.lib.ObjectId
+import org.eclipse.jgit.lib.ConfigConstants
 import org.eclipse.jgit.lib.ProgressMonitor
 import org.eclipse.jgit.lib.Ref
 import org.eclipse.jgit.lib.Repository
@@ -64,6 +65,15 @@ class RemoteGatewayImpl(
     private val credentialsProvider: CredentialsProvider = GitCredentialHelperProvider(),
     private val now: () -> Long = System::currentTimeMillis,
 ) : RemoteGateway {
+
+    /**
+     * 설정의 `remote.<name>` 서브섹션을 읽는다 — 네트워크를 타지 않는다.
+     * 진행률 콜백도 없다: 로컬 설정 조회는 초 단위 작업이 아니다.
+     */
+    override suspend fun listRemotes(): List<String> =
+        gitAccess.withRepository { repository ->
+            repository.config.getSubsections(ConfigConstants.CONFIG_REMOTE_SECTION).sorted()
+        }
 
     override suspend fun clone(url: String, into: RepositoryPath, onProgress: (Progress) -> Unit) {
         val remote = RemoteIdentity(label = DEFAULT_REMOTE, url = url)

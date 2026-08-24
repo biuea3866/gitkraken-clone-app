@@ -51,6 +51,8 @@ internal fun remoteRef(name: String): RemoteRef = RemoteRef(
 internal class FakeRemoteGateway(
     var gate: CompletableDeferred<Unit>? = null,
     var ignoreCancellation: Boolean = false,
+    /** listRemotes 가 돌려줄 이름. 원격 없음도 정상 시나리오라 기본값은 origin 하나다. */
+    private val remoteNames: List<String> = listOf(REMOTE),
 ) : RemoteGateway {
 
     var fetchResult: List<RemoteRef> = emptyList()
@@ -82,6 +84,8 @@ internal class FakeRemoteGateway(
      * 디스패처에서는 큐에 남는다. 콜백을 쓰는 테스트는 이 신호를 기다린다.
      */
     val progressCallbackRegistered = CompletableDeferred<(Progress) -> Unit>()
+
+    override suspend fun listRemotes(): List<String> = remoteNames
 
     override suspend fun clone(url: String, into: RepositoryPath, onProgress: (Progress) -> Unit) {
         error("툴바는 clone 을 호출하지 않는다")
