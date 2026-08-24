@@ -26,6 +26,7 @@ internal val builtInTranslations: List<Map<Locale, Map<StringKey, String>>> =
         searchTranslations,
         paletteTranslations,
         stagingTranslations,
+        conflictTranslations,
     )
 
 /** 네임스페이스별 번역을 로케일 단위로 합친다. 같은 키가 겹치면 뒤에 오는 쪽이 이긴다. */
