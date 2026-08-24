@@ -1,6 +1,6 @@
 # [UND-34] Worktree 관리
 
-> wave 7 · 사이즈 M · 의존 UND-02 · 소유 `domain/worktree/` · `infrastructure/git/worktree/`
+> wave 7 · 사이즈 M · 의존 UND-02, UND-59 · 소유 `domain/worktree/` · `infrastructure/git/worktree/`
 
 ## 작업 내용 (설계 의도)
 `WorktreeGateway` 를 신설한다. 하나의 저장소를 **여러 디렉토리에 동시 체크아웃**하는 git worktree 를 다룬다.

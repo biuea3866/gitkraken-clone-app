@@ -3,7 +3,7 @@
 각 훅은 git tracked 셸 스크립트. `.claude/settings.json`이 matcher로 묶어 등록한다.
 모든 훅은 `bash -n` 통과를 전제로 한다. 추가 시 `chmod +x` 필수.
 
-## 등록된 훅 (12개)
+## 등록된 훅 (11개)
 
 | 파일 | 시점 | matcher | 동작 | 차단? |
 |---|---|---|---|---|
@@ -11,7 +11,6 @@
 | `custom-gradlew-jvm-guard.sh` | PreToolUse | `Bash` | `./gradlew` 직전 `gradle.properties` 의 `undine.jvm` vs `$JAVA_HOME` 비교 | ✅ 미스매치 시 |
 | `custom-check-commit-prefix.sh` | PreToolUse | `Bash` | `git commit -m` 메시지에 `[UND-NN]` 강제 + **정밀 lint**(콜론 앞 공백 `feat :`·다중 prefix `[A][B]` 차단, `gh pr create --title` 에도 적용). 티켓 없는 작업은 `no-ticket` 명시로 면제 | ✅ |
 | `custom-block-git-push.sh` | PreToolUse | `Bash` | `git push` 직전 사용자 승인 프롬프트(ask). --force / --force-with-lease 사용 시 reason 에 경고 노출 | 🔔 (ask) |
-| `custom-block-mainline-merge.sh` | PreToolUse | `Bash` | `gh pr merge` / 보호 브랜치(`main\|stage-*`) 위에서의 `git merge\|rebase` 차단. 작업 브랜치에서 default branch 싱크는 허용 | ✅ |
 | `custom-block-env-read.sh` | PreToolUse | `Bash` | `cat`/`grep`/`vi`/`code` 등 + `.env*`·`*.pem`·`id_rsa` / `echo $TOKEN` / `printenv` / `env` 차단 | ✅ |
 | `custom-secrets-read-guard.sh` | PreToolUse | `Read` | Claude `Read` 도구로 `.env`·credentials·`*.pem` 등 읽기 차단 | ✅ |
 | `custom-secrets-edit-guard.sh` | PreToolUse | `Edit\|Write\|MultiEdit` | `.env`·credentials·`*.pem` 등 편집 차단, application 설정 비밀 패턴 경고 | ✅ |

@@ -20,7 +20,6 @@ Undine(Compose Desktop Git 클라이언트) 개발에 쓰는 AI 협업 자동화
 │   ├── custom-gradlew-jvm-guard.sh         # PreToolUse Bash: ./gradlew 전 undine.jvm vs $JAVA_HOME
 │   ├── custom-check-commit-prefix.sh       # PreToolUse Bash: [UND-NN] 접두사 + 제목 정밀 lint
 │   ├── custom-block-git-push.sh            # PreToolUse Bash: git push 직전 사용자 승인 프롬프트(ask)
-│   ├── custom-block-mainline-merge.sh      # PreToolUse Bash: 보호 브랜치 위 merge/rebase 차단
 │   ├── custom-block-env-read.sh            # PreToolUse Bash: .env / 시크릿 echo 차단
 │   ├── custom-secrets-read-guard.sh        # PreToolUse Read: .env/credentials/*.pem 차단
 │   ├── custom-secrets-edit-guard.sh        # PreToolUse Edit/Write: 민감 파일 편집 가드

@@ -63,14 +63,14 @@ Undine 구현을 **53개 티켓 / 10개 wave** 로 분해한 결과다.
 | [UND-29](UND-29-blame-file-history.md) | Blame · 파일 이력 조회 | M | 7 | UND-01 · UND-05 | `domain/blame/` · `infrastructure/git/blame/` |
 | [UND-30](UND-30-reflog-recovery.md) | Reflog 조회 · 복구 | M | 7 | UND-01 | `domain/reflog/` · `infrastructure/git/reflog/` |
 | [UND-31](UND-31-patch-create-apply.md) | Patch 생성 · 적용 | M | 7 | UND-05 | `domain/patch/` · `infrastructure/git/patch/` |
-| [UND-32](UND-32-submodule-management.md) | Submodule 관리 | M | 7 | UND-02 | `domain/submodule/` · `infrastructure/git/submodule/` |
+| [UND-32](UND-32-submodule-management.md) | Submodule 관리 | M | 7 | UND-02 · UND-59 | `domain/submodule/` · `infrastructure/git/submodule/` |
 | [UND-33](UND-33-git-lfs.md) | Git LFS 연동 | M | 7 | UND-08 | `domain/lfs/` · `infrastructure/git/lfs/` |
-| [UND-34](UND-34-worktree-management.md) | Worktree 관리 | M | 7 | UND-02 | `domain/worktree/` · `infrastructure/git/worktree/` |
+| [UND-34](UND-34-worktree-management.md) | Worktree 관리 | M | 7 | UND-02 · UND-59 | `domain/worktree/` · `infrastructure/git/worktree/` |
 | [UND-35](UND-35-bisect-session.md) | Bisect 세션 | M | 7 | UND-03 | `domain/bisect/` · `application/bisect/` · `infrastructure/git/bisect/` |
 | [UND-36](UND-36-commit-signing.md) | 커밋 서명 (GPG / SSH) | M | 7 | UND-06 | `domain/signing/` · `infrastructure/git/signing/` |
-| [UND-37](UND-37-git-identity-profiles.md) | Git identity 프로필 | S | 7 | UND-06 · UND-11 | `domain/identity/` · `application/identity/` · `infrastructure/identity/` |
+| [UND-37](UND-37-git-identity-profiles.md) | Git identity 프로필 | S | 7 | UND-06 · UND-11 · UND-59 | `domain/identity/` · `application/identity/` · `infrastructure/identity/` |
 | [UND-38](UND-38-operation-history-undo.md) | 실행 이력 · Undo 스택 | L | 7 | UND-09 · UND-21 | `domain/undo/` · `application/undo/` |
-| [UND-39](UND-39-external-diff-merge-tool.md) | 외부 diff/merge 도구 연동 | S | 7 | UND-05 · UND-11 | `domain/externaltool/` · `infrastructure/externaltool/` |
+| [UND-39](UND-39-external-diff-merge-tool.md) | 외부 diff/merge 도구 연동 | S | 7 | UND-05 · UND-11 · UND-59 | `domain/externaltool/` · `infrastructure/externaltool/` |
 | [UND-40](UND-40-preferences-screen.md) | 설정 화면 | M | 8 | UND-10 · UND-11 · UND-22 · UND-37 · UND-39 | `presentation/preferences/` |
 | [UND-41](UND-41-blame-history-view.md) | Blame 뷰 · 파일 이력 화면 | M | 8 | UND-10 · UND-29 | `presentation/blame/` |
 | [UND-42](UND-42-graph-drag-drop.md) | 그래프 드래그&드롭 조작 | L | 8 | UND-14 · UND-21 · UND-28 · UND-38 | `presentation/graph/` (dnd 확장) |
@@ -86,6 +86,7 @@ Undine 구현을 **53개 티켓 / 10개 wave** 로 분해한 결과다.
 | [UND-54](UND-54-merge-start-state-guard.md) | merge/rebase 시작 경로 상태 가드 완결 | S | 4 | UND-21 | `infrastructure/git/merge/` (가드 추가) |
 | [UND-56](UND-56-gitkraken-visual-tuning.md) | GitKraken 계열 시각 튜닝 · 렌더 확인 수단 | S | 5 | UND-26 · UND-10 | `presentation/design/` · `presentation/graph/`(그리기) · `presentation/shell/`(분할선) |
 | [UND-57](UND-57-list-remotes-contract.md) | 원격 목록 계약 · 툴바 활성화 | S | 5 | UND-18 · UND-26 | `domain/RemoteGateway.kt` · `infrastructure/git/remote/` · `di/` |
+| [UND-59](UND-59-wave7-common-contract.md) | wave 7 공통 계약 확장 | S | 7 | UND-01 | `domain/Settings.kt` · `domain/SettingsGateway.kt` · `domain/UndineException.kt` · `infrastructure/settings/` |
 
 > **UND-49(i18n)만 wave 2 에 있다.** 2차 범위에서 추가됐지만, 나중에 넣으면 이미 작성된 전 화면의
 > 문자열을 추출해야 해 거대한 retrofit 티켓이 된다. 구현 착수 전인 지금 선행 티켓으로 옮겨
@@ -159,15 +160,16 @@ flowchart LR
 | 4 | UND-17, UND-23, UND-24, UND-25 | 4 |
 | 5 | UND-26 | 1 |
 | 6 | UND-27 | 1 |
-| 7 | UND-28, UND-29, UND-30, UND-31, UND-32, UND-33, UND-34, UND-35, UND-36, UND-37, UND-38, UND-39 | 12 |
+| 7a | UND-28, UND-29, UND-30, UND-31, UND-33, UND-35, UND-36, UND-38, UND-59 | 9 |
+| 7b | UND-32, UND-34, UND-37, UND-39 | 4 |
 | 8 | UND-40, UND-41, UND-42, UND-43, UND-44, UND-45, UND-46, UND-47, UND-48 | 9 |
 | 9 | UND-51 | 1 |
 | 10 | UND-50, UND-52 | 2 |
 
-- **너비 분포**: [1, 11, 11, 4, 1, 1, 12, 9, 1, 2]
-- **평균 wave 너비**: 5.30
+- **너비 분포**: [1, 11, 11, 4, 1, 1, 9, 4, 9, 1, 2]
+- **평균 wave 너비**: 4.91
 - **판정: 통과** — 모든 wave 너비가 1~2 인 직선형 DAG 가 아니다.
-  wave 2·3·7·8 에서 각각 11·11·12·9 개가 동시에 열린다.
+  wave 2·3·7a·8 에서 각각 11·11·9·9 개가 동시에 열린다.
 
 꼬리 wave 의 너비 1~2 는 **의도**다. 와이어업과 E2E 는 앞선 결과 전체를 전제로 하는
 단일 책임이라 쪼개면 오히려 충돌을 만든다.
