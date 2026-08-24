@@ -38,6 +38,21 @@ import kotlinx.coroutines.Dispatchers
 private const val TEXT_FILE = "shared.txt"
 private const val BINARY = "logo.bin"
 
+private val TWO_REGION_CONTENT = """
+    앞
+    <<<<<<< HEAD
+    첫 구간 우리
+    =======
+    첫 구간 저쪽
+    >>>>>>> feature
+    사이
+    <<<<<<< HEAD
+    둘째 구간 우리
+    =======
+    둘째 구간 저쪽
+    >>>>>>> feature
+""".trimIndent()
+
 private val CONFLICTED_CONTENT = """
     앞
     <<<<<<< HEAD
@@ -213,6 +228,49 @@ class ConflictStateSpec : FunSpec({
         rebasing.continueOperation()
 
         merge.calls shouldContainExactly listOf("continueRebase")
+    }
+
+    test("보는 구간을 옮기면 그 구간의 세 원본이 화면 재료가 된다") {
+        val state = stateWith(
+            FakeConflictGateway(
+                files = listOf(ConflictedFile(TEXT_FILE, isBinary = false)),
+                contents = mapOf(TEXT_FILE to TWO_REGION_CONTENT),
+            ),
+        )
+        state.refresh()
+        state.select(TEXT_FILE)
+
+        state.regionCount shouldBe 2
+        state.focusedRegion shouldBe 0
+        state.focusedConflict.shouldNotBeNull().ours shouldContainExactly listOf("첫 구간 우리")
+
+        state.focusRegion(1)
+
+        state.focusedConflict.shouldNotBeNull().theirs shouldContainExactly listOf("둘째 구간 저쪽")
+
+        // 범위를 벗어난 값은 무시한다 — 화면이 없는 구간을 그리려 하면 빈 패널이 된다.
+        state.focusRegion(2)
+        state.focusedRegion shouldBe 1
+    }
+
+    test("파일을 바꾸면 보던 구간 번호가 처음으로 돌아간다") {
+        val other = "other.txt"
+        val state = stateWith(
+            FakeConflictGateway(
+                files = listOf(
+                    ConflictedFile(TEXT_FILE, isBinary = false),
+                    ConflictedFile(other, isBinary = false),
+                ),
+                contents = mapOf(TEXT_FILE to TWO_REGION_CONTENT, other to CONFLICTED_CONTENT),
+            ),
+        )
+        state.refresh()
+        state.select(TEXT_FILE)
+        state.focusRegion(1)
+
+        state.select(other)
+
+        state.focusedRegion shouldBe 0
     }
 
     test("진행 중이 아니면 계속이 상태 위반으로 남는다") {

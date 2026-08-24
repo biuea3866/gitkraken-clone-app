@@ -8,6 +8,7 @@ import dev.undine.domain.RepositoryState
 import dev.undine.domain.UndineException
 import dev.undine.domain.conflict.ConflictChoice
 import dev.undine.domain.conflict.ConflictDocument
+import dev.undine.domain.conflict.ConflictSegment
 import dev.undine.domain.conflict.ConflictSide
 import dev.undine.domain.conflict.ConflictedFile
 import dev.undine.domain.merge.AbortConfirmation
@@ -44,6 +45,15 @@ class ConflictState(
     var resolvedPaths: Set<String> by mutableStateOf(emptySet())
         private set
 
+    /**
+     * 지금 들여다보는 충돌 구간. 세 패널이 이 구간의 ours·base·theirs 를 그린다.
+     *
+     * 화면 상태라 홀더가 소유한다 (compose-ui 규칙 1) — 컴포저블의 `remember` 에 두면 파일을
+     * 바꿔도 이전 구간 번호가 남는다.
+     */
+    var focusedRegion: Int by mutableStateOf(0)
+        private set
+
     /** 표식이 남아 저장을 막았을 때의 줄 번호. 비어 있으면 차단 상태가 아니다. */
     var blockedMarkerLines: List<Int> by mutableStateOf(emptyList())
         private set
@@ -74,6 +84,12 @@ class ConflictState(
 
     val regionCount: Int get() = document?.conflictCount ?: 0
 
+    /** 지금 구간. 문서가 없거나 충돌이 없으면 `null` 이다. */
+    val focusedConflict: ConflictSegment.Conflict?
+        get() = document?.segments
+            ?.filterIsInstance<ConflictSegment.Conflict>()
+            ?.getOrNull(focusedRegion)
+
     /** 저장할 수 있는지 — 문서를 읽었고 남은 구간이 없을 때만. */
     val canSave: Boolean get() = document?.isResolved == true
 
@@ -85,10 +101,16 @@ class ConflictState(
     fun select(path: String) {
         selectedPath = path
         document = null
+        focusedRegion = 0
         blockedMarkerLines = emptyList()
         val file = files.firstOrNull { it.path == path } ?: return
         if (file.isBinary) return
         scope.launch { loadDocument(path) }
+    }
+
+    /** 들여다볼 구간을 옮긴다. 범위를 벗어난 값은 무시한다. */
+    fun focusRegion(index: Int) {
+        if (index in 0 until regionCount) focusedRegion = index
     }
 
     /** 구간의 선택을 바꾼다. 문서는 불변이라 새 문서로 교체한다. */
