@@ -17,6 +17,7 @@
 │   └── ticket-review.toml              # tickets/ 를 5개 렌즈로 병렬 리뷰 → 종합 (읽기 전용)
 ├── runner/
 │   ├── run-graph.py                # DAG 실행기 (서드파티 의존 0, stdlib tomllib)
+│   ├── wave-graph.py               # 티켓 DAG 실행기 — wave 단위로 run-graph.py 를 병렬 스폰
 │   └── adapters/                   # 벤더 어댑터 — 새 LLM CLI 는 여기 TOML 1개만 추가
 │       ├── README.md                   # 어댑터 스키마 + 추가 절차
 │       ├── claude.toml
@@ -65,6 +66,34 @@ $R $W/<workflow>.toml --run-dir <위 run-dir> --start-at <다음 노드>   # 재
 `--start-at` 은 그 노드와 **후손만** 실행한다. 이미 끝난 업스트림 산출물은 `--run-dir` 로
 넘긴 이전 실행 디렉토리에서 그대로 읽으므로, `--run-dir` 없이 쓰면 실패한다.
 게이트 노드는 단독 wave 여야 한다 (같은 wave 에 실행 노드가 섞이면 러너가 거부한다).
+
+## 두 층의 DAG — 노드와 티켓
+
+DAG 는 두 층에 있고 실행기도 둘이다.
+
+| 층 | 실행기 | 병렬 단위 | 진입 스킬 |
+|---|---|---|---|
+| **노드** (워크플로우 1개 안) | `run-graph.py` | 스레드 + `--max-parallel` | [[custom-orchestrate]] |
+| **티켓** (의존 DAG) | `wave-graph.py` | **프로세스 + 워크트리** | [[custom-ticket-wave]] |
+
+티켓 층은 워크플로우 TOML 로 표현할 수 없다 — 노드는 정적(`[[nodes]]`)이고 `cwd` 는 그래프당
+하나이며 노드 타입은 LLM·gate 둘뿐이다. 티켓 N건은 가변 실행 단위 + cwd N개다. 그래서
+`wave-graph.py` 는 `run-graph.py` 를 **감싸는 위층**이고, 프로필 해소는 그 함수를 그대로 재사용한다.
+
+의존·소유의 SSOT 는 **티켓 md 헤더**다 (`> wave N · 사이즈 S · 의존 UND-06, UND-10 · 소유 …`).
+헤더가 없으면 의존 없음으로 가정하지 않고 **중단**한다. 같은 wave 의 소유 경로가 겹치면
+실행 전에 막는다 (파일 소유 Rule 3 — 병렬 실행이 곧 머지 충돌이다).
+
+```bash
+V=.agent/orchestration/runner/wave-graph.py
+
+$V $W/develop-1-spec.toml --tickets UND-13,UND-14 --plan-only   # 계획·교집합만 (무료)
+$V $W/develop-1-spec.toml --wave 3 --dry-run --set ...          # 각 러너에 --dry-run (LLM 0)
+$V $W/develop-2-implement.toml --wave 3 --set-each spec_file=.agent/orchestration/runs/{ticket}/spec.json
+```
+
+**verdict 분기는 여기에도 없다.** 티켓 wave 안의 러너가 게이트(exit 2)에 닿으면 그 wave 는
+완료가 아니므로 다음 wave 를 시작하지 않는다 — 사람이 wave 단위로 검토하고 재개한다.
 
 ## 실행 구성 라우팅 — `profiles.toml`
 
