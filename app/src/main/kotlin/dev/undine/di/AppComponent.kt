@@ -1,6 +1,11 @@
 package dev.undine.di
 
 import dev.undine.application.commitdetail.LoadChangedFilesUseCase
+import dev.undine.application.conflict.AbortConflictedOperationUseCase
+import dev.undine.application.conflict.ContinueAfterResolveUseCase
+import dev.undine.application.conflict.LoadConflictContentUseCase
+import dev.undine.application.conflict.LoadConflictedFilesUseCase
+import dev.undine.application.conflict.ResolveConflictUseCase
 import dev.undine.application.diff.LoadFileDiffUseCase
 import dev.undine.application.graph.LoadCommitHistoryUseCase
 import dev.undine.application.staging.AmendCommitUseCase
@@ -25,6 +30,11 @@ import dev.undine.domain.RefGateway
 import dev.undine.domain.RepositoryGateway
 import dev.undine.domain.RepositoryPath
 import dev.undine.domain.SettingsGateway
+import dev.undine.domain.conflict.ConflictGateway
+import dev.undine.domain.merge.MergeGateway
+import dev.undine.domain.merge.MergeService
+import dev.undine.infrastructure.git.conflict.ConflictGatewayImpl
+import dev.undine.infrastructure.git.merge.MergeGatewayImpl
 import dev.undine.infrastructure.git.diff.DiffGatewayImpl
 import dev.undine.infrastructure.git.history.HistoryGatewayImpl
 import dev.undine.infrastructure.git.ref.RefGatewayImpl
@@ -34,6 +44,7 @@ import dev.undine.infrastructure.git.repository.GitAccess
 import dev.undine.infrastructure.git.repository.RepositoryGatewayImpl
 import dev.undine.infrastructure.git.worktreeops.WorktreeOpsGatewayImpl
 import dev.undine.infrastructure.settings.SettingsGatewayImpl
+import dev.undine.presentation.conflict.ConflictActions
 import dev.undine.presentation.staging.StagingActions
 import dev.undine.presentation.welcome.WelcomeActions
 import java.nio.file.Path
@@ -64,7 +75,12 @@ class AppComponent(settingsFile: Path) {
     private val remoteGateway = RemoteGatewayImpl(gitAccess)
     private val worktreeOpsGateway = WorktreeOpsGatewayImpl(gitAccess)
     private val stagingGateway = StagingGatewayImpl(gitAccess)
+    private val conflictGateway: ConflictGateway = ConflictGatewayImpl(gitAccess)
+    private val mergeGateway: MergeGateway = MergeGatewayImpl(gitAccess)
     private val settingsGateway: SettingsGateway = SettingsGatewayImpl(settingsFile)
+
+    /** 병합·리베이스의 규칙(시작 전 검사·진행 중 검사·확인 대조)을 갖는 도메인 서비스. */
+    private val mergeService = MergeService(repositoryGateway, mergeGateway)
 
     // ── UseCase (application) ──
     /** 환영 화면이 쓰는 네 동작. 화면은 이 묶음만 받고 Gateway 를 알지 못한다. */
@@ -94,6 +110,21 @@ class AppComponent(settingsFile: Path) {
         stageHunks = StageHunksUseCase(stagingGateway),
         commitStaged = CommitStagedUseCase(stagingGateway),
         amendCommit = AmendCommitUseCase(stagingGateway),
+    )
+
+    /**
+     * 충돌 에디터가 쓰는 동작 묶음.
+     *
+     * `loadStatus` 는 스테이징 패널과 같은 UseCase 를 공유한다 — 중단 확인에 담을 "사라질 경로" 는
+     * 스테이징이 보는 것과 같은 워킹트리 상태여야 한다.
+     */
+    val conflictActions = ConflictActions(
+        loadFiles = LoadConflictedFilesUseCase(conflictGateway),
+        loadContent = LoadConflictContentUseCase(conflictGateway),
+        resolve = ResolveConflictUseCase(conflictGateway),
+        continueAfterResolve = ContinueAfterResolveUseCase(mergeService),
+        abort = AbortConflictedOperationUseCase(mergeService),
+        loadStatus = stagingActions.loadStatus,
     )
 
     val fetchRemote = FetchRemoteUseCase(remoteGateway)
