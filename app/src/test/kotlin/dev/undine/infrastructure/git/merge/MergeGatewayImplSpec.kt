@@ -774,4 +774,78 @@ class MergeGatewayImplSpec : FunSpec({
             }
         } shouldContainExactly emptyList()
     }
+
+    test("병합이 진행 중이면 새 병합·리베이스를 시작하지 않고 ORIG_HEAD 를 지킨다") {
+        openFixture(tempdir()).use { fixture ->
+            fixture.givenConflictingBranches()
+            fixture.checkout(INITIAL_BRANCH)
+            fixture.gateway.merge(RefName(FEATURE_BRANCH), allowFastForward = true)
+            fixture.gateway.repositoryState() shouldBe RepositoryState.MERGING
+            val startPointBefore = fixture.origHead()
+
+            shouldThrow<UndineException.StateViolation> {
+                fixture.gateway.merge(RefName(FEATURE_BRANCH), allowFastForward = true)
+            }
+            shouldThrow<UndineException.StateViolation> { fixture.gateway.rebase(RefName(INITIAL_BRANCH)) }
+
+            // ORIG_HEAD 가 부분 진행 HEAD 로 덮어써지면 abort 가 되돌릴 지점을 잃는다.
+            fixture.origHead() shouldBe startPointBefore
+            fixture.gateway.repositoryState() shouldBe RepositoryState.MERGING
+        }
+    }
+
+    test("리베이스가 진행 중이면 새 병합·리베이스를 시작하지 않고 ORIG_HEAD 를 지킨다") {
+        openFixture(tempdir()).use { fixture ->
+            fixture.givenConflictingBranches()
+            fixture.checkout(FEATURE_BRANCH)
+            fixture.gateway.rebase(RefName(INITIAL_BRANCH))
+            fixture.gateway.repositoryState() shouldBe RepositoryState.REBASING
+            val startPointBefore = fixture.origHead()
+
+            shouldThrow<UndineException.StateViolation> { fixture.gateway.rebase(RefName(INITIAL_BRANCH)) }
+            shouldThrow<UndineException.StateViolation> {
+                fixture.gateway.merge(RefName(INITIAL_BRANCH), allowFastForward = true)
+            }
+
+            fixture.origHead() shouldBe startPointBefore
+            fixture.gateway.repositoryState() shouldBe RepositoryState.REBASING
+        }
+    }
+
+    test("진행 중 시작을 거부한 뒤 abort 하면 원래 시작 지점으로 복구된다") {
+        openFixture(tempdir()).use { fixture ->
+            fixture.givenConflictingBranches()
+            fixture.checkout(INITIAL_BRANCH)
+            val headBeforeMerge = fixture.head()
+            fixture.gateway.merge(RefName(FEATURE_BRANCH), allowFastForward = true)
+
+            // 덮어쓰기가 없었음을 abort 결과로 증명한다 — 지점이 망가졌다면 여기서 다른 커밋으로 간다.
+            shouldThrow<UndineException.StateViolation> { fixture.gateway.rebase(RefName(INITIAL_BRANCH)) }
+            fixture.gateway.abortMerge(fixture.abortConfirmation())
+
+            fixture.head() shouldBe headBeforeMerge
+            fixture.gateway.repositoryState() shouldBe RepositoryState.NORMAL
+        }
+    }
+
+    test("continueMerge·continueRebase·skipRebaseCommit 은 진행 중이 아니면 저장소를 건드리지 않는다") {
+        openFixture(tempdir()).use { fixture ->
+            fixture.commit(SHARED_FILE, "main\n", "initial")
+            fixture.write(SHARED_FILE, "staged edit\n")
+            fixture.stage(SHARED_FILE)
+            val headBefore = fixture.head()
+
+            // NORMAL 에서 continueMerge 가 통과하면 staged 변경이 일반 커밋으로 나간다.
+            shouldThrow<UndineException.StateViolation> { fixture.gateway.continueMerge() }
+            shouldThrow<UndineException.StateViolation> { fixture.gateway.continueRebase() }
+            shouldThrow<UndineException.StateViolation> {
+                fixture.gateway.skipRebaseCommit(fixture.skipConfirmation())
+            }
+
+            fixture.head() shouldBe headBefore
+            fixture.read(SHARED_FILE) shouldBe "staged edit\n"
+            fixture.gateway.repositoryState() shouldBe RepositoryState.NORMAL
+        }
+    }
+
 })
