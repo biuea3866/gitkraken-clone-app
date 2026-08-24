@@ -37,6 +37,23 @@ private const val OPERATION_SKIP_REBASE_COMMIT = "merge.skipRebaseCommit"
 private const val OPERATION_ABORT_REBASE = "merge.abortRebase"
 
 private const val START_POINT_MISSING = "되돌릴 시작 지점(ORIG_HEAD)이 없습니다"
+/**
+ * 진행 중인데 새로 시작하면 `rememberStartPoint` 가 `ORIG_HEAD` 를 **부분 진행 HEAD** 로 덮어써
+ * 그 뒤의 abort 가 되돌릴 지점을 잃는다 — 복구 불가다. `MergeService` 는 시작 전에 워킹트리 더티만
+ * 보고 진행 중 상태는 보지 않는다(충돌 해결 중 워킹트리는 항상 더티라 그 검사가 통과한다).
+ */
+private const val ALREADY_IN_PROGRESS = "진행 중인 병합·리베이스가 있어 새로 시작하지 않았습니다"
+
+/**
+ * 시작을 막아야 하는 상태. **DETACHED·EMPTY 는 여기 없다** — detached HEAD 에서 병합을 시작하는 것은
+ * git 이 허용하는 정상 동작이고, 빈 저장소는 대상 참조를 못 찾아 다른 사유로 실패한다.
+ * 막아야 하는 것은 "이미 무언가 진행 중" 뿐이다.
+ */
+private val IN_PROGRESS_STATES = setOf(
+    RepositoryState.MERGING,
+    RepositoryState.REBASING,
+    RepositoryState.REVERTING,
+)
 private const val MERGE_NOT_IN_PROGRESS = "병합이 진행 중이 아닙니다"
 private const val REBASE_NOT_IN_PROGRESS = "리베이스가 진행 중이 아닙니다"
 private const val UNCONFIRMED_DISCARD = "확인한 뒤에 생긴 편집이 있어 중단하지 않았습니다"
@@ -78,6 +95,10 @@ class MergeGatewayImpl(private val gitAccess: GitAccess) : MergeGateway {
     override suspend fun merge(target: RefName, allowFastForward: Boolean): MergeResult =
         gitOperation(OPERATION_MERGE) { git ->
             val targetRef = git.repository.requireRef(target)
+            // 진행 중이면 시작하지 않는다 — 아래 rememberStartPoint 가 ORIG_HEAD 를 덮어쓰기 전에 막는다.
+            if (git.repository.toOpenedRepository().state in IN_PROGRESS_STATES) {
+                throw UndineException.StateViolation(ALREADY_IN_PROGRESS)
+            }
             git.repository.rememberStartPoint()
             git.merge()
                 .include(targetRef)
@@ -126,6 +147,10 @@ class MergeGatewayImpl(private val gitAccess: GitAccess) : MergeGateway {
     override suspend fun rebase(target: RefName): RebaseResult =
         gitOperation(OPERATION_REBASE) { git ->
             val targetRef = git.repository.requireRef(target)
+            // 진행 중이면 시작하지 않는다 — 아래 rememberStartPoint 가 ORIG_HEAD 를 덮어쓰기 전에 막는다.
+            if (git.repository.toOpenedRepository().state in IN_PROGRESS_STATES) {
+                throw UndineException.StateViolation(ALREADY_IN_PROGRESS)
+            }
             git.repository.rememberStartPoint()
             git.rebase()
                 .setUpstream(requireCommitOf(targetRef, target))
@@ -302,3 +327,4 @@ private fun Repository.requireConfirmedSkipTarget(confirmation: SkipConfirmation
 private fun Repository.requireState(expected: RepositoryState, detail: String) {
     if (toOpenedRepository().state != expected) throw UndineException.StateViolation(detail)
 }
+
