@@ -82,10 +82,6 @@
           },
           {
             "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.agent/hooks/custom-block-mainline-merge.sh"
-          },
-          {
-            "type": "command",
             "command": "${CLAUDE_PROJECT_DIR}/.agent/hooks/custom-block-env-read.sh"
           }
         ]

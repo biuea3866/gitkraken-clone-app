@@ -50,9 +50,6 @@ type = "command"
 command = ".agent/hooks/custom-block-git-push.sh"
 [[hooks.PreToolUse.hooks]]
 type = "command"
-command = ".agent/hooks/custom-block-mainline-merge.sh"
-[[hooks.PreToolUse.hooks]]
-type = "command"
 command = ".agent/hooks/custom-block-env-read.sh"
 
 # ── PreToolUse (파일 편집) ── apply_patch 를 명시해 alias 동작에 의존하지 않는다.
