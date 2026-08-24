@@ -102,6 +102,59 @@
         }
       }
     },
+    "advisory": {
+      "type": "array",
+      "description": "차단 자격이 없어 강등한 지적 (review-grading.md \"차단 판정의 전제\" C1~C6). 심각도는 그대로 두고 findings 가 아니라 여기에 넣는다 — 기존 결함의 p0 를 p4 로 낮춰 기록하면 후속 티켓에서 위험을 잃는다. 없으면 생략하거나 빈 배열.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "level",
+          "file",
+          "line",
+          "problem",
+          "non_blocking_reason"
+        ],
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": [
+              "p0",
+              "p1",
+              "p2",
+              "p3",
+              "p4"
+            ],
+            "description": "심각도. 차단하지 않는다고 낮추지 않는다."
+          },
+          "file": {
+            "type": "string"
+          },
+          "line": {
+            "type": "integer"
+          },
+          "problem": {
+            "type": "string"
+          },
+          "non_blocking_reason": {
+            "type": "string",
+            "enum": [
+              "C1_pre_existing",
+              "C2_unachievable",
+              "C3_class_closed",
+              "C4_decided",
+              "C5_artifact",
+              "C6_test_depth"
+            ],
+            "description": "어느 전제를 못 갖췄는지. review-grading.md 의 C1~C6 과 1:1."
+          },
+          "followup_ko": {
+            "type": "string",
+            "description": "후속 티켓으로 다룰 내용 (C1·C2 에서 권장)."
+          }
+        }
+      }
+    },
     "summary_ko": {
       "type": "string"
     }

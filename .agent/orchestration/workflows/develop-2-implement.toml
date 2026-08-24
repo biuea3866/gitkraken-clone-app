@@ -107,6 +107,12 @@ prompt = '''
 (실제 사례: `schemaVersion` 해석 실패 하나가 Int 절삭 → Double 폴백 → 명시적 null 로 세 라운드에 나뉘어
 나왔습니다. 셋은 같은 결함이며 한 번에 나왔어야 합니다.)
 
+**단, 넓히는 범위는 이번 diff 가 원인인 것까지입니다.** 같은 부류를 이 diff 밖 기존 코드로 넓혀
+차단하지 마세요 — 그것이 라운드를 끝나지 않게 만든 실제 원인입니다. 차단(`findings`)에 올릴 자격은
+`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1~C6 이 정합니다. 자격이
+없으면 **심각도를 낮추지 말고 `advisory` 에 `non_blocking_reason` 과 함께** 넣고, 필요하면
+`followup_ko` 에 후속 티켓 내용을 적습니다.
+
 점검:
 1. 스펙의 인수 조건을 항목별로 코드와 대조합니다 (파일:라인 또는 테스트명을 근거로).
 2. `implement_1` 의 deviations 가 정당한지, 스펙을 임의로 축소·확대하지 않았는지 봅니다.
@@ -139,6 +145,12 @@ prompt = '''
 그 횟수만큼 반복되고, 그 사이 사람이 "고쳤다" 고 판단합니다.
 (실제 사례: `schemaVersion` 해석 실패 하나가 Int 절삭 → Double 폴백 → 명시적 null 로 세 라운드에 나뉘어
 나왔습니다. 셋은 같은 결함이며 한 번에 나왔어야 합니다.)
+
+**단, 넓히는 범위는 이번 diff 가 원인인 것까지입니다.** 같은 부류를 이 diff 밖 기존 코드로 넓혀
+차단하지 마세요 — 그것이 라운드를 끝나지 않게 만든 실제 원인입니다. 차단(`findings`)에 올릴 자격은
+`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1~C6 이 정합니다. 자격이
+없으면 **심각도를 낮추지 말고 `advisory` 에 `non_blocking_reason` 과 함께** 넣고, 필요하면
+`followup_ko` 에 후속 티켓 내용을 적습니다.
 
 점검:
 1. 신규 클래스/함수에 대응 테스트가 있는지 짝을 맞춥니다 (`*Spec.kt` / `*Test.kt` grep).
@@ -173,6 +185,12 @@ prompt = '''
 그 횟수만큼 반복되고, 그 사이 사람이 "고쳤다" 고 판단합니다.
 (실제 사례: `schemaVersion` 해석 실패 하나가 Int 절삭 → Double 폴백 → 명시적 null 로 세 라운드에 나뉘어
 나왔습니다. 셋은 같은 결함이며 한 번에 나왔어야 합니다.)
+
+**단, 넓히는 범위는 이번 diff 가 원인인 것까지입니다.** 같은 부류를 이 diff 밖 기존 코드로 넓혀
+차단하지 마세요 — 그것이 라운드를 끝나지 않게 만든 실제 원인입니다. 차단(`findings`)에 올릴 자격은
+`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1~C6 이 정합니다. 자격이
+없으면 **심각도를 낮추지 말고 `advisory` 에 `non_blocking_reason` 과 함께** 넣고, 필요하면
+`followup_ko` 에 후속 티켓 내용을 적습니다.
 
 점검 (서브에이전트를 호출할 수 없으므로 **직접 grep 해서** 판정합니다):
 1. **1-hop 호출 그래프** — 변경된 public 함수·모델을 심볼로 grep 해 호출자를 찾고,
@@ -212,6 +230,12 @@ prompt = '''
 (실제 사례: `schemaVersion` 해석 실패 하나가 Int 절삭 → Double 폴백 → 명시적 null 로 세 라운드에 나뉘어
 나왔습니다. 셋은 같은 결함이며 한 번에 나왔어야 합니다.)
 
+**단, 넓히는 범위는 이번 diff 가 원인인 것까지입니다.** 같은 부류를 이 diff 밖 기존 코드로 넓혀
+차단하지 마세요 — 그것이 라운드를 끝나지 않게 만든 실제 원인입니다. 차단(`findings`)에 올릴 자격은
+`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1~C6 이 정합니다. 자격이
+없으면 **심각도를 낮추지 말고 `advisory` 에 `non_blocking_reason` 과 함께** 넣고, 필요하면
+`followup_ko` 에 후속 티켓 내용을 적습니다.
+
 점검:
 1. **의존성 추가** — 새 라이브러리가 `gradle/libs.versions.toml` 을 경유하는지 봅니다.
    `build.gradle.kts` 에 버전을 하드코딩했으면 p2 입니다.
@@ -250,6 +274,12 @@ prompt = '''
 (실제 사례: `schemaVersion` 해석 실패 하나가 Int 절삭 → Double 폴백 → 명시적 null 로 세 라운드에 나뉘어
 나왔습니다. 셋은 같은 결함이며 한 번에 나왔어야 합니다.)
 
+**단, 넓히는 범위는 이번 diff 가 원인인 것까지입니다.** 같은 부류를 이 diff 밖 기존 코드로 넓혀
+차단하지 마세요 — 그것이 라운드를 끝나지 않게 만든 실제 원인입니다. 차단(`findings`)에 올릴 자격은
+`.agent/docs/review-grading.md` "차단 판정의 전제 — diff 인과성" 의 C1~C6 이 정합니다. 자격이
+없으면 **심각도를 낮추지 말고 `advisory` 에 `non_blocking_reason` 과 함께** 넣고, 필요하면
+`followup_ko` 에 후속 티켓 내용을 적습니다.
+
 점검:
 1. **revert 단위** — 티켓 범위 밖 변경이 같은 커밋에 섞여 되돌리기 불가해졌는지 봅니다.
 2. **설정 파일 역방향** — 설정 스키마를 바꿨다면 구버전 앱이 신 스키마를 만났을 때
@@ -277,7 +307,7 @@ prompt = '''
 입력:
 - 5축 산출물: 업스트림 `intent_ac_1` · `tests_1` · `side_effects_1` · `deploy_1` · `rollback_1`
 - 스펙: {{spec_file}} — ac_results 의 기준입니다.
-- 등급·verdict 규칙: .agent/docs/review-grading.md
+- 등급·verdict·차단 자격(C1~C6) 규칙: .agent/docs/review-grading.md
 - 오탐 기준: .agent/docs/review-false-positives.md
 
 해야 할 일:
@@ -286,9 +316,13 @@ prompt = '''
 2. `false_positive_checked` 가 false 인 finding 은 **한 단계 강등**합니다 (오탐 대조를 거치지 않았으므로).
    오탐 SSOT 에 해당하는 패턴이면 기각하고 findings 에서 제외합니다.
 3. 스펙의 인수 조건별 충족 여부를 ac_results 에 채웁니다 — 근거는 `intent_ac_1` 의 checked 를 씁니다.
-4. verdict 를 규칙대로 정합니다: p0~p2 가 하나라도 있으면 REQUEST_CHANGES,
+4. **차단 자격을 재심사합니다 (백스톱).** 축이 `findings` 에 올렸더라도
+   `.agent/docs/review-grading.md` "차단 판정의 전제" C1~C6 을 못 갖춘 항목은 `advisory` 로 옮깁니다.
+   근거 라인이 **이번 diff 의 변경 라인**인지 확인하고, 변경되지 않은 라인만 인용됐으면 C1 입니다.
+   강등 항목은 심각도를 낮추지 말고 `non_blocking_reason` 을 붙입니다.
+5. verdict 를 규칙대로 정합니다: **차단 자격을 갖춘** p0~p2 가 하나라도 있으면 REQUEST_CHANGES,
    p3~p4 만 있으면 COMMENT, 없으면 APPROVED.
-5. 축 산출물이 누락됐거나 파싱 실패면 **REQUEST_CHANGES** 로 두고 summary_ko 에 그 사실을 적습니다
+6. 축 산출물이 누락됐거나 파싱 실패면 **REQUEST_CHANGES** 로 두고 summary_ko 에 그 사실을 적습니다
    (판정 불가를 통과로 읽지 않습니다).
-6. summary_ko 에는 **수정 우선순위**를 적습니다 — p0 → p1 → p2 순으로 무엇을 먼저 고쳐야 하는지.
+7. summary_ko 에는 **수정 우선순위**를 적습니다 — p0 → p1 → p2 순으로 무엇을 먼저 고쳐야 하는지.
 '''

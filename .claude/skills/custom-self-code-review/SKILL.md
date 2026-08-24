@@ -40,6 +40,15 @@ base 는 **PR `baseRefName` 우선**(`gh pr view --json baseRefName`), 불명 �
 > **선행 — 오탐 SSOT 대조**: 5축 지적을 적기 전에 [`.agent/docs/review-false-positives.md`](../../docs/review-false-positives.md)
 > 를 먼저 읽고, 각 finding 이 그 문서의 오탐/의도된 패턴에 해당하면 **기각/강등**한다.
 > 등급(p0~p5)과 verdict 산출은 [`.agent/docs/review-grading.md`](../../docs/review-grading.md) 가 정본이다.
+>
+> **차단 자격 — diff 인과성**: 등급과 차단은 다르다. p0~p2 로 **차단**하려면
+> [`review-grading.md`](../../docs/review-grading.md) "차단 판정의 전제" 의 C1~C6 을 갖춰야 한다:
+> 이번 diff 가 원인(C1) · 달성 가능한 수정(C2) · 닫힌 부류 재개 아님(C3) · 결정 문서가 정한 것 아님(C4) ·
+> 레포 파일 대상(C5) · 이미 테스트된 동작의 단정 추가 아님(C6). 자격이 없으면 **심각도를 낮추지 말고**
+> `advisory` 로 옮기고 `non_blocking_reason` 을 붙인다.
+>
+> 이 전제가 없으면 검증 라운드가 수렴하지 않는다 — 고칠 때마다 그 옆의 기존 코드가 새로 보여
+> 라운드마다 새 차단이 생긴다 (wave 3 에서 한 티켓에 5라운드가 돌았다).
 
 #### Axis 1 — 변경 의도와 티켓 정합성
 
@@ -136,6 +145,9 @@ base 는 **PR `baseRefName` 우선**(`gh pr view --json baseRefName`), 불명 �
 - ❌ JGit 자원을 `use {}` 없이 열어 두고 파일 핸들 누수 방치
 - ❌ Git I/O 를 UI 코루틴에서 직접 호출
 - ❌ 티켓 범위 밖 리팩터링을 같은 커밋에 섞어 revert 불가로 만들기
+- ❌ 이번 diff 가 만들지 않은 기존 결함으로 차단하기 — `advisory` + 후속 티켓 (C1)
+- ❌ 플랫폼이 제공하지 않는 보장을 요구하는 지적으로 차단하기 — 잔존 위험을 명시한다 (C2)
+- ❌ 이미 테스트된 동작에 단정을 더 붙이라며 p2 를 매기기 — 그것은 p3 다 (C6)
 
 ## 관련
 
