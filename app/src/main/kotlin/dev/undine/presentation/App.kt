@@ -54,6 +54,8 @@ import dev.undine.presentation.shell.AppShell
 import dev.undine.presentation.shell.AppShellState
 import dev.undine.presentation.shell.AppShellSlots
 import dev.undine.presentation.shell.rememberAppShellState
+import dev.undine.presentation.staging.StagingPanel
+import dev.undine.presentation.staging.StagingState
 import dev.undine.presentation.sidebar.SidebarState
 import dev.undine.presentation.sidebar.SidebarTree
 import dev.undine.presentation.toolbar.RemoteToolbar
@@ -77,6 +79,18 @@ private data class RepositoryContext(
     val opened: OpenedRepository? = null,
     val branches: List<Branch> = emptyList(),
     val tags: List<Tag> = emptyList(),
+)
+
+/**
+ * 고른 커밋을 들여다보는 데 필요한 값 묶음. 커밋·파일 선택이 바뀌면 함께 바뀌므로 하나로 묶는다.
+ */
+@Immutable
+private data class CommitInspection(
+    val commit: Commit?,
+    val detailState: CommitDetailState,
+    val diffState: DiffViewerState,
+    val fileDiff: DiffResult?,
+    val filePath: String?,
 )
 
 /** 설정·로그를 두는 사용자 디렉터리. 앱 전용 하위 디렉터리 하나만 쓴다. */
@@ -212,6 +226,9 @@ private fun RepositoryArea(
     val searchState = rememberSearchState(component.searchCommits, refs)
     val detailState = rememberCommitDetailState(component.loadChangedFiles)
     val diffState = rememberDiffViewerState()
+    val stagingState = remember(repositoryPath) {
+        StagingState(actions = component.stagingActions, scope = scope)
+    }
     val sidebarState = remember(repositoryPath) {
         SidebarState(
             loadRefs = component.loadSidebarRefs,
@@ -251,6 +268,7 @@ private fun RepositoryArea(
 
     LaunchedEffect(refs) {
         sidebarState.refresh()
+        stagingState.refresh()
         graphState.loadInitialPage()
     }
 
@@ -306,10 +324,14 @@ private fun RepositoryArea(
                 },
                 bottom = {
                     BottomArea(
-                        selectedCommit = graphState.selectedCommit,
-                        detailState = detailState,
-                        diffState = diffState,
-                        fileDiff = fileDiff,
+                        inspection = CommitInspection(
+                            commit = graphState.selectedCommit,
+                            detailState = detailState,
+                            diffState = diffState,
+                            fileDiff = fileDiff,
+                            filePath = selection.filePath,
+                        ),
+                        stagingState = stagingState,
                         onSelectFile = { filePath -> shellState.selectFile(filePath) },
                     )
                 },
@@ -320,24 +342,30 @@ private fun RepositoryArea(
 }
 
 /**
- * 아래 영역 — 파일을 고르기 전에는 커밋 상세, 고른 뒤에는 그 파일의 diff 다.
+ * 아래 영역.
  *
- * 스테이징 패널(UND-17)·충돌 편집기(UND-23)는 아직 없다. 자리를 비워 두는 대신 지금 보여줄 수
- * 있는 것을 보여준다 — 빈 슬롯은 배선이 덜 된 것으로 읽힌다.
+ * 커밋을 고르지 않았으면 **작업 중인 변경**(스테이징 패널)이다 — Git 클라이언트를 여는 이유가
+ * 대개 그것이고, 빈 화면보다 지금 할 일을 보여주는 것이 맞다. 커밋을 고르면 그 커밋의 상세로,
+ * 파일까지 고르면 그 파일의 diff 로 바뀐다.
+ *
+ * 충돌 편집기(UND-23)는 아직 없다.
  */
 @Composable
 private fun BottomArea(
-    selectedCommit: Commit?,
-    detailState: CommitDetailState,
-    diffState: DiffViewerState,
-    fileDiff: DiffResult?,
+    inspection: CommitInspection,
+    stagingState: StagingState,
     onSelectFile: (String) -> Unit,
 ) {
-    if (selectedCommit == null) return
+    val selectedCommit = inspection.commit
+    val fileDiff = inspection.fileDiff
+    if (selectedCommit == null) {
+        StagingPanel(state = stagingState, modifier = Modifier.fillMaxSize())
+        return
+    }
     if (fileDiff == null) {
         CommitDetailPanel(
             commit = selectedCommit,
-            state = detailState,
+            state = inspection.detailState,
             modifier = Modifier.fillMaxSize(),
             onSelectFile = onSelectFile,
         )
@@ -345,9 +373,9 @@ private fun BottomArea(
     }
     DiffViewer(
         result = fileDiff,
-        state = diffState,
-        // 스테이징은 UND-17 소관이다. 계약을 만족시키되 아무 것도 하지 않는다.
-        onStageHunk = { },
+        state = inspection.diffState,
+        // 인덱스 상태의 단일 소유자는 패널이다 — 뷰어는 의사만 올린다.
+        onStageHunk = { hunk -> stagingState.stageHunk(inspection.filePath.orEmpty(), listOf(hunk)) },
         modifier = Modifier.fillMaxSize(),
     )
 }

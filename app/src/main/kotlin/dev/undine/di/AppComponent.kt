@@ -3,6 +3,12 @@ package dev.undine.di
 import dev.undine.application.commitdetail.LoadChangedFilesUseCase
 import dev.undine.application.diff.LoadFileDiffUseCase
 import dev.undine.application.graph.LoadCommitHistoryUseCase
+import dev.undine.application.staging.AmendCommitUseCase
+import dev.undine.application.staging.CommitStagedUseCase
+import dev.undine.application.staging.LoadWorkingTreeStatusUseCase
+import dev.undine.application.staging.StageFilesUseCase
+import dev.undine.application.staging.StageHunksUseCase
+import dev.undine.application.staging.UnstageFilesUseCase
 import dev.undine.application.search.SearchCommitsUseCase
 import dev.undine.application.sidebar.CheckoutBranchUseCase
 import dev.undine.application.sidebar.DeleteBranchUseCase
@@ -22,11 +28,13 @@ import dev.undine.domain.SettingsGateway
 import dev.undine.infrastructure.git.diff.DiffGatewayImpl
 import dev.undine.infrastructure.git.history.HistoryGatewayImpl
 import dev.undine.infrastructure.git.ref.RefGatewayImpl
+import dev.undine.infrastructure.git.staging.StagingGatewayImpl
 import dev.undine.infrastructure.git.remote.RemoteGatewayImpl
 import dev.undine.infrastructure.git.repository.GitAccess
 import dev.undine.infrastructure.git.repository.RepositoryGatewayImpl
 import dev.undine.infrastructure.git.worktreeops.WorktreeOpsGatewayImpl
 import dev.undine.infrastructure.settings.SettingsGatewayImpl
+import dev.undine.presentation.staging.StagingActions
 import dev.undine.presentation.welcome.WelcomeActions
 import java.nio.file.Path
 
@@ -55,6 +63,7 @@ class AppComponent(settingsFile: Path) {
     private val diffGateway = DiffGatewayImpl(gitAccess)
     private val remoteGateway = RemoteGatewayImpl(gitAccess)
     private val worktreeOpsGateway = WorktreeOpsGatewayImpl(gitAccess)
+    private val stagingGateway = StagingGatewayImpl(gitAccess)
     private val settingsGateway: SettingsGateway = SettingsGatewayImpl(settingsFile)
 
     // ── UseCase (application) ──
@@ -76,6 +85,16 @@ class AppComponent(settingsFile: Path) {
 
     val loadChangedFiles = LoadChangedFilesUseCase(diffGateway)
     val loadFileDiff = LoadFileDiffUseCase(diffGateway)
+
+    /** 스테이징 패널이 쓰는 동작 묶음. 패널이 인덱스 상태의 단일 소유자다. */
+    val stagingActions = StagingActions(
+        loadStatus = LoadWorkingTreeStatusUseCase(repositoryGateway),
+        stageFiles = StageFilesUseCase(stagingGateway),
+        unstageFiles = UnstageFilesUseCase(stagingGateway),
+        stageHunks = StageHunksUseCase(stagingGateway),
+        commitStaged = CommitStagedUseCase(stagingGateway),
+        amendCommit = AmendCommitUseCase(stagingGateway),
+    )
 
     val fetchRemote = FetchRemoteUseCase(remoteGateway)
     val pullRemote = PullRemoteUseCase(remoteGateway)

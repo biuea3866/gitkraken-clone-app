@@ -16,6 +16,10 @@ import dev.undine.testsupport.FIXED_NOW
 import dev.undine.testsupport.RecordingHistoryGateway
 import dev.undine.testsupport.commit
 import dev.undine.testsupport.commitId
+import dev.undine.presentation.staging.FakeRepositoryGateway
+import dev.undine.presentation.staging.RecordingStagingGateway
+import dev.undine.presentation.staging.statusOf
+import dev.undine.presentation.staging.stagingStateWith
 import dev.undine.application.graph.LoadCommitHistoryUseCase
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.longs.shouldBeGreaterThan
@@ -57,6 +61,27 @@ class ScreenshotRenderSpec : FunSpec({
 
         file.length() shouldBeGreaterThan 0
     }
+
+    test("스테이징 패널이 다크 테마로 렌더된다") {
+        val file = ScreenshotRenderer.render("staging-dark", width = 900, height = 620) {
+            val state = remember {
+                stagingStateWith(
+                    FakeRepositoryGateway(
+                        statusOf(
+                            staged = listOf("app/src/main/kotlin/dev/undine/presentation/staging/StagingPanel.kt"),
+                            unstaged = listOf("tickets/README.md", "app/build.gradle.kts"),
+                            untracked = listOf("docs/new-note.md"),
+                        ),
+                    ),
+                    RecordingStagingGateway(),
+                )
+            }
+            LaunchedStaging(state)
+        }
+
+        file.length() shouldBeGreaterThan 0
+    }
+
 })
 
 /** 첫 페이지를 실어야 행이 그려진다 — 렌더 전에 로드를 끝낸다. */
@@ -107,3 +132,13 @@ private fun sampleRefIndex(): CommitRefIndex = CommitRefIndex.of(
     ),
     currentBranch = RefName("main"),
 )
+
+/** 목록을 실은 뒤 렌더한다 — refresh 전에는 빈 상태가 그려진다. */
+@androidx.compose.runtime.Composable
+private fun LaunchedStaging(state: dev.undine.presentation.staging.StagingState) {
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        state.refresh()
+        state.changeMessage("스테이징 패널을 붙인다")
+    }
+    dev.undine.presentation.staging.StagingPanel(state = state, modifier = Modifier.fillMaxSize())
+}
