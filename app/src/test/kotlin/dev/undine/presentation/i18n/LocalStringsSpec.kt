@@ -3,7 +3,7 @@ package dev.undine.presentation.i18n
 import androidx.compose.runtime.CompositionLocalProvider
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.string.shouldNotContain
+import io.kotest.matchers.string.shouldContain
 import java.io.File
 import java.util.Locale
 
@@ -39,10 +39,12 @@ class LocalStringsSpec : FunSpec({
         composeCapturing { capture -> capture(strings.common.ok) } shouldBe systemStrings().common.ok
     }
 
-    test("App.kt 에는 i18n 을 배선하지 않는다 — UND-26 소유") {
+    // UND-26 이 배선을 했으므로 "배선하지 않았음" 가드를 뒤집는다 — 배선이 사라지면 화면 문자열이
+    // 시스템 로케일 기본값으로 조용히 되돌아가고, 그 회귀는 눈으로 잡기 어렵다.
+    test("App.kt 가 화면 트리에 i18n 을 배선한다") {
         val appSource = File(APP_SOURCE_PATH)
 
         appSource.isFile shouldBe true
-        appSource.readText() shouldNotContain "LocalStrings"
+        appSource.readText() shouldContain "LocalStrings provides"
     }
 })

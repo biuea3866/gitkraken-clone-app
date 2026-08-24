@@ -2,11 +2,12 @@ package dev.undine.presentation.i18n
 
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
-import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
+import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.shouldBe
 import java.util.Locale
 
-private val UNREGISTERED_KEY = StringKey("graph.empty.title")
+/** 어느 네임스페이스도 정의하지 않는 키. 화면 키를 쓰면 그 화면이 배선될 때 테스트가 깨진다. */
+private val UNREGISTERED_KEY = StringKey("absent.namespace.absentKey")
 
 /**
  * 문자열 조회·로케일 결정·누락 키 폴백. 로케일 전환은 시스템 로케일만 다룬다 —
@@ -34,22 +35,34 @@ class StringCatalogSpec : FunSpec({
         strings.common.close shouldBe "Close"
     }
 
-    test("이 티켓이 등록하는 키는 공통 4개와 상대 시각 4개뿐이다") {
-        val registeredKeys = mergeTranslations(builtInTranslations)
+    // UND-26 이 전 화면 번역을 등록한다. 네임스페이스 단위로 못박는다 — 키 목록을 열거하면
+    // 화면이 문구를 하나 추가할 때마다 이 테스트가 깨져 실제 회귀를 가린다.
+    test("배선된 카탈로그에 전 화면 네임스페이스가 등록된다") {
+        val namespaces = mergeTranslations(builtInTranslations)
             .getValue(DEFAULT_LOCALE)
             .keys
-            .map { it.id }
+            .map { it.namespace.substringBefore('.') }
+            .distinct()
 
-        registeredKeys shouldContainExactlyInAnyOrder listOf(
-            "common.ok",
-            "common.cancel",
-            "common.retry",
-            "common.close",
-            "time.relative.justNow",
-            "time.relative.minutesAgo",
-            "time.relative.hoursAgo",
-            "time.relative.daysAgo",
+        namespaces shouldContainAll listOf(
+            "common",
+            "time",
+            "shell",
+            "welcome",
+            "sidebar",
+            "graph",
+            "commitdetail",
+            "diff",
+            "toolbar",
+            "search",
+            "palette",
         )
+    }
+
+    test("등록된 화면 키는 기본 로케일에서 빈 문자열이 아니다") {
+        val entries = mergeTranslations(builtInTranslations).getValue(DEFAULT_LOCALE)
+
+        entries.filterValues { it.isBlank() }.keys.map { it.id } shouldBe emptyList()
     }
 
     test("키는 네임스페이스와 이름으로 나뉜다") {
@@ -94,7 +107,8 @@ class StringCatalogSpec : FunSpec({
     }
 
     test("어느 로케일에도 없는 키는 크래시하지 않고 키 이름을 반환한다") {
-        catalog.stringsFor(Locale.ENGLISH, devBuild = false).text(UNREGISTERED_KEY) shouldBe "graph.empty.title"
+        catalog.stringsFor(Locale.ENGLISH, devBuild = false).text(UNREGISTERED_KEY) shouldBe
+            UNREGISTERED_KEY.id
     }
 
     test("undine.dev=true 인 개발 빌드에서 누락 키는 앞뒤 표식으로 감싸 표시된다") {
