@@ -20,6 +20,11 @@ import dev.undine.domain.conflict.ConflictedFile
 import dev.undine.presentation.conflict.ConflictEditor
 import dev.undine.presentation.conflict.ConflictState
 import dev.undine.presentation.conflict.conflictStateForRender
+import dev.undine.presentation.rebase.RebasePlanEditor
+import dev.undine.presentation.rebase.RebasePlanState
+import dev.undine.presentation.rebase.RecordingRebaseGateway
+import dev.undine.presentation.rebase.rebaseStateWith
+import dev.undine.presentation.rebase.targetsOf
 import dev.undine.presentation.staging.FakeRepositoryGateway
 import dev.undine.presentation.staging.RecordingStagingGateway
 import dev.undine.presentation.staging.statusOf
@@ -103,7 +108,34 @@ class ScreenshotRenderSpec : FunSpec({
         file.length() shouldBeGreaterThan 0
     }
 
+    test("리베이스 계획 편집기가 다크 테마로 렌더된다") {
+        val file = ScreenshotRenderer.render("rebase-dark", width = 1100, height = 700) {
+            val state = remember {
+                rebaseStateWith(
+                    RecordingRebaseGateway(
+                        targetsOf(
+                            "그래프 레인 배치를 다듬는다",
+                            "diff 뷰어 분할 보기를 추가한다",
+                            "커밋 상세 패널을 붙인다",
+                            pushed = setOf("그래프 레인 배치를 다듬는다"),
+                        ),
+                    ),
+                )
+            }
+            LaunchedRebase(state)
+        }
+
+        file.length() shouldBeGreaterThan 0
+    }
+
 })
+
+/** 대상을 실은 뒤 렌더한다 — 읽기 전에는 빈 상태가 그려진다. */
+@androidx.compose.runtime.Composable
+private fun LaunchedRebase(state: RebasePlanState) {
+    androidx.compose.runtime.LaunchedEffect(Unit) { state.load() }
+    RebasePlanEditor(state = state, modifier = Modifier.fillMaxSize())
+}
 
 private const val CONFLICT_PATH = "app/src/main/kotlin/dev/undine/presentation/App.kt"
 
