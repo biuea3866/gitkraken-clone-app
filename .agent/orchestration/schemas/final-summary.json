@@ -73,7 +73,9 @@
           "level",
           "file",
           "line",
-          "problem"
+          "problem",
+          "non_blocking_reason",
+          "followup_ko"
         ],
         "properties": {
           "level": {
@@ -98,6 +100,7 @@
           "non_blocking_reason": {
             "type": "string",
             "enum": [
+              "none",
               "C1_pre_existing",
               "C2_unachievable",
               "C3_class_closed",
@@ -105,11 +108,11 @@
               "C5_artifact",
               "C6_test_depth"
             ],
-            "description": "차단 자격을 못 갖춘 사유 (review-grading.md C1~C6). 단순 p3~p4 nit 이면 생략한다."
+            "description": "차단 자격을 못 갖춘 사유 (review-grading.md C1~C6). 강등이 아닌 단순 p3~p4 nit 이면 \"none\"."
           },
           "followup_ko": {
             "type": "string",
-            "description": "후속 티켓으로 다룰 내용 (C1·C2 에서 권장)."
+            "description": "후속 티켓으로 다룰 내용 (C1·C2 에서 권장). 없으면 빈 문자열."
           }
         }
       }
