@@ -101,6 +101,7 @@ Undine 구현을 **53개 티켓 / 10개 wave** 로 분해한 결과다.
 | ID | 제목 | 사이즈 | 의존 | 소유 |
 |---|---|---|---|---|
 | [UND-55](UND-55-orchestration-routing-table.md) | 오케스트레이션 실행 구성 라우팅 테이블 | S | — | `.agent/orchestration/profiles.toml`(신규) · `runner/run-graph.py` · `workflows/*.toml` |
+| [UND-58](UND-58-ticket-wave-executor.md) | 티켓 wave 실행기 — 티켓 DAG 병렬화 | M | UND-55 | `.agent/orchestration/runner/wave-graph.py`(신규) · `.agent/skills/custom-ticket-wave/`(신규) |
 
 ## 공통 규약 (전 티켓 적용)
 

@@ -1,4 +1,4 @@
-# .agent/skills — 스킬 (7개)
+# .agent/skills — 스킬 (8개)
 
 슬래시 명령 또는 자동 발화로 호출되는 워크플로우. `.claude/skills/` 는 여기서 생성되는 투영본이다.
 
@@ -6,6 +6,7 @@
 |---|---|---|
 | [`custom-develop-orchestrator`](custom-develop-orchestrator/SKILL.md) | "UND-NN 작업해줘/구현해줘", `/custom-develop-orchestrator UND-NN` | 티켓 1건 스펙→구현→검증→정리 1-루프 (스펙 승인·최종 검토 2 게이트) |
 | [`custom-orchestrate`](custom-orchestrate/SKILL.md) | `/custom-orchestrate <workflow>`, "harness-audit 돌려줘" | DAG 워크플로우 dry-run 검증 → 승인 → 실행 → 산출물 요약 |
+| [`custom-ticket-wave`](custom-ticket-wave/SKILL.md) | `/custom-ticket-wave`, "wave 3 티켓 전부 스펙 돌려줘" | 티켓 DAG 위상정렬 → wave 단위 병렬 실행 (티켓당 워크트리 1개) |
 | [`custom-self-code-review`](custom-self-code-review/SKILL.md) | `git push` 직전, PR 본문 작성 직전 | 5축 자가 리뷰 (의도·테스트·사이드이펙트·빌드의존성·롤백) — **축 정의 SSOT** |
 | [`custom-affected-test-runner`](custom-affected-test-runner/SKILL.md) | push 직전 "이 변경 테스트 돌았나" | 변경 범위 대응 테스트 실행 |
 | [`custom-pr-create`](custom-pr-create/SKILL.md) | "PR 만들어줘" | 템플릿 기반 PR 본문 + `gh pr create` (기본 Draft) |
