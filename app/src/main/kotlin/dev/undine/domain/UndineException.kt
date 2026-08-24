@@ -69,6 +69,9 @@ sealed class UndineException(message: String, cause: Throwable? = null) : Except
             COMMIT("커밋"),
             STASH("스태시"),
             REMOTE("원격"),
+
+            /** 그 커밋에 그 경로가 없다. 삭제된 파일을 잘못된 기준 커밋으로 조회한 경우가 대표적이다. */
+            PATH("경로"),
         }
     }
 
