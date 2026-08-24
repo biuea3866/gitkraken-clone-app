@@ -376,6 +376,8 @@ class CloneRepositoryUseCaseSpec : BehaviorSpec({
 
                 outcome shouldBe CloneOutcome.Cloned(RepositoryPath(target.path))
                 File(target, "HEAD").readText() shouldBe "ref\n"
+                // 소유 표식은 앱 내부용이라 결과 저장소에 남지 않는다.
+                target.list().orEmpty().toList() shouldContainExactly listOf("HEAD")
                 // 디렉터리를 지우고 다시 만들었다면 지문이 달라진다 — 사용자가 건 권한·속성이 사라진다.
                 target.fileKey() shouldBe identityBefore
                 parent.stagingLeftovers().shouldBeEmpty()

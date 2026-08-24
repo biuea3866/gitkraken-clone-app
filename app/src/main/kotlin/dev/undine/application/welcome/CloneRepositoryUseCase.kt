@@ -17,14 +17,23 @@ import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
-import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.BasicFileAttributes
+import java.nio.file.StandardCopyOption
 import java.util.UUID
 import java.util.logging.Level
 import java.util.logging.Logger
 
 /** 스테이징 디렉터리 이름 앞머리. 점으로 시작해 파일 탐색기에서 숨겨지고, 앱 소유임이 드러난다. */
 private const val STAGING_PREFIX = ".undine-clone-"
+
+/**
+ * 스테이징 안에 남기는 소유 표식 파일. 안에는 만들 때 뽑은 임의 토큰이 들어 있다.
+ *
+ * 왜 파일인가. 경로·이름·`fileKey`(device+inode) 는 모두 **재현될 수 있다** — 리눅스 ext4 는 같은
+ * 경로의 디렉터리를 지운 직후 새로 만들면 **같은 inode 를 재사용**하므로, 지문 대조가 교체를
+ * 구별하지 못한다(macOS APFS 에서는 잘 통과해 이 구멍이 가려졌다). 다른 주체는 이 토큰 값을 알 수 없다.
+ */
+private const val OWNER_MARKER = ".undine-owner"
 
 private val LOGGER: Logger = Logger.getLogger("dev.undine.application.welcome.CloneRepositoryUseCase")
 
@@ -79,8 +88,8 @@ class CloneRepositoryUseCase(
     ): CloneOutcome {
         val target = File(into.value)
         val staging = withContext(ioDispatcher) { prepareStaging(target) } ?: return CloneOutcome.TargetNotEmpty
-        // 만든 그 디렉터리인지 나중에 증명할 지문. 이름·모양은 흉내 낼 수 있어도 이것은 그 아이노드다.
-        val stagingIdentity = withContext(ioDispatcher) { staging.identity() }
+        // 만든 그 디렉터리인지 나중에 증명할 토큰. 다른 주체는 이 값을 알 수 없다.
+        val stagingToken = withContext(ioDispatcher) { staging.ownershipToken() }
 
         var promoted = false
         try {
@@ -88,7 +97,7 @@ class CloneRepositoryUseCase(
             // 대상으로 옮기기까지가 성공이다 — 옮기지 못하면 저장소가 생기지 않았다.
             promoted = withContext(NonCancellable + ioDispatcher) { promote(staging, target) }
         } finally {
-            if (!promoted) cleanUp(staging, stagingIdentity, onCleanupFailed)
+            if (!promoted) cleanUp(staging, stagingToken, onCleanupFailed)
         }
         if (!promoted) throw UndineException.GitOperationFailed(operation = "clone")
 
@@ -113,7 +122,9 @@ class CloneRepositoryUseCase(
         if (parent == null || (target.exists() && !target.isEmptyDirectory())) return null
         parent.mkdirs()
         // 같은 대상에 두 clone 이 붙어도 서로의 스테이징을 건드리지 않도록 이름을 유일하게 만든다.
-        return File(parent, "$STAGING_PREFIX${target.name}-${UUID.randomUUID()}").takeIf { it.mkdir() }
+        val staging = File(parent, "$STAGING_PREFIX${target.name}-${UUID.randomUUID()}")
+        // 소유 표식을 남긴다 — 이것을 읽을 수 있어야만 나중에 지운다. 표식을 못 남기면 시작하지 않는다.
+        return staging.takeIf { it.mkdir() && it.writeOwnerMarker() }
     }
 
     /**
@@ -129,8 +140,11 @@ class CloneRepositoryUseCase(
      * 덮어쓰기 옵션을 주지 않으므로 그 이름을 가로채지 않는다.
      */
     private fun promote(staging: File, target: File): Boolean = runCatching {
+        // 소유 표식은 **옮기기 전에 지우지 않는다** — 옮기다 실패하면 소유를 증명할 수 없어
+        // 정리가 스테이징을 그대로 남긴다. 성공한 뒤에 결과에서 지운다.
         if (!target.exists()) {
             moveDirectory(staging.toPath(), target.toPath())
+            Files.deleteIfExists(File(target, OWNER_MARKER).toPath())
             return@runCatching true
         }
         moveContentsInto(staging, target)
@@ -147,10 +161,12 @@ class CloneRepositoryUseCase(
         val usableTarget = !Files.isSymbolicLink(targetPath) &&
             Files.isDirectory(targetPath, LinkOption.NOFOLLOW_LINKS) &&
             target.isEmptyDirectory()
-        val entries = staging.listFiles()
+        // 소유 표식은 앱 내부용이라 옮기지 않는다 — 스테이징에 남겨 두면 실패 시 정리가 소유를 증명할 수 있다.
+        val entries = staging.listFiles()?.filterNot { it.name == OWNER_MARKER }
         if (!usableTarget || entries == null) return false
         entries.forEach { entry -> Files.move(entry.toPath(), targetPath.resolve(entry.name)) }
-        // 내용을 다 옮겼으면 빈 스테이징만 남는다. 지우지 못해도 clone 자체는 성공이다.
+        // 내용을 다 옮겼으면 표식만 남는다. 지우지 못해도 clone 자체는 성공이다.
+        Files.deleteIfExists(File(staging, OWNER_MARKER).toPath())
         Files.deleteIfExists(staging.toPath())
         return true
     }
@@ -158,21 +174,21 @@ class CloneRepositoryUseCase(
     /**
      * 실패·취소로 남은 스테이징을 지운다.
      *
-     * **앱이 만든 그 디렉터리인지 지문으로 확인한다.** 이름 접두사와 "심볼릭 링크가 아닌 디렉터리" 는
-     * 흉내 낼 수 있으므로, 만든 시점에 잡아 둔 [File.identity]([java.nio.file.attribute.BasicFileAttributes.fileKey],
-     * 없으면 생성 시각+경로)와 대조한다. 어긋나면 그 사이 다른 주체가 경로를 차지한 것이므로 지우지 않고
-     * 수동 정리로 넘긴다 — 링크를 따라 지우면 링크가 가리키는 사용자 데이터를 지우게 된다.
-     * 삭제도 링크를 따라가지 않는다([deleteDirectory] 기본 구현).
+     * **앱이 만든 그 디렉터리인지 소유 토큰으로 확인한다.** 이름 접두사·"심볼릭 링크가 아닌 디렉터리"·
+     * `fileKey` 는 모두 재현될 수 있다(리눅스는 같은 경로의 inode 를 재사용한다). 만든 시점에 남긴
+     * [OWNER_MARKER] 의 토큰이 그대로 읽히는지 대조한다 — 어긋나면 그 사이 다른 주체가 경로를 차지한
+     * 것이므로 지우지 않고 수동 정리로 넘긴다. 링크를 따라 지우면 링크가 가리키는 사용자 데이터를
+     * 지우게 되므로 삭제도 링크를 따라가지 않는다([deleteDirectory] 기본 구현).
      */
     private suspend fun cleanUp(
         staging: File,
-        stagingIdentity: Any?,
+        stagingToken: String?,
         onCleanupFailed: (RepositoryPath) -> Unit,
     ) {
         // 취소도 이 경로로 온다 — NonCancellable 이 아니면 정리 자체가 취소돼 반쯤 채운 디렉터리가 남는다.
         withContext(NonCancellable + ioDispatcher) {
             if (!staging.exists()) return@withContext
-            if (!isAppOwnedStaging(staging, stagingIdentity)) {
+            if (!isAppOwnedStaging(staging, stagingToken)) {
                 onCleanupFailed(RepositoryPath(staging.path))
                 return@withContext
             }
@@ -182,28 +198,28 @@ class CloneRepositoryUseCase(
 }
 
 /**
- * 디렉터리의 지문. 같은 경로에 새로 만든 디렉터리와 **구별되는** 값이어야 한다 —
- * `fileKey` 는 POSIX 에서 (device, inode) 라 경로가 교체되면 달라진다. 제공하지 않는 파일 시스템에서는
- * 생성 시각으로 대신한다(같은 밀리초에 교체되면 구별하지 못하지만, 이름·모양 검사보다는 강하다).
+ * 스테이징의 소유 토큰. [OWNER_MARKER] 를 읽을 수 없으면 `null` — 증명할 수 없다는 뜻이다.
+ * 심볼릭 링크를 따라 읽지 않도록 표식이 일반 파일인지 먼저 본다.
  */
-private fun File.identity(): Any? = runCatching {
-    val attributes = Files.readAttributes(toPath(), BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
-    attributes.fileKey() ?: attributes.creationTime()
+private fun File.ownershipToken(): String? = runCatching {
+    val marker = File(this, OWNER_MARKER).toPath()
+    if (Files.isSymbolicLink(marker) || !Files.isRegularFile(marker, LinkOption.NOFOLLOW_LINKS)) return null
+    Files.readString(marker).takeIf { it.isNotBlank() }
 }.getOrNull()
 
 /**
  * 이 경로가 [prepareStaging] 이 만든 **그** 디렉터리로 남아 있는지.
  *
- * 이름·모양 검사는 흉내 낼 수 있으므로 만든 시점의 지문([File.identity])까지 대조한다 —
- * 같은 이름으로 새로 만든 디렉터리는 지문이 달라 걸린다.
+ * 이름·모양·inode 는 재현될 수 있으므로 만든 시점에 남긴 소유 토큰([File.ownershipToken])까지
+ * 대조한다 — 같은 이름으로 새로 만든 디렉터리에는 그 토큰이 없다.
  */
-private fun isAppOwnedStaging(staging: File, createdIdentity: Any?): Boolean {
+private fun isAppOwnedStaging(staging: File, createdToken: String?): Boolean {
     val path = staging.toPath()
     val looksRight = staging.name.startsWith(STAGING_PREFIX) &&
         !Files.isSymbolicLink(path) &&
         Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)
-    // 지문을 못 잡았다면 앱 소유를 증명할 수 없다 — 증명하지 못한 것은 지우지 않는다.
-    return looksRight && createdIdentity != null && createdIdentity == staging.identity()
+    // 토큰을 못 남겼거나 지금 읽히지 않으면 앱 소유를 증명할 수 없다 — 증명하지 못한 것은 지우지 않는다.
+    return looksRight && createdToken != null && createdToken == staging.ownershipToken()
 }
 
 /**
@@ -246,3 +262,7 @@ private fun File.isEmptyDirectory(): Boolean = list()?.isEmpty() == true
 private fun logMovedNonAtomically(cause: AtomicMoveNotSupportedException) {
     LOGGER.log(Level.FINE, "staging move fell back to non-atomic", cause)
 }
+
+/** 소유 표식을 남긴다. 실패하면 소유를 증명할 수 없으므로 clone 을 시작하지 않는다. */
+private fun File.writeOwnerMarker(): Boolean =
+    runCatching { File(this, OWNER_MARKER).writeText(UUID.randomUUID().toString()) }.isSuccess
