@@ -328,14 +328,16 @@ class AppShellSpec : FunSpec({
         }
     }
 
+    // 분할선은 `border` 가 아니라 `divider` 를 쓴다 — 구획 표시는 읽는 대상이 아니라서
+    // 상호작용 경계와 같은 밝기면 화면이 선으로 갈라져 보인다.
     test("테마를 전환하면 셸 배경과 분할선 색이 각 토큰 값으로 함께 바뀐다") {
         val light = captureShellColors(ThemeMode.LIGHT)
         val dark = captureShellColors(ThemeMode.DARK)
 
         light.background shouldBe ColorTokens.Light.background
-        light.splitter shouldBe ColorTokens.Light.border
+        light.splitter shouldBe ColorTokens.Light.divider
         dark.background shouldBe ColorTokens.Dark.background
-        dark.splitter shouldBe ColorTokens.Dark.border
+        dark.splitter shouldBe ColorTokens.Dark.divider
         dark.background shouldNotBe light.background
         dark.splitter shouldNotBe light.splitter
     }

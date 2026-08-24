@@ -63,7 +63,7 @@ fun ShellSplitter(
                     Modifier.height(thickness).fillMaxWidth()
                 },
             )
-            .background(UndineTokens.color.border)
+            .background(UndineTokens.color.divider)
             .draggable(
                 state = dragState,
                 orientation = if (vertical) Orientation.Horizontal else Orientation.Vertical,

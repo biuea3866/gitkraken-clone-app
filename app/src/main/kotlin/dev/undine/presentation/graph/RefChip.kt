@@ -14,6 +14,9 @@ import dev.undine.presentation.design.UndineTokens
 import dev.undine.presentation.i18n.graph
 import dev.undine.presentation.i18n.strings
 
+/** 칩 배경의 불투명도. 글자 대비를 지키려면 옅어야 한다 — 색은 식별용이고 글자가 정보다. */
+private const val CHIP_FILL_ALPHA = 0.18f
+
 /**
  * 커밋 행에 붙는 참조 칩 — HEAD·브랜치·태그.
  *
@@ -28,7 +31,6 @@ internal fun RefChip(
     chip: GraphRefChip,
     modifier: Modifier = Modifier,
 ) {
-    val colors = UndineTokens.color
     val spacing = UndineTokens.spacing
     val shape = UndineTokens.shape
     val accent = chipColor(chip.kind)
@@ -37,7 +39,8 @@ internal fun RefChip(
         text = chip.refName ?: strings.graph.head,
         modifier = modifier
             .clip(RoundedCornerShape(shape.cornerSmall))
-            .background(colors.surface)
+            // 칩 색을 옅게 깐 배경 + 같은 색 경계. 외곽선만 두면 칩이 배경에 묻혀 참조가 눈에 안 띈다.
+            .background(accent.copy(alpha = CHIP_FILL_ALPHA))
             .border(shape.borderThin, accent, RoundedCornerShape(shape.cornerSmall))
             .padding(horizontal = spacing.extraSmall),
         maxLines = 1,

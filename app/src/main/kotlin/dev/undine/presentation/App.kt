@@ -28,6 +28,7 @@ import dev.undine.domain.OpenedRepository
 import dev.undine.domain.RefName
 import dev.undine.domain.RepositoryPath
 import dev.undine.domain.Tag
+import dev.undine.domain.ThemeMode
 import dev.undine.domain.UndineException
 import dev.undine.presentation.commitdetail.CommitDetailPanel
 import dev.undine.presentation.commitdetail.CommitDetailState
@@ -96,7 +97,9 @@ fun App(
     errors: AppErrorState,
     modifier: Modifier = Modifier,
 ) {
-    UndineTheme {
+    // 기본은 다크다. Git 클라이언트는 이력·diff 를 오래 들여다보는 화면이고, 설정 화면(UND-40)이
+    // 붙기 전까지 사용자가 바꿀 수단이 없으므로 기본값이 곧 유일한 선택이다.
+    UndineTheme(themeMode = ThemeMode.DARK) {
         CompositionLocalProvider(LocalStrings provides systemStrings()) {
             Box(modifier = modifier.fillMaxSize().background(UndineTokens.color.background)) {
                 AppContent(component = component, errors = errors)
