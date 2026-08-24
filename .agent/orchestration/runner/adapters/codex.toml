@@ -42,6 +42,10 @@ exhaustion_patterns = [
   "quota exceeded",
   "\"status\"\\s*:\\s*429",
   "429 too many requests",
+  # 2026-08-21 UND-21 deploy_1 관측: codex 는 용량 부족을 "Selected model is at capacity" 로 알린다.
+  # quota 계열 문구가 아니라 위 패턴이 하나도 안 걸리고, 출력 파일을 안 써서 _parse_error 로 죽었다.
+  # 일시적 용량도 소진과 같이 취급한다 — 기다리는 대신 벤더를 바꾼다 (adapters/README.md).
+  "is at capacity",
 ]
 
 [failover.translate.sandbox]
