@@ -39,6 +39,10 @@ private const val TEMPORARY_SUFFIX = ".tmp"
  * 같은 인스턴스의 동시 [save] 는 [Mutex] 로 직렬화하고 임시 파일은 호출마다 새로 만든다 —
  * 고정 이름의 임시 파일을 공유하면 한 저장이 다른 저장의 내용을 옮겨 쓴다.
  *
+ * [update] 는 읽기까지 그 같은 [Mutex] 안으로 넣는다 — 전체 스냅샷 계약이라 소비자가 [load] 로 읽고
+ * [save] 로 쓰는 사이에 다른 갱신이 끼어들면 그 갱신이 통째로 사라진다. 동기화는 이 자원의 Gateway 가
+ * 소유하며 소비자는 자기 락을 갖지 않는다.
+ *
  * @param settingsFile 설정 파일 경로. 현재 플랫폼 기본 경로는 [forCurrentPlatform] 이 정한다.
  * @param currentTimeMillis 백업 파일명(손상·신버전)에 쓰는 시각. 테스트가 고정값을 주입한다.
  */
@@ -52,12 +56,15 @@ class SettingsGatewayImpl(
     override suspend fun load(): Settings = withContext(Dispatchers.IO) { readSettings() }
 
     override suspend fun save(settings: Settings): Unit = withContext(Dispatchers.IO) {
+        serialSave.withLock { writeSettings(settings) }
+    }
+
+    override suspend fun update(transform: (Settings) -> Settings): Unit = withContext(Dispatchers.IO) {
         serialSave.withLock {
-            writeSettings(
-                settings.copy(
-                    recentRepositories = normalizeRecentRepositories(settings.recentRepositories),
-                ),
-            )
+            val current = readSettings()
+            val updated = transform(current)
+            // 바꿀 것이 없으면 파일을 건드리지 않는다 — 임시 파일 교체는 공짜가 아니다.
+            if (updated != current) writeSettings(updated)
         }
     }
 
@@ -117,7 +124,11 @@ class SettingsGatewayImpl(
         }
     }
 
-    private fun writeSettings(settings: Settings) {
+    /** 중복 제거·상한 절단은 쓰기 직전에 한다 — 어느 경로로 들어와도 파일에는 정규화된 값만 남는다. */
+    private fun writeSettings(requested: Settings) {
+        val settings = requested.copy(
+            recentRepositories = normalizeRecentRepositories(requested.recentRepositories),
+        )
         settingsFile.parent?.let { Files.createDirectories(it) }
         preserveNewerSchemaFile()
         // 상대 경로로 넘어와도 부모가 있어야 한다 — createTempFile 은 디렉토리가 null 이면 NPE 다.
