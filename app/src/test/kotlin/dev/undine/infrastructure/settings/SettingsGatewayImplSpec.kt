@@ -1,5 +1,9 @@
 package dev.undine.infrastructure.settings
 
+import dev.undine.domain.AuthenticationMethod
+import dev.undine.domain.ExternalTool
+import dev.undine.domain.ExternalToolSettings
+import dev.undine.domain.IdentityProfile
 import dev.undine.domain.RepositoryPath
 import dev.undine.domain.Settings
 import dev.undine.domain.ThemeMode
@@ -7,6 +11,7 @@ import dev.undine.domain.WindowBounds
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.engine.spec.tempdir
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -48,6 +53,43 @@ private val DEFAULTS = Settings(
 
 private fun settingsOf(vararg paths: String) = DEFAULTS.copy(
     recentRepositories = paths.map(::RepositoryPath),
+)
+
+/** 이름 있는 이스케이프가 없는 C0 제어문자 표본. JSON 에 날것으로 들어가면 다음 로드가 손상으로 읽는다. */
+private const val CONTROL_SAMPLE = "\u0000\u0001\u001F"
+
+/** 가장 최근 백업이 이기는지 보려고 [FIXED_NOW] 보다 하루 앞선 시각을 쓴다. */
+private const val OLDER_BACKUP_NOW = FIXED_NOW - 86_400_000L
+
+/** 스키마 2 를 쓰던 앱의 원본. 구버전으로 내려가 저장하면 이 내용이 newer 백업으로 밀려난다. */
+private val NEWER_SCHEMA_BACKUP_CONTENT = """
+    {
+      "schemaVersion": 2,
+      "recentRepositories": ["/tmp/before-rollback"],
+      "theme": "DARK",
+      "window": { "width": 1440, "height": 900, "maximized": false },
+      "identityProfiles": [
+        {
+          "name": "일 이름",
+          "email": "work@example.com",
+          "signingKeyId": "ABCD1234",
+          "defaultAuthentication": "SSH",
+          "expectedHost": "github.com"
+        }
+      ],
+      "externalTools": {
+        "diffTool": { "executable": "/usr/bin/kdiff3", "arguments": ["--label", "A"] },
+        "mergeTool": null
+      }
+    }
+""".trimIndent()
+
+private val BACKED_UP_PROFILE = IdentityProfile(
+    name = "일 이름",
+    email = "work@example.com",
+    signingKeyId = "ABCD1234",
+    defaultAuthentication = AuthenticationMethod.SSH,
+    expectedHost = "github.com",
 )
 
 private fun writeFile(target: Path, content: String) {
@@ -261,9 +303,156 @@ class SettingsGatewayImplSpec : FunSpec({
         val content = Files.readString(settingsFile)
         val root = JsonParser(content).parseDocument() as Map<*, *>
 
-        root.keys.toList() shouldBe listOf("schemaVersion", "recentRepositories", "theme", "window")
+        root.keys.toList() shouldBe listOf(
+            "schemaVersion",
+            "recentRepositories",
+            "theme",
+            "window",
+            "identityProfiles",
+            "externalTools",
+        )
         (root["window"] as Map<*, *>).keys.toList() shouldBe listOf("width", "height", "maximized")
         CREDENTIAL_WORDS.forEach { word -> content.lowercase() shouldNotContain word }
+    }
+
+    test("identity 프로필과 외부 도구 설정은 저장 후 같은 값으로 복원된다") {
+        val settingsFile = settingsFileIn(tempdir())
+        val settings = DEFAULTS.copy(
+            identityProfiles = listOf(
+                IdentityProfile(
+                    name = "일 이름",
+                    email = "work@example.com",
+                    signingKeyId = "ABCD1234",
+                    defaultAuthentication = AuthenticationMethod.SSH,
+                    expectedHost = "github.com",
+                ),
+                IdentityProfile(
+                    name = "개인",
+                    email = "me@example.com",
+                    signingKeyId = null,
+                    defaultAuthentication = AuthenticationMethod.HTTPS,
+                    expectedHost = null,
+                ),
+            ),
+            externalTools = ExternalToolSettings(
+                diffTool = ExternalTool("/usr/bin/kdiff3", listOf("\$LOCAL", "\$REMOTE")),
+                mergeTool = ExternalTool("/usr/bin/meld", emptyList()),
+            ),
+        )
+
+        gatewayFor(settingsFile).save(settings)
+
+        gatewayFor(settingsFile).load() shouldBe settings
+    }
+
+    test("프로필이 0건인 설정은 빈 목록으로 복원된다 — null 과 빈 목록을 구분한다") {
+        val settingsFile = settingsFileIn(tempdir())
+
+        gatewayFor(settingsFile).save(DEFAULTS.copy(identityProfiles = emptyList()))
+
+        val root = JsonParser(Files.readString(settingsFile)).parseDocument() as Map<*, *>
+        root["identityProfiles"] shouldBe emptyList<Any?>()
+        gatewayFor(settingsFile).load().identityProfiles.shouldBeEmpty()
+    }
+
+    test("직렬화된 프로필에는 서명 키 ID 만 있고 키 본문·패스프레이즈 키가 없다") {
+        val settingsFile = settingsFileIn(tempdir())
+        gatewayFor(settingsFile).save(
+            DEFAULTS.copy(
+                identityProfiles = listOf(
+                    IdentityProfile(
+                        name = "일 이름",
+                        email = "work@example.com",
+                        signingKeyId = "ABCD1234",
+                        defaultAuthentication = AuthenticationMethod.SSH,
+                        expectedHost = "github.com",
+                    ),
+                ),
+            ),
+        )
+
+        val content = Files.readString(settingsFile)
+        val root = JsonParser(content).parseDocument() as Map<*, *>
+        val profile = (root["identityProfiles"] as List<*>).single() as Map<*, *>
+
+        profile.keys.toList() shouldBe listOf(
+            "name",
+            "email",
+            "signingKeyId",
+            "defaultAuthentication",
+            "expectedHost",
+        )
+        CREDENTIAL_WORDS.forEach { word -> content.lowercase() shouldNotContain word }
+    }
+
+    test("새 필드가 없는 기존 설정 파일도 읽히고 기존 값이 보존된다") {
+        val settingsFile = settingsFileIn(tempdir())
+        writeFile(
+            settingsFile,
+            """
+            {
+              "schemaVersion": 1,
+              "recentRepositories": ["/tmp/kept"],
+              "theme": "DARK",
+              "window": { "width": 1024, "height": 768, "maximized": true }
+            }
+            """.trimIndent(),
+        )
+
+        gatewayFor(settingsFile).load() shouldBe Settings(
+            recentRepositories = listOf(RepositoryPath("/tmp/kept")),
+            theme = ThemeMode.DARK,
+            window = WindowBounds(width = 1024, height = 768, maximized = true),
+            identityProfiles = emptyList(),
+            externalTools = ExternalToolSettings.NONE,
+        )
+    }
+
+    test("프로필 항목이 깨져 있어도 읽을 수 있는 프로필만 남기고 로드는 실패하지 않는다") {
+        val settingsFile = settingsFileIn(tempdir())
+        writeFile(
+            settingsFile,
+            """
+            {
+              "schemaVersion": 2,
+              "identityProfiles": [
+                { "name": "정상", "email": "ok@example.com", "defaultAuthentication": "SSH" },
+                { "email": "이름없음@example.com" },
+                "문자열 프로필"
+              ],
+              "externalTools": { "diffTool": "문자열 도구" }
+            }
+            """.trimIndent(),
+        )
+
+        val loaded = gatewayFor(settingsFile).load()
+
+        loaded.identityProfiles shouldBe listOf(
+            IdentityProfile(
+                name = "정상",
+                email = "ok@example.com",
+                signingKeyId = null,
+                defaultAuthentication = AuthenticationMethod.SSH,
+                expectedHost = null,
+            ),
+        )
+        loaded.externalTools shouldBe ExternalToolSettings.NONE
+    }
+
+    test("알 수 없는 기본 인증 방식은 HTTPS 로 읽는다") {
+        val settingsFile = settingsFileIn(tempdir())
+        writeFile(
+            settingsFile,
+            """
+            {
+              "schemaVersion": 2,
+              "identityProfiles": [{ "name": "n", "email": "e", "defaultAuthentication": "KERBEROS" }]
+            }
+            """.trimIndent(),
+        )
+
+        gatewayFor(settingsFile).load().identityProfiles.single()
+            .defaultAuthentication shouldBe AuthenticationMethod.HTTPS
     }
 
     test("신버전 스키마 파일은 저장 전에 newer 백업으로 보존된다") {
@@ -385,5 +574,139 @@ class SettingsGatewayImplSpec : FunSpec({
 
         gatewayFor(settingsFile).save(settingsOf("/tmp/saved"))
         Files.readString(newerSchemaBackupOf(settingsFile)) shouldBe alienContent
+    }
+
+    test("expectedHost 키가 없는 기존 프로필 파일도 읽히고 호스트만 비워 둔다") {
+        val settingsFile = settingsFileIn(tempdir())
+        writeFile(
+            settingsFile,
+            """
+            {
+              "schemaVersion": 2,
+              "identityProfiles": [
+                { "name": "일", "email": "work@example.com", "defaultAuthentication": "SSH" }
+              ]
+            }
+            """.trimIndent(),
+        )
+
+        gatewayFor(settingsFile).load().identityProfiles shouldBe listOf(
+            IdentityProfile(
+                name = "일",
+                email = "work@example.com",
+                signingKeyId = null,
+                defaultAuthentication = AuthenticationMethod.SSH,
+                expectedHost = null,
+            ),
+        )
+    }
+
+    test("구버전으로 롤백했다 돌아오면 구버전이 담지 못한 필드를 newer 백업에서 되살린다") {
+        val settingsFile = settingsFileIn(tempdir())
+        // 구버전(스키마 1) 앱이 한 번 저장한 뒤의 상태를 그대로 재현한다 — 신버전 원본은 newer 백업으로
+        // 밀려나고, 현재 파일은 구버전이 새로 쓴 스키마 1 파일이다.
+        writeFile(newerSchemaBackupOf(settingsFile), NEWER_SCHEMA_BACKUP_CONTENT)
+        writeFile(
+            settingsFile,
+            """
+            {
+              "schemaVersion": 1,
+              "recentRepositories": ["/tmp/opened-on-old-version"],
+              "theme": "LIGHT",
+              "window": { "width": 1024, "height": 768, "maximized": false }
+            }
+            """.trimIndent(),
+        )
+
+        val loaded = gatewayFor(settingsFile).load()
+
+        loaded.identityProfiles shouldBe listOf(BACKED_UP_PROFILE)
+        loaded.externalTools shouldBe ExternalToolSettings(
+            diffTool = ExternalTool("/usr/bin/kdiff3", listOf("--label", "A")),
+            mergeTool = null,
+        )
+        // 구버전이 아는 필드는 구버전 파일이 이긴다 — 백업은 그보다 오래됐다.
+        loaded.recentRepositories shouldBe listOf(RepositoryPath("/tmp/opened-on-old-version"))
+        loaded.theme shouldBe ThemeMode.LIGHT
+    }
+
+    test("되살린 뒤 저장하면 현재 스키마 파일에 새 필드가 다시 담긴다") {
+        val settingsFile = settingsFileIn(tempdir())
+        writeFile(newerSchemaBackupOf(settingsFile), NEWER_SCHEMA_BACKUP_CONTENT)
+        writeFile(settingsFile, """{ "schemaVersion": 1, "theme": "LIGHT" }""")
+        val gateway = gatewayFor(settingsFile)
+
+        gateway.save(gateway.load())
+
+        val root = JsonParser(Files.readString(settingsFile)).parseDocument() as Map<*, *>
+        root["schemaVersion"] shouldBe CURRENT_SCHEMA_VERSION.toLong()
+        gatewayFor(settingsFile).load().identityProfiles shouldBe listOf(BACKED_UP_PROFILE)
+    }
+
+    test("newer 백업이 여러 개면 가장 최근 것에서 되살린다") {
+        val settingsFile = settingsFileIn(tempdir())
+        writeFile(newerSchemaBackupOf(settingsFile, now = OLDER_BACKUP_NOW), NEWER_SCHEMA_BACKUP_CONTENT)
+        writeFile(
+            newerSchemaBackupOf(settingsFile, now = FIXED_NOW),
+            """
+            {
+              "schemaVersion": 2,
+              "identityProfiles": [
+                { "name": "최신", "email": "latest@example.com", "defaultAuthentication": "HTTPS" }
+              ]
+            }
+            """.trimIndent(),
+        )
+        writeFile(settingsFile, """{ "schemaVersion": 1, "theme": "LIGHT" }""")
+
+        gatewayFor(settingsFile).load().identityProfiles.single().name shouldBe "최신"
+    }
+
+    test("현재 스키마 파일을 읽을 때는 newer 백업을 되살리지 않는다") {
+        val settingsFile = settingsFileIn(tempdir())
+        writeFile(newerSchemaBackupOf(settingsFile), NEWER_SCHEMA_BACKUP_CONTENT)
+
+        gatewayFor(settingsFile).save(DEFAULTS.copy(identityProfiles = emptyList()))
+
+        gatewayFor(settingsFile).load().identityProfiles.shouldBeEmpty()
+    }
+
+    test("따옴표·역슬래시·제어문자가 든 값도 저장 후 그대로 복원된다") {
+        val settingsFile = settingsFileIn(tempdir())
+        val tricky = "따옴표 \"q\" 역슬래시 \\ 탭\t 개행\n 복귀\r 백스페이스\b 폼피드$FORM_FEED$CONTROL_SAMPLE"
+        val settings = Settings(
+            recentRepositories = listOf(RepositoryPath("/tmp/$tricky")),
+            theme = ThemeMode.DARK,
+            window = WindowBounds(width = 1024, height = 768, maximized = true),
+            identityProfiles = listOf(
+                IdentityProfile(
+                    name = "이름 $tricky",
+                    email = "mail$tricky@example.com",
+                    signingKeyId = "key $tricky",
+                    defaultAuthentication = AuthenticationMethod.SSH,
+                    expectedHost = "host $tricky",
+                ),
+            ),
+            externalTools = ExternalToolSettings(
+                diffTool = ExternalTool(executable = "/usr/bin/$tricky", arguments = listOf("--label=$tricky")),
+                mergeTool = null,
+            ),
+        )
+
+        gatewayFor(settingsFile).save(settings)
+
+        gatewayFor(settingsFile).load() shouldBe settings
+    }
+
+    test("이름 있는 이스케이프가 없는 제어문자는 유니코드 이스케이프로 적힌다") {
+        val settingsFile = settingsFileIn(tempdir())
+
+        gatewayFor(settingsFile).save(settingsOf("/tmp/a${CONTROL_SAMPLE}b"))
+
+        val content = Files.readString(settingsFile)
+        content.contains("\\u0000") shouldBe true
+        content.contains("\\u001f") shouldBe true
+        // 파일에 남은 날것의 C0 제어문자는 포맷용 줄바꿈뿐이어야 한다.
+        content.none { it in '\u0000'..'\u001F' && it != '\n' } shouldBe true
     }
 })
