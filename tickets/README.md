@@ -82,6 +82,8 @@ Undine 구현을 **53개 티켓 / 10개 wave** 로 분해한 결과다.
 | [UND-48](UND-48-auto-update.md) | 자동 업데이트 | M | 8 | UND-25 | `domain/update/` · `application/update/` · `infrastructure/update/` · `build.gradle.kts` |
 | [UND-50](UND-50-accessibility-audit.md) | 접근성 감사 · 보강 | M | 10 | UND-40 · UND-41 · UND-42 · UND-43 · UND-44 · UND-45 · UND-46 · UND-47 · UND-51 | `presentation/**` (감사 결과 보강) |
 | [UND-51](UND-51-wiring-phase2.md) | 2차 통합 와이어업 | M | 9 | UND-22 · UND-26 · UND-38 · UND-40 · UND-41 · UND-42 · UND-43 · UND-44 · UND-45 · UND-46 · UND-47 · UND-48 | `presentation/App.kt` · `di/` · `presentation/palette/` (등록) |
+| [UND-60](UND-60-patch-apply-transaction.md) | 패치 적용 트랜잭션 (실패 복원 재설계) | M | 8 | UND-31 | `infrastructure/git/patch/` (스냅샷·복원 경로) |
+| [UND-61](UND-61-gitattributes-round-trip.md) | `.gitattributes` 왕복 편집 · LFS CLI 경계 | S | 8 | UND-33 | `infrastructure/git/lfs/AttributesFile.kt` · `GitAttributesRules.kt` · `ProcessLfsCommandRunner.kt` |
 | [UND-52](UND-52-e2e-scenario-phase2.md) | 2차 E2E 시나리오 테스트 | M | 10 | UND-51 | `app/src/test/kotlin/.../scenario2/` |
 | [UND-54](UND-54-merge-start-state-guard.md) | merge/rebase 시작 경로 상태 가드 완결 | S | 4 | UND-21 | `infrastructure/git/merge/` (가드 추가) |
 | [UND-56](UND-56-gitkraken-visual-tuning.md) | GitKraken 계열 시각 튜닝 · 렌더 확인 수단 | S | 5 | UND-26 · UND-10 | `presentation/design/` · `presentation/graph/`(그리기) · `presentation/shell/`(분할선) |
@@ -162,14 +164,14 @@ flowchart LR
 | 6 | UND-27 | 1 |
 | 7a | UND-28, UND-29, UND-30, UND-31, UND-33, UND-36, UND-38, UND-59 | 8 |
 | 7b | UND-32, UND-34, UND-35, UND-37, UND-39 | 5 |
-| 8 | UND-40, UND-41, UND-42, UND-43, UND-44, UND-45, UND-46, UND-47, UND-48 | 9 |
+| 8 | UND-40, UND-41, UND-42, UND-43, UND-44, UND-45, UND-46, UND-47, UND-48, UND-60, UND-61 | 11 |
 | 9 | UND-51 | 1 |
 | 10 | UND-50, UND-52 | 2 |
 
-- **너비 분포**: [1, 11, 11, 4, 1, 1, 8, 5, 9, 1, 2]
-- **평균 wave 너비**: 4.91
+- **너비 분포**: [1, 11, 11, 4, 1, 1, 8, 5, 11, 1, 2]
+- **평균 wave 너비**: 5.09
 - **판정: 통과** — 모든 wave 너비가 1~2 인 직선형 DAG 가 아니다.
-  wave 2·3·7a·8 에서 각각 11·11·8·9 개가 동시에 열린다.
+  wave 2·3·7a·8 에서 각각 11·11·8·11 개가 동시에 열린다.
 
 꼬리 wave 의 너비 1~2 는 **의도**다. 와이어업과 E2E 는 앞선 결과 전체를 전제로 하는
 단일 책임이라 쪼개면 오히려 충돌을 만든다.
@@ -214,7 +216,7 @@ flowchart LR
 | 5 | 1건 — `presentation/App.kt` · `di/` |
 | 6 | 1건 — `app/src/test/kotlin/.../scenario/` |
 | 7 | 12건 — `domain/cherrypick/` · `application/cherrypick/` · `infrastructure/git/cherrypick/` · `domain/blame/` · `infrastructure/git/blame/` · `domain/reflog/` · `infrastructure/git/reflog/` · `domain/patch/` · `infrast |
-| 8 | 9건 — `presentation/preferences/` · `presentation/blame/` · `presentation/graph/` (dnd 확장) · `presentation/undo/` · `presentation/tabs/` · `presentation/shell/` · `application/session/` · `infrastructure/git/reposito |
+| 8 | 11건 — `presentation/preferences/` · `presentation/blame/` · `presentation/graph/` (dnd 확장) · `presentation/undo/` · `presentation/tabs/` · `presentation/shell/` · `application/session/` · `infrastructure/git/reposito · `infrastructure/git/patch/`(복원 경로, UND-60) · `infrastructure/git/lfs/`(왕복 편집, UND-61) |
 | 9 | 1건 — `presentation/App.kt` · `di/` · `presentation/palette/` (등록) |
 | 10 | 2건 — `presentation/**` (감사 결과 보강) · `app/src/test/kotlin/.../scenario2/` |
 
