@@ -40,7 +40,12 @@ description = "구현·수정 — 파일을 쓰는 유일한 프로필"
 vendor = "claude"
 model = "opus"
 tools = ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
-permission_mode = "acceptEdits"
+# bypassPermissions 인 이유: acceptEdits 는 Bash 를 샌드박스해 워크스페이스 밖 쓰기를 막는다.
+# Gradle 은 ~/.gradle 에 잠금(.lck)·소켓을 만들어야 하므로 그 모드에서는 빌드가 시작조차 못 한다
+# (2026-08-25 wave 7a: 6건 중 5건이 "Operation not permitted" 로 테스트를 못 돌렸다).
+# 테스트를 못 돌리면 "통과" 단언에 근거가 없어 COMPLETION-RULE 위반이다.
+# 어느 모드에서도 .agent/hooks 가드(시크릿·push·mainline·JDK)는 그대로 적용된다.
+permission_mode = "bypassPermissions"
 timeout_seconds = 3600
 
 # ── 검증 ── vendor 가 implement 와 달라야 한다 (러너가 강제) ─────────────────

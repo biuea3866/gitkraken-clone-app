@@ -62,3 +62,5 @@ exhaustion_patterns = [
 [failover.translate.permission_mode]
 dontAsk = { key = "sandbox", value = "read-only" }
 acceptEdits = { key = "sandbox", value = "workspace-write" }
+# implement 프로필이 쓰는 모드. codex 로 failover 해도 Gradle 이 ~/.gradle 을 쓸 수 있어야 한다.
+bypassPermissions = { key = "sandbox", value = "danger-full-access" }
