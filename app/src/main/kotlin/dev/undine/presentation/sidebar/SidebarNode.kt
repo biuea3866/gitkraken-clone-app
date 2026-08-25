@@ -5,12 +5,16 @@ import dev.undine.application.sidebar.SidebarRefs
 import dev.undine.domain.Branch
 import dev.undine.domain.StashEntry
 import dev.undine.domain.Tag
+import dev.undine.domain.submodule.Submodule
+import dev.undine.domain.worktree.Worktree
 
 private const val GROUP_KEY_PREFIX = "group:"
 private const val LOCAL_BRANCH_KEY_PREFIX = "local:"
 private const val REMOTE_BRANCH_KEY_PREFIX = "remote:"
 private const val TAG_KEY_PREFIX = "tag:"
 private const val STASH_KEY_PREFIX = "stash:"
+private const val SUBMODULE_KEY_PREFIX = "submodule:"
+private const val WORKTREE_KEY_PREFIX = "worktree:"
 
 /**
  * 평탄화된 트리의 한 행.
@@ -48,6 +52,16 @@ sealed interface SidebarNode {
     data class StashRow(val entry: StashEntry) : SidebarNode {
         override val key: String get() = STASH_KEY_PREFIX + entry.target.value
     }
+
+    /** 서브모듈 패널로 연결할 사이드바 행. 상태 상세와 동작은 UND-45 전용 패널이 소유한다. */
+    data class SubmoduleRow(val submodule: Submodule) : SidebarNode {
+        override val key: String get() = SUBMODULE_KEY_PREFIX + submodule.path
+    }
+
+    /** worktree 패널로 연결할 사이드바 행. 경로가 같은 항목을 안정적으로 식별한다. */
+    data class WorktreeRow(val worktree: Worktree) : SidebarNode {
+        override val key: String get() = WORKTREE_KEY_PREFIX + worktree.name
+    }
 }
 
 /** 지금 목록에 보이는 브랜치 행 수. 0 이면 화면이 빈 상태 안내를 대신 띄운다. */
@@ -67,6 +81,8 @@ fun buildSidebarNodes(
     refs: SidebarRefs,
     expandedGroups: Set<SidebarGroup>,
     filter: String,
+    submodules: List<Submodule> = emptyList(),
+    worktrees: List<Worktree> = emptyList(),
 ): List<SidebarNode> {
     val matching = refs.branches.filter { it.name.value.contains(filter, ignoreCase = true) }
     val nodes = mutableListOf<SidebarNode>()
@@ -79,6 +95,8 @@ fun buildSidebarNodes(
     }
     nodes.appendGroup(SidebarGroup.TAGS, expandedGroups, refs.tags) { SidebarNode.TagRow(it) }
     nodes.appendGroup(SidebarGroup.STASHES, expandedGroups, refs.stashes) { SidebarNode.StashRow(it) }
+    nodes.appendGroup(SidebarGroup.SUBMODULES, expandedGroups, submodules) { SidebarNode.SubmoduleRow(it) }
+    nodes.appendGroup(SidebarGroup.WORKTREES, expandedGroups, worktrees) { SidebarNode.WorktreeRow(it) }
 
     return nodes
 }

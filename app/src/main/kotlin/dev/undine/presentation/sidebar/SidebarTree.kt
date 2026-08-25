@@ -23,6 +23,7 @@ import dev.undine.domain.OpenedRepository
 import dev.undine.domain.UndineException
 import dev.undine.presentation.design.UndineTokens
 import dev.undine.presentation.design.component.UndineEmptyState
+import dev.undine.presentation.design.component.UndineListRow
 import dev.undine.presentation.design.component.UndineToast
 import dev.undine.presentation.design.component.UndineToastTone
 import dev.undine.presentation.i18n.sidebar
@@ -125,7 +126,37 @@ private fun SidebarRefList(
 
                 is SidebarNode.TagRow -> SidebarTagRow(tag = node.tag)
                 is SidebarNode.StashRow -> SidebarStashRow(entry = node.entry)
+                is SidebarNode.SubmoduleRow -> SidebarSubmoduleRow(node.submodule.path)
+                is SidebarNode.WorktreeRow -> SidebarWorktreeRow(node.worktree.name, node.worktree.path.value)
             }
+        }
+    }
+}
+
+/** 전용 패널 배선 전에도 사이드바 행은 경로·이름을 잃지 않고 표시한다. */
+@Composable
+private fun SidebarSubmoduleRow(path: String) {
+    UndineListRow(onClick = {}) {
+        androidx.compose.foundation.text.BasicText(
+            text = path,
+            style = UndineTokens.typography.body.copy(color = UndineTokens.color.foregroundPrimary),
+        )
+    }
+}
+
+/** worktree의 브랜치·상세 동작은 전용 패널이 맡고, 사이드바에는 식별 정보만 둔다. */
+@Composable
+private fun SidebarWorktreeRow(name: String, path: String) {
+    UndineListRow(onClick = {}) {
+        androidx.compose.foundation.layout.Column {
+            androidx.compose.foundation.text.BasicText(
+                text = name,
+                style = UndineTokens.typography.body.copy(color = UndineTokens.color.foregroundPrimary),
+            )
+            androidx.compose.foundation.text.BasicText(
+                text = path,
+                style = UndineTokens.typography.caption.copy(color = UndineTokens.color.foregroundSecondary),
+            )
         }
     }
 }
