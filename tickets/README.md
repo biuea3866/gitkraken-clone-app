@@ -1,6 +1,6 @@
 # tickets — 작업 단위 SSOT
 
-Undine 구현을 **53개 티켓 / 10개 wave** 로 분해한 결과다.
+Undine 구현을 **58개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2건·하네스 2건 별도).
 **착수 전 자기 티켓의 소유 패키지를 확인한다** — 같은 wave 의 다른 티켓과 파일이 겹치면
 머지 충돌이 난다 (`.agent/docs/conventions.md` Rule 3).
 
@@ -62,9 +62,9 @@ Undine 구현을 **53개 티켓 / 10개 wave** 로 분해한 결과다.
 | [UND-28](UND-28-cherry-pick.md) | Cherry-pick 실행 | M | 7 | UND-21 | `domain/cherrypick/` · `application/cherrypick/` · `infrastructure/git/cherrypick/` |
 | [UND-29](UND-29-blame-file-history.md) | Blame · 파일 이력 조회 | M | 7 | UND-01 · UND-05 | `domain/blame/` · `infrastructure/git/blame/` |
 | [UND-30](UND-30-reflog-recovery.md) | Reflog 조회 · 복구 | M | 7 | UND-01 | `domain/reflog/` · `infrastructure/git/reflog/` |
-| [UND-31](UND-31-patch-create-apply.md) | Patch 생성 · 적용 | M | 7 | UND-05 | `domain/patch/` · `infrastructure/git/patch/` |
+| [UND-60](UND-60-patch-apply-transaction.md) | Patch 생성 · 적용 (트리 트랜잭션 복원) | M | 7 | UND-05 | `domain/patch/` · `infrastructure/git/patch/` |
+| [UND-61](UND-61-git-lfs.md) | Git LFS 연동 (출처를 사실로 판정) | M | 7 | UND-08 | `domain/lfs/` · `infrastructure/git/lfs/` |
 | [UND-32](UND-32-submodule-management.md) | Submodule 관리 | M | 7 | UND-02 · UND-59 | `domain/submodule/` · `infrastructure/git/submodule/` |
-| [UND-33](UND-33-git-lfs.md) | Git LFS 연동 | M | 7 | UND-08 | `domain/lfs/` · `infrastructure/git/lfs/` |
 | [UND-34](UND-34-worktree-management.md) | Worktree 관리 | M | 7 | UND-02 · UND-59 | `domain/worktree/` · `infrastructure/git/worktree/` |
 | [UND-35](UND-35-bisect-session.md) | Bisect 세션 | M | 7 | UND-03 · UND-59 | `domain/bisect/` · `application/bisect/` · `infrastructure/git/bisect/` |
 | [UND-36](UND-36-commit-signing.md) | 커밋 서명 (GPG / SSH) | M | 7 | UND-06 | `domain/signing/` · `infrastructure/git/signing/` |
@@ -78,12 +78,10 @@ Undine 구현을 **53개 티켓 / 10개 wave** 로 분해한 결과다.
 | [UND-44](UND-44-multi-repo-tabs.md) | 다중 저장소 탭 | L | 8 | UND-02 · UND-12 | `presentation/tabs/` · `presentation/shell/` · `application/session/` · `infrastructure/git/repository/` (다중 세션 확장) |
 | [UND-45](UND-45-submodule-worktree-panel.md) | Submodule · Worktree 패널 | M | 8 | UND-10 · UND-32 · UND-34 | `presentation/submodule/` |
 | [UND-46](UND-46-reflog-bisect-screen.md) | Reflog · Bisect 화면 | M | 8 | UND-10 · UND-30 · UND-35 | `presentation/recovery/` |
-| [UND-47](UND-47-patch-screen.md) | Patch 화면 | M | 8 | UND-10 · UND-31 | `presentation/patch/` |
+| [UND-47](UND-47-patch-screen.md) | Patch 화면 | M | 8 | UND-10 · UND-60 | `presentation/patch/` |
 | [UND-48](UND-48-auto-update.md) | 자동 업데이트 | M | 8 | UND-25 | `domain/update/` · `application/update/` · `infrastructure/update/` · `build.gradle.kts` |
 | [UND-50](UND-50-accessibility-audit.md) | 접근성 감사 · 보강 | M | 10 | UND-40 · UND-41 · UND-42 · UND-43 · UND-44 · UND-45 · UND-46 · UND-47 · UND-51 | `presentation/**` (감사 결과 보강) |
 | [UND-51](UND-51-wiring-phase2.md) | 2차 통합 와이어업 | M | 9 | UND-22 · UND-26 · UND-38 · UND-40 · UND-41 · UND-42 · UND-43 · UND-44 · UND-45 · UND-46 · UND-47 · UND-48 | `presentation/App.kt` · `di/` · `presentation/palette/` (등록) |
-| [UND-60](UND-60-patch-apply-transaction.md) | 패치 적용 트랜잭션 (실패 복원 재설계) | M | 8 | UND-31 | `infrastructure/git/patch/` (스냅샷·복원 경로) |
-| [UND-61](UND-61-gitattributes-round-trip.md) | `.gitattributes` 왕복 편집 · LFS CLI 경계 | S | 8 | UND-33 | `infrastructure/git/lfs/AttributesFile.kt` · `GitAttributesRules.kt` · `ProcessLfsCommandRunner.kt` |
 | [UND-62](UND-62-submodule-remove-safety.md) | 서브모듈 제거 안전성 (파괴적 정리 재설계) | M | 8 | UND-32 | `domain/submodule/SubmoduleGateway.kt` · `infrastructure/git/submodule/` (제거 경로) |
 | [UND-52](UND-52-e2e-scenario-phase2.md) | 2차 E2E 시나리오 테스트 | M | 10 | UND-51 | `app/src/test/kotlin/.../scenario2/` |
 | [UND-54](UND-54-merge-start-state-guard.md) | merge/rebase 시작 경로 상태 가드 완결 | S | 4 | UND-21 | `infrastructure/git/merge/` (가드 추가) |
@@ -96,6 +94,19 @@ Undine 구현을 **53개 티켓 / 10개 wave** 로 분해한 결과다.
 > **모든 UI 티켓이 처음부터 문자열 리소스를 쓰게** 했다.
 
 사이즈 기준: S ≈ 200줄 · M ≈ 400줄 · L ≈ 800줄 (구현 코드 기준, 테스트 제외).
+
+## 폐기된 티켓
+
+구현이 데이터 유실 p0 로 수렴하지 않아 **머지하지 않고** 대체 티켓으로 다시 세운 것들이다.
+문서는 판단 근거로 남기고 **착수 대상에서 제외**한다 — 위 위상정렬·파일 교집합 표에 넣지 않는다.
+
+| ID | 제목 | 대체 | 폐기 사유 |
+|---|---|---|---|
+| [UND-31](UND-31-patch-create-apply.md) | Patch 생성 · 적용 | [UND-60](UND-60-patch-apply-transaction.md) | 워킹트리 스냅샷 복원이 파일시스템 토폴로지를 열거로 감당 못 함 — 6라운드 p0 4건 |
+| [UND-33](UND-33-git-lfs.md) | Git LFS 연동 | [UND-61](UND-61-git-lfs.md) | 파일 출처를 인스턴스 필드에 기억 — 저장소 전환에서 사용자 파일 삭제, 6라운드 미수렴 |
+
+대체 티켓은 기능 범위를 그대로 이어받되 실패한 설계 축만 바꿨다. 미머지 작업물은 각 워크트리에
+남아 있으나 **기반이 아니라 참고 자료**다 — 위 유실 경로가 그 안에 그대로 있다.
 
 ## 티켓 목록 — 하네스 (앱 wave DAG 밖)
 
@@ -130,13 +141,13 @@ flowchart LR
         W1["wave 1<br/>스캐폴딩·계약<br/>(1)"]
         W2["wave 2<br/>Gateway·디자인·i18n<br/>(11)"]
         W3["wave 3<br/>UI·병합엔진·검색<br/>(11)"]
-        W4["wave 4<br/>충돌·리베이스UI·패키징<br/>(4)"]
-        W5["wave 5<br/>통합 와이어업<br/>(1)"]
+        W4["wave 4<br/>충돌·리베이스UI·패키징<br/>(5)"]
+        W5["wave 5<br/>통합 와이어업<br/>(3)"]
         W6["wave 6<br/>E2E<br/>(1)"]
     end
     subgraph P2["2차 — 완성도"]
-        W7["wave 7<br/>Gateway 확장<br/>(12)"]
-        W8["wave 8<br/>화면·업데이트<br/>(9)"]
+        W7["wave 7<br/>Gateway 확장<br/>(13)"]
+        W8["wave 8<br/>화면·업데이트<br/>(10)"]
         W9["wave 9<br/>2차 와이어업<br/>(1)"]
         W10["wave 10<br/>접근성·2차 E2E<br/>(2)"]
     end
@@ -160,19 +171,22 @@ flowchart LR
 | 1 | UND-01 | 1 |
 | 2 | UND-02, UND-03, UND-04, UND-05, UND-06, UND-07, UND-08, UND-09, UND-10, UND-11, UND-49 | 11 |
 | 3 | UND-12, UND-13, UND-14, UND-15, UND-16, UND-18, UND-19, UND-20, UND-21, UND-22, UND-53 | 11 |
-| 4 | UND-17, UND-23, UND-24, UND-25 | 4 |
-| 5 | UND-26 | 1 |
+| 4 | UND-17, UND-23, UND-24, UND-25, UND-54 | 5 |
+| 5 | UND-26, UND-56, UND-57 | 3 |
 | 6 | UND-27 | 1 |
-| 7a | UND-28, UND-29, UND-30, UND-31, UND-33, UND-36, UND-38, UND-59 | 8 |
+| 7a | UND-28, UND-29, UND-30, UND-36, UND-38, UND-59, UND-60, UND-61 | 8 |
 | 7b | UND-32, UND-34, UND-35, UND-37, UND-39 | 5 |
-| 8 | UND-40, UND-41, UND-42, UND-43, UND-44, UND-45, UND-46, UND-47, UND-48, UND-60, UND-61, UND-62 | 12 |
+| 8 | UND-40, UND-41, UND-42, UND-43, UND-44, UND-45, UND-46, UND-47, UND-48, UND-62 | 10 |
 | 9 | UND-51 | 1 |
 | 10 | UND-50, UND-52 | 2 |
 
-- **너비 분포**: [1, 11, 11, 4, 1, 1, 8, 5, 12, 1, 2]
-- **평균 wave 너비**: 5.18
+- **너비 분포**: [1, 11, 11, 5, 3, 1, 8, 5, 10, 1, 2]
+- **평균 wave 너비**: 5.27
 - **판정: 통과** — 모든 wave 너비가 1~2 인 직선형 DAG 가 아니다.
-  wave 2·3·7a·8 에서 각각 11·11·8·12 개가 동시에 열린다.
+  wave 2·3·7a·8 에서 각각 11·11·8·10 개가 동시에 열린다.
+> UND-54·UND-56·UND-57 은 이 표에서 누락돼 있었다 — 티켓 헤더의 wave 값으로 채웠다.
+> **UND-56·UND-57 은 헤더가 wave 5 지만 의존(UND-26)이 wave 5 다** — 실제로는 UND-26 뒤에 선다.
+> 헤더가 정본이므로 값은 그대로 두고 사실만 남긴다.
 
 꼬리 wave 의 너비 1~2 는 **의도**다. 와이어업과 E2E 는 앞선 결과 전체를 전제로 하는
 단일 책임이라 쪼개면 오히려 충돌을 만든다.
