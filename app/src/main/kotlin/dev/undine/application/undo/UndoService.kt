@@ -35,6 +35,25 @@ class UndoService(
     }
 
     /**
+     * 실행하지 않고 최상단 항목의 되돌리기 가능 여부만 판단한다. **스택을 바꾸지 않는다.**
+     *
+     * 화면이 버튼을 누르기 전에 대상과 불가 사유를 말할 수 있어야 하므로 [undo] 와 같은 판단
+     * ([plan])을 쓰되 [UndoStack.peek] 로만 읽는다 — 미리 보기가 항목을 소비하면 사용자는
+     * 누르지도 않은 기록을 잃는다.
+     *
+     * 여기서 통과했다고 [undo] 가 반드시 성공하는 것은 아니다. 검사와 실행 사이의 **외부** 변경은
+     * 방어 대상이 아니며(wave 8 결정 A-M1), 그 경우에도 [undo] 가 실행 직전 같은 판단을 다시 한다.
+     */
+    suspend fun preview(): UndoTarget {
+        val entry = undoStack.peek() ?: return UndoTarget.None
+
+        return when (val plan = plan(entry)) {
+            is UndoPlan.Refuse -> UndoTarget.Blocked(entry, plan.outcome)
+            is UndoPlan.Execute -> UndoTarget.Undoable(entry)
+        }
+    }
+
+    /**
      * 판단에 **필요한 만큼만** 저장소를 조회한다.
      *
      * 복구 불가 항목은 조회조차 하지 않는다 — Git 을 전혀 건드리지 않고 사유만 돌려주기 위해서다.

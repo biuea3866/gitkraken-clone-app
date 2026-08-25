@@ -7,6 +7,7 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import java.time.Instant
 
 private val MAIN = RefName("main")
 
@@ -16,6 +17,8 @@ private fun entry(headSeed: Int) = OperationEntry(
     operation = GitOperationKind.COMMIT,
     strategy = UndoStrategy.SoftResetTo(commitId(headSeed - 1)),
     baseline = baseline(headSeed),
+    targetLabel = "커밋 $headSeed",
+    recordedAt = Instant.ofEpochSecond(headSeed.toLong()),
 )
 
 /**
