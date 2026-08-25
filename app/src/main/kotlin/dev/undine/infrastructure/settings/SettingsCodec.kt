@@ -6,7 +6,7 @@ import dev.undine.domain.ThemeMode
 import dev.undine.domain.WindowBounds
 
 /** 이 앱이 쓰는 설정 스키마 버전. 필드를 추가·변경하면 올린다. */
-internal const val CURRENT_SCHEMA_VERSION = 1
+internal const val CURRENT_SCHEMA_VERSION = 2
 
 /** 최근 저장소 보관 상한. 초과분은 `save` 시점에 목록 뒤(= 오래된 쪽)에서 잘린다. */
 internal const val MAX_RECENT_REPOSITORIES = 20
@@ -21,6 +21,8 @@ private const val KEY_WINDOW = "window"
 private const val KEY_WIDTH = "width"
 private const val KEY_HEIGHT = "height"
 private const val KEY_MAXIMIZED = "maximized"
+private const val KEY_IDENTITY_PROFILES = "identityProfiles"
+private const val KEY_EXTERNAL_TOOLS = "externalTools"
 
 /** 파일이 없거나 읽을 수 없을 때 시작하는 설정. */
 internal val DEFAULT_SETTINGS = Settings(
@@ -41,7 +43,12 @@ internal val DEFAULT_SETTINGS = Settings(
  */
 internal sealed interface SettingsDecodeResult {
 
-    data class Decoded(val settings: Settings) : SettingsDecodeResult
+    /**
+     * @property fromOlderSchema 파일이 [CURRENT_SCHEMA_VERSION] 보다 **낮은** 스키마로 적혔다.
+     * 그 파일은 이후 버전이 더한 필드를 애초에 표현할 수 없으므로, 그 필드가 비어 있는 것은
+     * "사용자가 비웠다" 가 아니라 "적을 수 없었다" 다 — 롤백 복구가 이 구분에 기댄다.
+     */
+    data class Decoded(val settings: Settings, val fromOlderSchema: Boolean) : SettingsDecodeResult
 
     /** 파일의 스키마 버전이 앱보다 높다. 구버전 앱이 신버전 설정을 망가뜨리지 않게 파일을 건드리지 않는다. */
     data object FromNewerSchema : SettingsDecodeResult
@@ -50,8 +57,8 @@ internal sealed interface SettingsDecodeResult {
 }
 
 internal fun encodeSettings(settings: Settings): String {
-    val paths = settings.recentRepositories
-        .joinToString(", ") { "\"${escapeJsonString(it.value)}\"" }
+    val paths = settings.recentRepositories.joinToString(", ") { jsonString(it.value) }
+    val profiles = settings.identityProfiles.joinToString(", ", transform = ::encodeIdentityProfile)
     return """
         {
           "$KEY_SCHEMA_VERSION": $CURRENT_SCHEMA_VERSION,
@@ -61,6 +68,11 @@ internal fun encodeSettings(settings: Settings): String {
             "$KEY_WIDTH": ${settings.window.width},
             "$KEY_HEIGHT": ${settings.window.height},
             "$KEY_MAXIMIZED": ${settings.window.maximized}
+          },
+          "$KEY_IDENTITY_PROFILES": [$profiles],
+          "$KEY_EXTERNAL_TOOLS": {
+            "$KEY_DIFF_TOOL": ${encodeExternalTool(settings.externalTools.diffTool)},
+            "$KEY_MERGE_TOOL": ${encodeExternalTool(settings.externalTools.mergeTool)}
           }
         }
     """.trimIndent() + "\n"
@@ -87,13 +99,8 @@ private fun decodeFields(document: Any?): SettingsDecodeResult {
     return when {
         // 키 자체가 없어야 스키마 버전을 적기 전의 최초 형식이다 — 우리가 읽을 수 있다.
         // 값이 명시적 null 인 것은 "버전을 적었는데 우리가 모르는 형태" 라 아래 분기로 내려간다.
-        !fields.containsKey(KEY_SCHEMA_VERSION) -> SettingsDecodeResult.Decoded(
-            Settings(
-                recentRepositories = readRecentRepositories(fields[KEY_RECENT_REPOSITORIES]),
-                theme = readTheme(fields[KEY_THEME]),
-                window = readWindow(fields[KEY_WINDOW]),
-            ),
-        )
+        !fields.containsKey(KEY_SCHEMA_VERSION) ->
+            SettingsDecodeResult.Decoded(readSettings(fields), fromOlderSchema = true)
 
         // 버전이 있는데 해석할 수 없으면(Long 범위 밖의 수·문자열 등) **우리 것이 아니다.**
         // "모르니 기본값" 으로 처리하면 그 파일을 그대로 덮어써 되돌릴 수 없다.
@@ -103,14 +110,23 @@ private fun decodeFields(document: Any?): SettingsDecodeResult {
         schemaVersion > CURRENT_SCHEMA_VERSION.toLong() -> SettingsDecodeResult.FromNewerSchema
 
         else -> SettingsDecodeResult.Decoded(
-            Settings(
-                recentRepositories = readRecentRepositories(fields[KEY_RECENT_REPOSITORIES]),
-                theme = readTheme(fields[KEY_THEME]),
-                window = readWindow(fields[KEY_WINDOW]),
-            ),
+            settings = readSettings(fields),
+            fromOlderSchema = schemaVersion < CURRENT_SCHEMA_VERSION.toLong(),
         )
     }
 }
+
+/**
+ * 알려진 키만 읽는다. 새 키([KEY_IDENTITY_PROFILES]·[KEY_EXTERNAL_TOOLS])가 없는 구버전 파일은
+ * 그 필드만 기본값이 되고 나머지 값은 그대로 보존된다.
+ */
+private fun readSettings(fields: Map<*, *>): Settings = Settings(
+    recentRepositories = readRecentRepositories(fields[KEY_RECENT_REPOSITORIES]),
+    theme = readTheme(fields[KEY_THEME]),
+    window = readWindow(fields[KEY_WINDOW]),
+    identityProfiles = readIdentityProfiles(fields[KEY_IDENTITY_PROFILES]),
+    externalTools = readExternalTools(fields[KEY_EXTERNAL_TOOLS]),
+)
 
 /**
  * 목록의 앞이 최신이라는 규약만 지킨다 — 정렬은 호출부 몫이고, 중복 제거와 상한 절단은 여기서 한다.
@@ -147,18 +163,3 @@ private fun Map<*, *>.readInt(key: String): Int? = readLong(key)?.let { value ->
 
 private fun Map<*, *>.readLong(key: String): Long? = this[key] as? Long
 
-/** JSON 문자열 리터럴로 쓸 수 있게 따옴표·역슬래시·제어문자를 이스케이프한다. */
-private fun escapeJsonString(raw: String): String = buildString {
-    raw.forEach { character ->
-        when (character) {
-            '"' -> append("\\\"")
-            '\\' -> append("\\\\")
-            '\b' -> append("\\b")
-            FORM_FEED -> append("\\f")
-            '\n' -> append("\\n")
-            '\r' -> append("\\r")
-            '\t' -> append("\\t")
-            else -> append(character)
-        }
-    }
-}
