@@ -99,8 +99,10 @@ class BlameGatewayImplSpec : FunSpec({
         val history = gateway.fileHistory(RENAMED, at = null, limit = 10)
 
         // rename 이후 커밋 + rename 커밋 + 그 이전 커밋까지 이어진다.
-        history.map { it.message.trim() } shouldContainExactly
+        history.map { it.commit.message.trim() } shouldContainExactly
             listOf("이름 바꾼 뒤 고친다", "이름을 바꾼다", "처음 만든다")
+        history.map { it.path } shouldContainExactly listOf(RENAMED, RENAMED, CODE)
+        history[1].previousPath shouldBe CODE
     }
 
     test("삭제된 파일도 그 파일이 있던 커밋 기준으로 이력을 조회한다") {
@@ -110,7 +112,7 @@ class BlameGatewayImplSpec : FunSpec({
 
         val history = gateway.fileHistory(CODE, at = beforeDelete, limit = 10)
 
-        history.map { it.message.trim() } shouldContainExactly listOf("지우기 전 마지막", "처음 만든다")
+        history.map { it.commit.message.trim() } shouldContainExactly listOf("지우기 전 마지막", "처음 만든다")
     }
 
     test("삭제된 파일을 HEAD 기준으로 조회하면 경로를 찾을 수 없다") {

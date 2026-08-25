@@ -139,9 +139,10 @@ class StringCatalogSpec : FunSpec({
         displayed shouldBe "OK"
     }
 
-    test("wave 8 화면 7개의 빈 네임스페이스 스텁이 등록돼도 병합이 성공한다") {
-        // 빈 맵 7개가 목록에 들어 있고, 그 빈 맵들은 병합에서 아무 키도 더하지 않는다.
-        builtInTranslations.count { it.isEmpty() } shouldBe WAVE8_STUB_NAMESPACES.size
+    test("구현 전인 wave 8 화면의 빈 네임스페이스 스텁이 등록돼도 병합이 성공한다") {
+        // blame 화면은 UND-41에서 번역을 채웠고, 나머지 6개 스텁만 병합에서 아무 키도 더하지 않는다.
+        builtInTranslations.count { it.isEmpty() } shouldBe
+            WAVE8_STUB_NAMESPACES.count { namespace -> namespace != BLAME_NAMESPACE }
 
         val merged = mergeTranslations(builtInTranslations)
         val withoutStubs = mergeTranslations(builtInTranslations.filter { it.isNotEmpty() })

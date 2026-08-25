@@ -20,6 +20,18 @@ data class BlameLine(
 )
 
 /**
+ * 파일 이력 한 건. 같은 파일이라도 rename 전후에는 커밋이 가리키는 경로가 다르므로 경로를 커밋과
+ * 분리해 보관한다. 화면은 [previousPath] 로 이름 변경 지점을 명시적으로 표시한다.
+ */
+data class FileHistoryEntry(
+    val commit: Commit,
+    val path: String,
+    val previousPath: String? = null,
+) {
+    val isRename: Boolean get() = previousPath != null
+}
+
+/**
  * blame 결과.
  *
  * **이진 파일과 빈 파일은 실패가 아니다.** 예외로 올리면 화면이 "왜 안 되는지" 를 안내할 수 없다 —
@@ -101,5 +113,5 @@ interface BlameGateway {
      * @param at 기준 커밋. null 이면 현재 HEAD 다. 삭제된 파일도 그 파일이 있던 커밋을 주면 조회된다.
      * @throws UndineException.NotFound 그 커밋에서 그 경로의 이력을 찾을 수 없을 때
      */
-    suspend fun fileHistory(path: String, at: CommitId? = null, limit: Int): List<Commit>
+    suspend fun fileHistory(path: String, at: CommitId? = null, limit: Int): List<FileHistoryEntry>
 }

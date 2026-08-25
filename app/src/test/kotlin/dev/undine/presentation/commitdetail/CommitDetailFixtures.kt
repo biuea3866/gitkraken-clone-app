@@ -6,6 +6,7 @@ import dev.undine.domain.Commit
 import dev.undine.domain.CommitId
 import dev.undine.domain.DiffGateway
 import dev.undine.domain.DiffResult
+import dev.undine.domain.FileComparison
 import dev.undine.domain.FileChange
 import dev.undine.domain.Person
 import dev.undine.domain.UndineException
@@ -95,6 +96,9 @@ internal class FakeDiffGateway(
 
     override suspend fun hunksOf(commit: CommitId, path: String, parentIndex: Int): DiffResult =
         error("상세 패널은 hunk 를 요청하지 않는다")
+
+    override suspend fun hunksBetween(comparison: FileComparison): DiffResult =
+        error("상세 패널은 두 이력 시점 diff 를 요청하지 않는다")
 }
 
 internal fun useCaseOf(gateway: DiffGateway): LoadChangedFilesUseCase = LoadChangedFilesUseCase(gateway)
