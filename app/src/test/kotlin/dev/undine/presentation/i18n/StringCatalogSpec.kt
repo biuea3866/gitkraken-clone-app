@@ -9,6 +9,17 @@ import java.util.Locale
 /** 어느 네임스페이스도 정의하지 않는 키. 화면 키를 쓰면 그 화면이 배선될 때 테스트가 깨진다. */
 private val UNREGISTERED_KEY = StringKey("absent.namespace.absentKey")
 
+/** UND-63 이 자리만 잡아 둔 wave 8 화면 7개의 네임스페이스. 키·번역은 각 화면 티켓이 채운다. */
+private val WAVE8_STUB_NAMESPACES = listOf(
+    PREFERENCES_NAMESPACE,
+    BLAME_NAMESPACE,
+    GRAPH_DRAG_DROP_NAMESPACE,
+    UNDO_NAMESPACE,
+    TABS_NAMESPACE,
+    SUBMODULE_WORKTREE_NAMESPACE,
+    RECOVERY_NAMESPACE,
+)
+
 /**
  * 문자열 조회·로케일 결정·누락 키 폴백. 로케일 전환은 시스템 로케일만 다룬다 —
  * 사용자 설정 로케일은 이 티켓 범위 밖이다.
@@ -126,6 +137,55 @@ class StringCatalogSpec : FunSpec({
         }
 
         displayed shouldBe "OK"
+    }
+
+    test("wave 8 화면 7개의 빈 네임스페이스 스텁이 등록돼도 병합이 성공한다") {
+        // 빈 맵 7개가 목록에 들어 있고, 그 빈 맵들은 병합에서 아무 키도 더하지 않는다.
+        builtInTranslations.count { it.isEmpty() } shouldBe WAVE8_STUB_NAMESPACES.size
+
+        val merged = mergeTranslations(builtInTranslations)
+        val withoutStubs = mergeTranslations(builtInTranslations.filter { it.isNotEmpty() })
+
+        merged shouldBe withoutStubs
+        builtInStringCatalog().supportedLocales shouldContainAll setOf(Locale.KOREAN, Locale.ENGLISH)
+    }
+
+    test("빈 스텁을 등록해도 기존 키 조회는 그대로다") {
+        val english = builtInStringCatalog().stringsFor(Locale.ENGLISH, devBuild = false)
+        val korean = builtInStringCatalog().stringsFor(Locale.KOREAN, devBuild = false)
+
+        english.common.ok shouldBe "OK"
+        english.common.retry shouldBe "Retry"
+        korean.common.ok shouldBe "확인"
+        korean.common.retry shouldBe "다시 시도"
+    }
+
+    test("빈 스텁 네임스페이스의 키는 아직 어느 로케일에도 없어 키 이름으로 폴백한다") {
+        val strings = catalog.stringsFor(Locale.ENGLISH, devBuild = false)
+
+        WAVE8_STUB_NAMESPACES.forEach { namespace ->
+            val key = StringKey("$namespace.absentKey")
+
+            strings.text(key) shouldBe key.id
+        }
+    }
+
+    test("스텁 네임스페이스는 서로 겹치지 않는다 — 화면끼리 키가 충돌하지 않는다") {
+        WAVE8_STUB_NAMESPACES.distinct().size shouldBe WAVE8_STUB_NAMESPACES.size
+    }
+
+    test("wave 8 스텁은 CommonStrings 와 같은 키·접근자 계약을 제공한다") {
+        val strings = catalog.stringsFor(Locale.KOREAN, devBuild = false)
+
+        listOf(
+            PreferencesKeys to strings.preferences,
+            BlameKeys to strings.blame,
+            GraphDragDropKeys to strings.graphDragDrop,
+            UndoKeys to strings.undo,
+            TabsKeys to strings.tabs,
+            SubmoduleWorktreeKeys to strings.submoduleWorktree,
+            RecoveryKeys to strings.recovery,
+        ).size shouldBe WAVE8_STUB_NAMESPACES.size
     }
 
     test("기본 로케일 번역이 없는 카탈로그는 만들 수 없다") {

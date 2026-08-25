@@ -24,4 +24,28 @@ enum class GitOperationKind(val label: String) {
 
     /** 지운 stash 는 되살릴 수 없다. */
     STASH_DROP("stash 삭제"),
+
+    /*
+     * 아래는 UND-63 이 wave 8 소비자(UND-42 그래프 조작 · UND-45 서브모듈·worktree 패널 ·
+     * UND-46 복구 화면)를 위해 한 번에 넓힌 자리다. 되돌릴 수 있는지는 여기서 가르지 않는다 —
+     * 같은 종류도 상황에 따라 갈리므로 판단은 UndoStrategy 가 한다. 되돌릴 수 없는 연산도
+     * 종류로는 기록한다: 되돌릴 수 없다는 사실을 사용자에게 말하려면 이름이 있어야 한다.
+     */
+
+    /** 그래프에서 브랜치를 끌어다 놓아 가리키는 커밋을 바꾼다. */
+    BRANCH_MOVE("브랜치 이동"),
+
+    /** 그래프에서 태그를 끌어다 놓아 가리키는 커밋을 바꾼다. */
+    TAG_MOVE("태그 이동"),
+
+    SUBMODULE_INIT("서브모듈 초기화"),
+    SUBMODULE_UPDATE("서브모듈 업데이트"),
+    WORKTREE_ADD("worktree 추가"),
+    WORKTREE_REMOVE("worktree 제거"),
+
+    /** reflog 에서 찾은 지점으로 되돌려 잃어버린 커밋을 되살린다. */
+    REFLOG_RESTORE("reflog 복구"),
+
+    /** bisect 세션의 시작·판정·종료. 세션 단위로 한 항목이다. */
+    BISECT_SESSION("bisect 세션"),
 }
