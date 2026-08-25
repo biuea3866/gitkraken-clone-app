@@ -1,6 +1,6 @@
 # [UND-45] Submodule · Worktree 패널
 
-> wave 8 · 사이즈 M · 의존 UND-10, UND-32, UND-34 · 소유 `presentation/submodule/`
+> wave 8 · 사이즈 M · 의존 UND-10, UND-32, UND-34, UND-63 · 소유 `presentation/submodule/` · `application/submodule/` · `application/worktree/`
 
 ## 작업 내용 (설계 의도)
 서브모듈과 worktree 를 사이드바 하위 섹션과 전용 패널에서 관리한다.

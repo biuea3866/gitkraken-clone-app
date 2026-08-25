@@ -1,6 +1,6 @@
 # [UND-41] Blame 뷰 · 파일 이력 화면
 
-> wave 8 · 사이즈 M · 의존 UND-10, UND-29 · 소유 `presentation/blame/`
+> wave 8 · 사이즈 M · 의존 UND-10, UND-29, UND-63 · 소유 `presentation/blame/` · `application/blame/`(확장)
 
 ## 작업 내용 (설계 의도)
 파일을 열어 **라인별 작성자**를 보고, 그 파일의 **변경 이력**을 따라간다.

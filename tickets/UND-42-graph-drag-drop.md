@@ -1,6 +1,6 @@
 # [UND-42] 그래프 드래그&드롭 조작
 
-> wave 8 · 사이즈 L · 의존 UND-14, UND-21, UND-28, UND-38 · 소유 `presentation/graph/` (dnd 확장)
+> wave 8 · 사이즈 L · 의존 UND-14, UND-21, UND-28, UND-38, UND-63 · 소유 `presentation/graph/` (dnd 확장)
 
 ## 작업 내용 (설계 의도)
 **GitKraken 의 시그니처 기능**이다. 그래프에서 브랜치를 다른 브랜치 위로 끌어다 놓아 병합·리베이스하고,

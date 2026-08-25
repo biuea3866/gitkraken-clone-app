@@ -1,6 +1,6 @@
 # [UND-47] Patch 화면
 
-> wave 8 · 사이즈 M · 의존 UND-10, UND-60 · 소유 `presentation/patch/`
+> wave 8 · 사이즈 M · 의존 UND-10, UND-60, UND-63 · 소유 `presentation/patch/`
 
 ## 작업 내용 (설계 의도)
 패치를 만들고 적용하는 화면이다.

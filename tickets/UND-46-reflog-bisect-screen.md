@@ -1,6 +1,6 @@
 # [UND-46] Reflog · Bisect 화면
 
-> wave 8 · 사이즈 M · 의존 UND-10, UND-30, UND-35 · 소유 `presentation/recovery/`
+> wave 8 · 사이즈 M · 의존 UND-10, UND-30, UND-35, UND-63 · 소유 `presentation/recovery/` · `application/reflog/`
 
 ## 작업 내용 (설계 의도)
 "잃어버린 커밋 찾기" 와 "버그 커밋 찾기" 두 복구 도구의 화면이다.
