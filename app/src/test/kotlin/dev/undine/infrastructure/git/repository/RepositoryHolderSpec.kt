@@ -10,6 +10,9 @@ import org.eclipse.jgit.lib.Constants
 import org.eclipse.jgit.lib.Repository
 import java.io.File
 import java.nio.file.Files
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * 닫힘을 관측하기 위한 **실제** `FileRepository` 다 — Mock 이 아니다.
@@ -110,5 +113,42 @@ class RepositoryHolderSpec : FunSpec({
 
     test("열지 않은 상태의 close 는 아무 일도 하지 않는다") {
         countingHolder().close()
+    }
+
+    test("여러 세션을 열고 LRU 대상만 회수할 수 있다") {
+        val firstDirectory = committedRepositoryAt(tempdir())
+        val secondDirectory = committedRepositoryAt(tempdir())
+        val holder = countingHolder()
+
+        val first = holder.openSession(RepositoryPath(firstDirectory.path))
+        val second = holder.openSession(RepositoryPath(secondDirectory.path))
+        holder.release(RepositoryPath(firstDirectory.path))
+
+        first.closeCount() shouldBe 1
+        second.closeCount() shouldBe 0
+        holder.current() shouldBe second
+        holder.close()
+    }
+
+    test("동시 열기·회수·해제가 홀더의 한 임계구역에서 안전하게 끝난다") {
+        val firstDirectory = committedRepositoryAt(tempdir())
+        val secondDirectory = committedRepositoryAt(tempdir())
+        val firstPath = RepositoryPath(firstDirectory.path)
+        val secondPath = RepositoryPath(secondDirectory.path)
+        val holder = countingHolder()
+
+        coroutineScope {
+            repeat(20) { index ->
+                launch(Dispatchers.Default) {
+                    val path = if (index % 2 == 0) firstPath else secondPath
+                    holder.openSession(path)
+                    holder.release(path)
+                    holder.open(path)
+                }
+            }
+        }
+
+        holder.current() shouldNotBe null
+        holder.close()
     }
 })

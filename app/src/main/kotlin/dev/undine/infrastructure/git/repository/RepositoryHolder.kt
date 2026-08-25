@@ -15,7 +15,7 @@ import java.nio.file.Path
  *
  * **이 클래스가 핸들의 유일한 소유자다.** 다른 Gateway 구현은 [current] 로 얻은 핸들을 받아 쓰기만 하고
  * 닫지 않는다 — 조회마다 새로 열면 JGit 객체 캐시가 매번 무효화돼 대형 저장소의 이력 로딩이 느려진다.
- * 이전 핸들은 **저장소를 전환할 때와 [close] 할 때만** 닫힌다.
+ * 이전 활성 핸들은 저장소를 전환할 때, 명시적으로 [release]할 때, [close]할 때 닫힌다.
  *
  * 세션 키는 **정규화하고 심볼릭 링크를 해소한 절대 경로**다 (`toRealPath()`). 같은 저장소를 다른 경로
  * 표기로 두 번 여는 것을 막는다. 키로 조회하는 형태를 유지하면 다중 저장소 탭(UND-44)이 이 계약을
@@ -30,8 +30,8 @@ class RepositoryHolder internal constructor(
     /** 프로덕션 생성자. 실제 JGit `FileRepository` 를 연다. */
     constructor() : this(::openFileRepository)
 
-    private var sessionKey: Path? = null
-    private var repository: Repository? = null
+    private val sessions = LinkedHashMap<Path, Repository>()
+    private var activeSessionKey: Path? = null
 
     /**
      * [path] 의 저장소 핸들을 돌려준다. 이미 같은 세션 키로 열려 있으면 **그 핸들을 그대로** 준다.
@@ -44,26 +44,52 @@ class RepositoryHolder internal constructor(
     @Synchronized
     fun open(path: RepositoryPath): Repository {
         val requestedKey = sessionKeyOf(path.value)
-        val opened = repository
-        if (opened != null && requestedKey == sessionKey) return opened
+        if (requestedKey == activeSessionKey) return requireNotNull(sessions[requestedKey])
 
-        val next = openWorkTreeRepository(path.value, requestedKey)
-        opened?.close()
-        sessionKey = requestedKey
-        repository = next
+        val next = sessions[requestedKey] ?: openWorkTreeRepository(path.value, requestedKey).also {
+            sessions[requestedKey] = it
+        }
+        activeSessionKey?.takeIf { it != requestedKey }?.let(::releaseByKey)
+        activeSessionKey = requestedKey
         return next
+    }
+
+    /**
+     * 다중 세션 캐시에 핸들을 연다. 활성 전환과 LRU 회수는 이 Holder의 같은 임계구역에서 끝난다.
+     *
+     * 기존 단일 저장소 경로는 [open]을 쓰므로, 비활성 핸들을 즉시 놓는 동작은 그대로 유지된다.
+     */
+    @Synchronized
+    fun openSession(path: RepositoryPath): Repository {
+        val requestedKey = sessionKeyOf(path.value)
+        val repository = sessions[requestedKey] ?: openWorkTreeRepository(path.value, requestedKey).also {
+            sessions[requestedKey] = it
+        }
+        activeSessionKey = requestedKey
+        return repository
     }
 
     /** 현재 열려 있는 핸들. 열기 전이거나 [close] 후에는 null 이다. */
     @Synchronized
-    fun current(): Repository? = repository
+    fun current(): Repository? = activeSessionKey?.let(sessions::get)
+
+    /** 특정 비활성/LRU 세션의 핸들을 닫는다. 현재 세션을 회수하면 활성 세션도 비운다. */
+    @Synchronized
+    fun release(path: RepositoryPath) {
+        releaseByKey(sessionKeyOf(path.value))
+    }
 
     /** 현재 핸들을 닫고 세션을 비운다. 열려 있지 않으면 아무 일도 하지 않는다. */
     @Synchronized
     fun close() {
-        repository?.close()
-        repository = null
-        sessionKey = null
+        sessions.values.toList().forEach(Repository::close)
+        sessions.clear()
+        activeSessionKey = null
+    }
+
+    private fun releaseByKey(key: Path) {
+        sessions.remove(key)?.close()
+        if (activeSessionKey == key) activeSessionKey = sessions.keys.lastOrNull()
     }
 
     private fun openWorkTreeRepository(raw: String, sessionKey: Path): Repository {

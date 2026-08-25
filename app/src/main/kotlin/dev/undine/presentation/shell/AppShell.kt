@@ -48,6 +48,7 @@ fun AppShell(
         Box(modifier = Modifier.fillMaxWidth().testTag(ShellTags.TOOLBAR)) {
             slots.toolbar(selection)
         }
+        slots.tabs()
         BoxWithConstraints(modifier = Modifier.fillMaxWidth().weight(1f)) {
             ShellSplitArea(
                 splitState = splitState,
