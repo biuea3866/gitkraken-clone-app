@@ -310,6 +310,10 @@ private class CountingSettingsGateway(private val settings: Settings) : Settings
     }
 
     override suspend fun save(settings: Settings) = Unit
+
+    override suspend fun update(transform: (Settings) -> Settings) {
+        transform(settings)
+    }
 }
 
 private class RecordingRunner(
