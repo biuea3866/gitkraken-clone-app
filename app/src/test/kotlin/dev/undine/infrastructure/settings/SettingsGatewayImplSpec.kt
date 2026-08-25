@@ -323,7 +323,14 @@ class SettingsGatewayImplSpec : FunSpec({
             "window",
             "identityProfiles",
             "externalTools",
+            "language",
+            "reopenLastRepository",
+            "confirmDestructiveActions",
+            "openTabs",
+            "activeTabIndex",
+            "updateCheck",
         )
+        (root["updateCheck"] as Map<*, *>).keys.toList() shouldBe listOf("enabled", "intervalHours")
         (root["window"] as Map<*, *>).keys.toList() shouldBe listOf("width", "height", "maximized")
         CREDENTIAL_WORDS.forEach { word -> content.lowercase() shouldNotContain word }
     }

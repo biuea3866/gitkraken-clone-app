@@ -72,7 +72,11 @@ class SettingsGatewayImpl(
         val content = readContentOrNull() ?: return DEFAULT_SETTINGS
         return when (val result = decodeSettings(content)) {
             is SettingsDecodeResult.Decoded ->
-                if (result.fromOlderSchema) restoreRolledBackFields(result.settings) else result.settings
+                if (result.fromOlderSchema) {
+                    restoreRolledBackFields(result.settings, result.schemaVersion)
+                } else {
+                    result.settings
+                }
 
             SettingsDecodeResult.FromNewerSchema -> {
                 logFailure("settings.load.newer_schema", "파일 스키마가 앱보다 새로워 기본값으로 시작합니다")
@@ -90,9 +94,9 @@ class SettingsGatewayImpl(
      * 구버전 스키마 파일을 읽었을 때만 탄다 — 구버전이 담지 못한 필드를 그 구버전이 남긴 백업에서 되살린다.
      * 되살릴 것이 없으면 읽은 값을 그대로 쓴다. 복구는 로드를 실패시키지 않는다.
      */
-    private fun restoreRolledBackFields(loaded: Settings): Settings {
+    private fun restoreRolledBackFields(loaded: Settings, loadedSchemaVersion: Int): Settings {
         val restored = try {
-            recoverFieldsFromNewerSchemaBackup(settingsFile, loaded)
+            recoverFieldsFromNewerSchemaBackup(settingsFile, loaded, loadedSchemaVersion)
         } catch (failure: IOException) {
             logFailure("settings.load.rollback_recovery_failed", failure.toString())
             null

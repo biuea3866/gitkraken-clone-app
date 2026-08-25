@@ -79,4 +79,45 @@ class SettingsSpec : FunSpec({
         settings.identityProfiles.shouldBeEmpty()
         settings.externalTools shouldBe ExternalToolSettings.NONE
     }
+
+    test("wave 8 이 더한 필드를 주지 않은 Settings 는 결정된 기본값을 갖는다") {
+        val settings = Settings(
+            recentRepositories = emptyList(),
+            theme = ThemeMode.SYSTEM,
+            window = WINDOW,
+        )
+
+        // 언어 미지정은 시스템 로케일을 따른다는 뜻이다 — 빈 문자열과 뭉개지 않는다.
+        settings.language.shouldBeNull()
+        // 시작 화면은 기존 동작(환영 화면)이 기본이다.
+        settings.reopenLastRepository shouldBe false
+        // 파괴적 연산 확인은 켜진 상태가 기본이다 — 끄는 것은 사용자의 명시적 선택이다.
+        settings.confirmDestructiveActions shouldBe true
+        settings.openTabs.shouldBeEmpty()
+        settings.activeTabIndex shouldBe 0
+        settings.updateCheck shouldBe UpdateCheckSettings.DEFAULT
+    }
+
+    test("업데이트 확인 기본값은 켜짐 · 24시간이다") {
+        UpdateCheckSettings.DEFAULT.enabled shouldBe true
+        UpdateCheckSettings.DEFAULT.intervalHours shouldBe 24
+    }
+
+    test("업데이트 확인 주기는 1시간에서 168시간(7일) 사이만 뜻이 있다") {
+        UpdateCheckSettings.INTERVAL_HOURS_RANGE shouldBe 1..168
+        (UpdateCheckSettings.DEFAULT.intervalHours in UpdateCheckSettings.INTERVAL_HOURS_RANGE) shouldBe true
+    }
+
+    test("탭 목록은 최근 저장소와 같은 표현을 쓴다 — 경로가 사라져도 항목이 남는다") {
+        val missing = RepositoryPath("/tmp/undine-removed-repository")
+        val settings = Settings(
+            recentRepositories = emptyList(),
+            theme = ThemeMode.SYSTEM,
+            window = WINDOW,
+            openTabs = listOf(missing),
+            activeTabIndex = 0,
+        )
+
+        settings.openTabs shouldBe listOf(missing)
+    }
 })

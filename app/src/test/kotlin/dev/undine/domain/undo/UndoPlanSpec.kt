@@ -115,7 +115,7 @@ class UndoPlanSpec : FunSpec({
             .shouldBeInstanceOf<UndoOutcome.Irreversible>()
     }
 
-    test("GitOperationKind 는 되돌릴 수 있는 다섯 연산과 복구 불가 세 연산으로 닫혀 있다") {
+    test("GitOperationKind 는 UND-38 의 열 연산과 UND-63 이 더한 여덟 연산으로 닫혀 있다") {
         GitOperationKind.entries.map { it.name } shouldBe listOf(
             "COMMIT",
             "CHECKOUT",
@@ -127,6 +127,42 @@ class UndoPlanSpec : FunSpec({
             "PUSH",
             "HARD_RESET",
             "STASH_DROP",
+            "BRANCH_MOVE",
+            "TAG_MOVE",
+            "SUBMODULE_INIT",
+            "SUBMODULE_UPDATE",
+            "WORKTREE_ADD",
+            "WORKTREE_REMOVE",
+            "REFLOG_RESTORE",
+            "BISECT_SESSION",
         )
+    }
+
+    test("모든 연산 종류는 사용자에게 보여줄 이름을 갖는다") {
+        GitOperationKind.entries.filter { it.label.isBlank() } shouldBe emptyList()
+    }
+
+    test("되돌릴 수 없는 연산도 종류로 기록된다 — 판단은 enum 이 아니라 전략이 한다") {
+        // worktree 제거는 되돌릴 수 없지만, 그 사실을 사용자에게 말하려면 이름이 있어야 한다.
+        val entry = entryOf(
+            strategy = UndoStrategy.Irreversible("제거한 worktree 는 앱이 되살릴 수 없습니다"),
+            operation = GitOperationKind.WORKTREE_REMOVE,
+        )
+
+        val refused = entry.planUndo(RECORDED, dirtyPaths = emptyList())
+            .shouldBeInstanceOf<UndoPlan.Refuse>()
+            .outcome
+            .shouldBeInstanceOf<UndoOutcome.Irreversible>()
+
+        refused.operation shouldBe GitOperationKind.WORKTREE_REMOVE
+        refused.operation.label shouldBe "worktree 제거"
+    }
+
+    test("같은 연산 종류라도 전략이 되돌릴 수 있다고 하면 실행한다") {
+        // enum 값 자체는 복구 가능 여부를 담지 않는다 — 같은 WORKTREE_ADD 도 상황에 따라 갈린다.
+        val strategy = UndoStrategy.SoftResetTo(HEAD_BEFORE)
+
+        entryOf(strategy, GitOperationKind.WORKTREE_ADD)
+            .planUndo(RECORDED, dirtyPaths = emptyList()) shouldBe UndoPlan.Execute(strategy)
     }
 })

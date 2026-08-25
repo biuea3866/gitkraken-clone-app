@@ -25,29 +25,89 @@ internal const val NEWER_SCHEMA_SUFFIX = ".newer-"
  *
  * 읽기 실패는 삼키지 않고 [IOException] 으로 올린다 — 복구 실패 사유를 남길지는 호출부가 정한다.
  *
+ * @param loadedSchemaVersion 현재 설정 파일이 적힌 스키마 버전. **그 버전이 담을 수 없던 필드만**
+ * 되살리는 기준이다 — 스키마 2 파일을 읽을 때 identity 프로필까지 백업 값으로 덮으면 사용자가
+ * 구버전에서 실제로 고친 값이 조용히 되돌아간다.
  * @return 되살린 값이 있으면 채워진 [Settings], 백업이 없거나 해독할 수 없으면 `null`.
  */
-internal fun recoverFieldsFromNewerSchemaBackup(settingsFile: Path, loaded: Settings): Settings? {
-    val backup = newestNewerSchemaBackup(settingsFile) ?: return null
-    val decoded = decodeSettings(Files.readString(backup)) as? SettingsDecodeResult.Decoded
-    val restored = decoded?.settings?.let { backedUp ->
-        loaded.copy(identityProfiles = backedUp.identityProfiles, externalTools = backedUp.externalTools)
-    }
-    return restored?.takeIf { it != loaded }
+internal fun recoverFieldsFromNewerSchemaBackup(
+    settingsFile: Path,
+    loaded: Settings,
+    loadedSchemaVersion: Int,
+): Settings? {
+    val backups = decodedBackupsNewestFirst(settingsFile)
+    if (backups.isEmpty()) return null
+    return restoreFieldsMissingFrom(loaded, backups, loadedSchemaVersion).takeIf { it != loaded }
 }
 
 /**
- * 백업이 여러 개면 **가장 최근 것**을 쓴다. 파일명 접미사가 epochMillis 라 수로 비교한다 —
- * 문자열 정렬은 자릿수가 바뀔 때 어긋난다. 수로 읽히지 않는 이름은 우리가 만든 것이 아니므로 건너뛴다.
+ * 버전마다 그 스키마가 표현할 수 있던 필드가 다르다 — 낮은 버전일수록 되살릴 것이 많다.
+ * 새 필드를 더하는 티켓은 자기 버전 분기를 여기에 한 줄 추가한다.
  */
-private fun newestNewerSchemaBackup(settingsFile: Path): Path? {
-    val directory = settingsFile.toAbsolutePath().parent ?: return null
+private fun restoreFieldsMissingFrom(
+    loaded: Settings,
+    backupsNewestFirst: List<SettingsDecodeResult.Decoded>,
+    loadedSchemaVersion: Int,
+): Settings {
+    var restored = loaded
+    if (loadedSchemaVersion < IDENTITY_AND_TOOLS_SCHEMA_VERSION) {
+        newestExpressing(backupsNewestFirst, IDENTITY_AND_TOOLS_SCHEMA_VERSION)?.let { backedUp ->
+            restored = restored.copy(
+                identityProfiles = backedUp.identityProfiles,
+                externalTools = backedUp.externalTools,
+            )
+        }
+    }
+    if (loadedSchemaVersion < PREFERENCE_SCHEMA_VERSION) {
+        newestExpressing(backupsNewestFirst, PREFERENCE_SCHEMA_VERSION)?.let { backedUp ->
+            restored = restored.copy(
+                language = backedUp.language,
+                reopenLastRepository = backedUp.reopenLastRepository,
+                confirmDestructiveActions = backedUp.confirmDestructiveActions,
+                openTabs = backedUp.openTabs,
+                activeTabIndex = backedUp.activeTabIndex,
+                updateCheck = backedUp.updateCheck,
+            )
+        }
+    }
+    return restored
+}
+
+/**
+ * 필드 묶음마다 **그 필드를 담을 수 있던 가장 최근 백업**을 고른다.
+ *
+ * 최신 백업 하나만 보면 연속 다운그레이드(3 → 2 → 1)에서 값을 잃는다: 그때 최신 백업은 스키마 2
+ * 파일이라 wave 8 필드를 애초에 담지 못하고, 거기서 읽은 기본값으로 덮으면 스키마 3 백업에 남아
+ * 있던 사용자 값이 다음 저장 때 영구히 사라진다. 담을 수 있던 버전으로 거르면 묶음별로 스키마 2
+ * 백업의 identity 값과 스키마 3 백업의 wave 8 값을 모두 살린다.
+ */
+private fun newestExpressing(
+    backupsNewestFirst: List<SettingsDecodeResult.Decoded>,
+    requiredSchemaVersion: Int,
+): Settings? = backupsNewestFirst.firstOrNull { it.schemaVersion >= requiredSchemaVersion }?.settings
+
+/**
+ * 백업을 **최근 것부터** 해독해 돌려준다.
+ *
+ * 해독할 수 없는 백업(손상·앱보다 새로운 스키마)은 되살릴 근거가 없으므로 목록에서 빠진다 —
+ * 그 자리에서 멈추면 더 오래된 쪽에 남아 있는 값까지 잃는다.
+ */
+private fun decodedBackupsNewestFirst(settingsFile: Path): List<SettingsDecodeResult.Decoded> =
+    newerSchemaBackupsNewestFirst(settingsFile)
+        .mapNotNull { backup -> decodeSettings(Files.readString(backup)) as? SettingsDecodeResult.Decoded }
+
+/**
+ * 파일명 접미사가 epochMillis 라 수로 비교한다 — 문자열 정렬은 자릿수가 바뀔 때 어긋난다.
+ * 수로 읽히지 않는 이름은 우리가 만든 것이 아니므로 건너뛴다.
+ */
+private fun newerSchemaBackupsNewestFirst(settingsFile: Path): List<Path> {
+    val directory = settingsFile.toAbsolutePath().parent ?: return emptyList()
     val prefix = "${settingsFile.fileName}$NEWER_SCHEMA_SUFFIX"
     return Files.list(directory).use { entries ->
         entries.toList()
             .filter { it.name.startsWith(prefix) }
             .mapNotNull { path -> path.name.removePrefix(prefix).toLongOrNull()?.let { stamp -> path to stamp } }
-            .maxByOrNull { (_, stamp) -> stamp }
-            ?.first
+            .sortedByDescending { (_, stamp) -> stamp }
+            .map { (path, _) -> path }
     }
 }
