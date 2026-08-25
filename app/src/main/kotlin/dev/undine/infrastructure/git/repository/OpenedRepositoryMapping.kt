@@ -12,6 +12,9 @@ import org.eclipse.jgit.lib.RepositoryState as JGitRepositoryState
 /** revert 진행 중임을 나타내는 파일. JGit 도 이 파일로 revert 상태를 판정한다. */
 private const val REVERT_HEAD_FILE = "REVERT_HEAD"
 
+/** 이분 탐색 진행 중임을 나타내는 파일. git·JGit 모두 이 파일로 bisect 상태를 판정한다. */
+private const val BISECT_LOG_FILE = "BISECT_LOG"
+
 private val MERGING_STATES = setOf(
     JGitRepositoryState.MERGING,
     JGitRepositoryState.MERGING_RESOLVED,
@@ -46,14 +49,16 @@ internal fun Repository.toOpenedRepository(): OpenedRepository {
 }
 
 /**
- * 진행 중인 연산(revert·cherry-pick·merge·rebase)이 HEAD 조건보다 우선한다 — "지금 무엇을 할 수 있는가" 를
- * 후행 티켓이 이 값으로 판단하므로, 충돌을 끝내야 하는 상태를 정상으로 보이게 하면 안 된다.
+ * 진행 중인 연산(revert·cherry-pick·merge·rebase·bisect)이 HEAD 조건보다 우선한다 —
+ * "지금 무엇을 할 수 있는가" 를 후행 티켓이 이 값으로 판단하므로, 끝내야 하는 상태를 정상으로
+ * 보이게 하면 안 된다.
  *
- * bisect 는 계약에 아직 없어 [RepositoryState.NORMAL] 로 떨어진다 — 그 상태를 필요로 하는 티켓이
- * enum 과 함께 추가한다.
+ * bisect 는 HEAD 가 검사 대상에 detached 로 붙어 있지만 [RepositoryState.DETACHED] 로 대체하지
+ * 않는다 — 그러면 화면이 continue/reset 을 안내할 근거를 잃는다.
  */
 private fun Repository.resolveState(head: Ref?): RepositoryState = when {
     isRevertInProgress() -> RepositoryState.REVERTING
+    isBisectInProgress() -> RepositoryState.BISECTING
     repositoryState in CHERRY_PICKING_STATES -> RepositoryState.CHERRY_PICKING
     repositoryState in MERGING_STATES -> RepositoryState.MERGING
     repositoryState in REBASING_STATES -> RepositoryState.REBASING
@@ -62,5 +67,9 @@ private fun Repository.resolveState(head: Ref?): RepositoryState = when {
     else -> RepositoryState.NORMAL
 }
 
-private fun Repository.isRevertInProgress(): Boolean =
-    directory?.let { File(it, REVERT_HEAD_FILE).exists() } == true
+private fun Repository.isRevertInProgress(): Boolean = hasGitFile(REVERT_HEAD_FILE)
+
+private fun Repository.isBisectInProgress(): Boolean = hasGitFile(BISECT_LOG_FILE)
+
+private fun Repository.hasGitFile(name: String): Boolean =
+    directory?.let { File(it, name).exists() } == true
