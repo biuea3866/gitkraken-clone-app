@@ -14,12 +14,14 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotContain
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -29,6 +31,9 @@ import kotlin.io.path.name
 private const val FIXED_NOW = 1_700_000_000_000L
 private const val EXCEEDING_RECENT_COUNT = 25
 private const val CONCURRENT_SAVE_COUNT = 16
+
+/** 동시 갱신 검증용 — 하나라도 사라지면 읽기-수정-쓰기가 한 임계구역 안에서 끝나지 않은 것이다. */
+private const val CONCURRENT_UPDATE_COUNT = 8
 
 private val CREDENTIAL_WORDS = listOf("token", "password", "passphrase", "secret")
 
@@ -53,6 +58,14 @@ private val DEFAULTS = Settings(
 
 private fun settingsOf(vararg paths: String) = DEFAULTS.copy(
     recentRepositories = paths.map(::RepositoryPath),
+)
+
+private fun profileNamed(name: String) = IdentityProfile(
+    name = name,
+    email = "$name@example.com",
+    signingKeyId = null,
+    defaultAuthentication = AuthenticationMethod.SSH,
+    expectedHost = null,
 )
 
 /** 이름 있는 이스케이프가 없는 C0 제어문자 표본. JSON 에 날것으로 들어가면 다음 로드가 손상으로 읽는다. */
@@ -494,6 +507,72 @@ class SettingsGatewayImplSpec : FunSpec({
         Files.list(settingsFile.parent).use { entries ->
             entries.filter { it.name != settingsFile.name }.count() shouldBe 0L
         }
+    }
+
+    test("동시 update 는 서로의 갱신을 덮어쓰지 않는다") {
+        val settingsFile = settingsFileIn(tempdir())
+        val gateway = gatewayFor(settingsFile)
+        val added = (1..CONCURRENT_UPDATE_COUNT).map { order -> profileNamed("프로필 $order") }
+
+        coroutineScope {
+            added.map { profile ->
+                async(Dispatchers.IO) {
+                    gateway.update { settings ->
+                        settings.copy(identityProfiles = settings.identityProfiles + profile)
+                    }
+                }
+            }.awaitAll()
+        }
+
+        gateway.load().identityProfiles shouldContainExactlyInAnyOrder added
+    }
+
+    test("서로 다른 필드를 갱신해도 상대 필드를 잃지 않는다") {
+        val settingsFile = settingsFileIn(tempdir())
+        val gateway = gatewayFor(settingsFile)
+        val profile = profileNamed("회사")
+        val recent = RepositoryPath("/tmp/repo")
+
+        coroutineScope {
+            launch(Dispatchers.IO) {
+                gateway.update { settings ->
+                    settings.copy(identityProfiles = settings.identityProfiles + profile)
+                }
+            }
+            launch(Dispatchers.IO) {
+                gateway.update { settings ->
+                    settings.copy(recentRepositories = listOf(recent) + settings.recentRepositories)
+                }
+            }
+        }
+
+        val stored = gateway.load()
+        stored.identityProfiles shouldContainExactly listOf(profile)
+        stored.recentRepositories shouldContainExactly listOf(recent)
+    }
+
+    test("transform 이 던지면 아무것도 쓰지 않는다") {
+        val settingsFile = settingsFileIn(tempdir())
+        val gateway = gatewayFor(settingsFile)
+        gateway.save(settingsOf("/tmp/kept"))
+
+        shouldThrow<IllegalStateException> {
+            gateway.update { error("갱신을 중단한다") }
+        }
+
+        gateway.load() shouldBe settingsOf("/tmp/kept")
+    }
+
+    test("바뀐 것이 없는 update 는 파일을 건드리지 않는다") {
+        val settingsFile = settingsFileIn(tempdir())
+        val gateway = gatewayFor(settingsFile)
+        gateway.save(settingsOf("/tmp/kept"))
+        val writtenAt = Files.getLastModifiedTime(settingsFile)
+
+        gateway.update { settings -> settings }
+
+        Files.getLastModifiedTime(settingsFile) shouldBe writtenAt
+        gateway.load() shouldBe settingsOf("/tmp/kept")
     }
 
     test("Int 범위를 넘는 schemaVersion 도 미래 스키마로 보고 저장 시 원본을 보존한다") {

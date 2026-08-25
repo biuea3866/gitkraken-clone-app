@@ -44,6 +44,11 @@ internal class FakeSettingsGateway(initial: Settings = settingsWith()) : Setting
         stored = settings
         saveCount++
     }
+
+    override suspend fun update(transform: (Settings) -> Settings) {
+        val updated = transform(stored)
+        if (updated != stored) save(updated)
+    }
 }
 
 /** 열기 결과를 경로별로 정해 두는 저장소 게이트웨이. 등록되지 않은 경로는 NOT_FOUND 로 실패한다. */
