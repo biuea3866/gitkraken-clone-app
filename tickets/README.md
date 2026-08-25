@@ -1,6 +1,6 @@
 # tickets — 작업 단위 SSOT
 
-Undine 구현을 **58개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2건·하네스 2건 별도).
+Undine 구현을 **59개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2건·하네스 2건 별도).
 **착수 전 자기 티켓의 소유 패키지를 확인한다** — 같은 wave 의 다른 티켓과 파일이 겹치면
 머지 충돌이 난다 (`.agent/docs/conventions.md` Rule 3).
 
@@ -71,18 +71,19 @@ Undine 구현을 **58개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2
 | [UND-37](UND-37-git-identity-profiles.md) | Git identity 프로필 | S | 7 | UND-06 · UND-11 · UND-59 | `domain/identity/` · `application/identity/` · `infrastructure/identity/` |
 | [UND-38](UND-38-operation-history-undo.md) | 실행 이력 · Undo 스택 | L | 7 | UND-09 · UND-21 | `domain/undo/` · `application/undo/` |
 | [UND-39](UND-39-external-diff-merge-tool.md) | 외부 diff/merge 도구 연동 | S | 7 | UND-05 · UND-11 · UND-59 | `domain/externaltool/` · `infrastructure/externaltool/` |
-| [UND-40](UND-40-preferences-screen.md) | 설정 화면 | M | 8 | UND-10 · UND-11 · UND-22 · UND-37 · UND-39 | `presentation/preferences/` |
-| [UND-41](UND-41-blame-history-view.md) | Blame 뷰 · 파일 이력 화면 | M | 8 | UND-10 · UND-29 | `presentation/blame/` |
-| [UND-42](UND-42-graph-drag-drop.md) | 그래프 드래그&드롭 조작 | L | 8 | UND-14 · UND-21 · UND-28 · UND-38 | `presentation/graph/` (dnd 확장) |
-| [UND-43](UND-43-undo-history-panel.md) | Undo 버튼 · 실행 이력 패널 | M | 8 | UND-10 · UND-38 | `presentation/undo/` |
-| [UND-44](UND-44-multi-repo-tabs.md) | 다중 저장소 탭 | L | 8 | UND-02 · UND-12 | `presentation/tabs/` · `presentation/shell/` · `application/session/` · `infrastructure/git/repository/` (다중 세션 확장) |
-| [UND-45](UND-45-submodule-worktree-panel.md) | Submodule · Worktree 패널 | M | 8 | UND-10 · UND-32 · UND-34 | `presentation/submodule/` |
-| [UND-46](UND-46-reflog-bisect-screen.md) | Reflog · Bisect 화면 | M | 8 | UND-10 · UND-30 · UND-35 | `presentation/recovery/` |
-| [UND-47](UND-47-patch-screen.md) | Patch 화면 | M | 8 | UND-10 · UND-60 | `presentation/patch/` |
-| [UND-48](UND-48-auto-update.md) | 자동 업데이트 | M | 8 | UND-25 | `domain/update/` · `application/update/` · `infrastructure/update/` · `build.gradle.kts` |
+| [UND-40](UND-40-preferences-screen.md) | 설정 화면 | M | 8 | UND-10 · UND-11 · UND-22 · UND-37 · UND-39 · UND-63 | `presentation/preferences/` · `application/preferences/` |
+| [UND-41](UND-41-blame-history-view.md) | Blame 뷰 · 파일 이력 화면 | M | 8 | UND-10 · UND-29 · UND-63 | `presentation/blame/` · `application/blame/`(확장) |
+| [UND-42](UND-42-graph-drag-drop.md) | 그래프 드래그&드롭 조작 | L | 8 | UND-14 · UND-21 · UND-28 · UND-38 · UND-63 | `presentation/graph/` (dnd 확장) |
+| [UND-43](UND-43-undo-history-panel.md) | Undo 버튼 · 실행 이력 패널 | M | 8 | UND-10 · UND-38 · UND-63 | `presentation/undo/` · `application/undo/`(확장) |
+| [UND-44](UND-44-multi-repo-tabs.md) | 다중 저장소 탭 | L | 8 | UND-02 · UND-12 · UND-63 | `presentation/tabs/` · `presentation/shell/` · `application/session/` · `infrastructure/git/repository/` (다중 세션 확장) |
+| [UND-45](UND-45-submodule-worktree-panel.md) | Submodule · Worktree 패널 | M | 8 | UND-10 · UND-32 · UND-34 · UND-63 | `presentation/submodule/` · `application/submodule/` · `application/worktree/` |
+| [UND-46](UND-46-reflog-bisect-screen.md) | Reflog · Bisect 화면 | M | 8 | UND-10 · UND-30 · UND-35 · UND-63 | `presentation/recovery/` · `application/reflog/` |
+| [UND-47](UND-47-patch-screen.md) | Patch 화면 | M | 8 | UND-10 · UND-60 · UND-63 | `presentation/patch/` |
+| [UND-48](UND-48-auto-update.md) | 자동 업데이트 | M | 8 | UND-25 · UND-63 | `domain/update/` · `application/update/` · `infrastructure/update/` · `build.gradle.kts` |
 | [UND-50](UND-50-accessibility-audit.md) | 접근성 감사 · 보강 | M | 10 | UND-40 · UND-41 · UND-42 · UND-43 · UND-44 · UND-45 · UND-46 · UND-47 · UND-51 | `presentation/**` (감사 결과 보강) |
 | [UND-51](UND-51-wiring-phase2.md) | 2차 통합 와이어업 | M | 9 | UND-22 · UND-26 · UND-38 · UND-40 · UND-41 · UND-42 · UND-43 · UND-44 · UND-45 · UND-46 · UND-47 · UND-48 | `presentation/App.kt` · `di/` · `presentation/palette/` (등록) |
 | [UND-62](UND-62-submodule-remove-safety.md) | 서브모듈 제거 안전성 (파괴적 정리 재설계) | M | 8 | UND-32 | `domain/submodule/SubmoduleGateway.kt` · `infrastructure/git/submodule/` (제거 경로) |
+| [UND-63](UND-63-wave8-common-contract.md) | wave 8 공통 계약 확장 | M | 8 | UND-38 · UND-49 · UND-59 | `domain/Settings.kt` · `infrastructure/settings/SettingsCodec.kt` · `domain/undo/GitOperationKind.kt` · `presentation/i18n/` |
 | [UND-52](UND-52-e2e-scenario-phase2.md) | 2차 E2E 시나리오 테스트 | M | 10 | UND-51 | `app/src/test/kotlin/.../scenario2/` |
 | [UND-54](UND-54-merge-start-state-guard.md) | merge/rebase 시작 경로 상태 가드 완결 | S | 4 | UND-21 | `infrastructure/git/merge/` (가드 추가) |
 | [UND-56](UND-56-gitkraken-visual-tuning.md) | GitKraken 계열 시각 튜닝 · 렌더 확인 수단 | S | 5 | UND-26 · UND-10 | `presentation/design/` · `presentation/graph/`(그리기) · `presentation/shell/`(분할선) |
@@ -147,7 +148,7 @@ flowchart LR
     end
     subgraph P2["2차 — 완성도"]
         W7["wave 7<br/>Gateway 확장<br/>(13)"]
-        W8["wave 8<br/>화면·업데이트<br/>(10)"]
+        W8["wave 8<br/>공통계약·화면·업데이트<br/>(11)"]
         W9["wave 9<br/>2차 와이어업<br/>(1)"]
         W10["wave 10<br/>접근성·2차 E2E<br/>(2)"]
     end
@@ -176,14 +177,15 @@ flowchart LR
 | 6 | UND-27 | 1 |
 | 7a | UND-28, UND-29, UND-30, UND-36, UND-38, UND-59, UND-60, UND-61 | 8 |
 | 7b | UND-32, UND-34, UND-35, UND-37, UND-39 | 5 |
-| 8 | UND-40, UND-41, UND-42, UND-43, UND-44, UND-45, UND-46, UND-47, UND-48, UND-62 | 10 |
+| 8a | UND-62, UND-63 | 2 |
+| 8b | UND-40, UND-41, UND-42, UND-43, UND-44, UND-45, UND-46, UND-47, UND-48 | 9 |
 | 9 | UND-51 | 1 |
 | 10 | UND-50, UND-52 | 2 |
 
-- **너비 분포**: [1, 11, 11, 5, 3, 1, 8, 5, 10, 1, 2]
-- **평균 wave 너비**: 5.27
+- **너비 분포**: [1, 11, 11, 5, 3, 1, 8, 5, 2, 9, 1, 2]
+- **평균 wave 너비**: 4.92
 - **판정: 통과** — 모든 wave 너비가 1~2 인 직선형 DAG 가 아니다.
-  wave 2·3·7a·8 에서 각각 11·11·8·10 개가 동시에 열린다.
+  wave 2·3·7a·8b 에서 각각 11·11·8·9 개가 동시에 열린다.
 > UND-54·UND-56·UND-57 은 이 표에서 누락돼 있었다 — 티켓 헤더의 wave 값으로 채웠다.
 > **UND-56·UND-57 은 헤더가 wave 5 지만 의존(UND-26)이 wave 5 다** — 실제로는 UND-26 뒤에 선다.
 > 헤더가 정본이므로 값은 그대로 두고 사실만 남긴다.

@@ -1,6 +1,6 @@
 # [UND-44] 다중 저장소 탭
 
-> wave 8 · 사이즈 L · 의존 UND-02, UND-12 · 소유 `presentation/tabs/` · `presentation/shell/` · `application/session/` · `infrastructure/git/repository/` (다중 세션 확장)
+> wave 8 · 사이즈 L · 의존 UND-02, UND-12, UND-63 · 소유 `presentation/tabs/` · `presentation/shell/` · `application/session/` · `infrastructure/git/repository/` (다중 세션 확장)
 
 ## 작업 내용 (설계 의도)
 여러 저장소를 탭으로 동시에 열어 오간다. 저장소를 자주 오가는 사용자에게는 가장 체감이 큰 기능이다.

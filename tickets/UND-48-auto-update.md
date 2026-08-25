@@ -1,6 +1,6 @@
 # [UND-48] 자동 업데이트
 
-> wave 8 · 사이즈 M · 의존 UND-25 · 소유 `domain/update/` · `application/update/` · `infrastructure/update/` · `build.gradle.kts`
+> wave 8 · 사이즈 M · 의존 UND-25, UND-63 · 소유 `domain/update/` · `application/update/` · `infrastructure/update/` · `build.gradle.kts`
 
 ## 작업 내용 (설계 의도)
 새 버전을 확인하고 사용자 동의 하에 설치한다. 개인 도구라도 직접 받아 설치하게 두면 사실상 갱신되지 않는다.

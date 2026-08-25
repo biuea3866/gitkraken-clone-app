@@ -1,6 +1,6 @@
 # [UND-43] Undo 버튼 · 실행 이력 패널
 
-> wave 8 · 사이즈 M · 의존 UND-10, UND-38 · 소유 `presentation/undo/`
+> wave 8 · 사이즈 M · 의존 UND-10, UND-38, UND-63 · 소유 `presentation/undo/` · `application/undo/`(확장)
 
 ## 작업 내용 (설계 의도)
 UND-38 이 만든 Undo 스택을 화면에 노출한다. 툴바의 Undo 버튼과 실행 이력 패널이다.
