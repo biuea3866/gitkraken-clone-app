@@ -18,6 +18,7 @@ private const val OPERATION_LIST = "submodule.list"
 private const val OPERATION_INITIALIZE = "submodule.initialize"
 private const val OPERATION_UPDATE = "submodule.update"
 private const val OPERATION_ADD = "submodule.add"
+private const val OPERATION_REMOVE = "submodule.remove"
 
 /**
  * [SubmoduleGateway] 의 JGit 구현.
@@ -65,6 +66,19 @@ class SubmoduleGatewayImpl(
                 repository.addSubmodule(url, path, branch, credentialsProvider)
                 repository.requireSubmodule(path)
             }.onFailure(rollback::restoreAfter).getOrThrow()
+        }
+    }
+
+    /**
+     * 제거는 전송이 없어 마스킹할 원격이 없다 — 조회·보존 스캔·정리·삭제를 [guarded] 하나가 감싸는
+     * **한 임계구역** 안에서 끝낸다. 스캔과 실행을 따로 들어가면 그 사이에 저장소가 전환돼 A 에서 읽은
+     * 판정으로 B 의 파일을 지울 수 있다.
+     */
+    override suspend fun remove(path: String, confirmed: Boolean) {
+        requireSubmodulePath(path)
+        guarded(OPERATION_REMOVE, remote = null) { repository ->
+            repository.requireSubmodule(path)
+            repository.removeSubmodule(path, confirmed)
         }
     }
 
