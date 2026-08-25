@@ -89,13 +89,22 @@ internal fun Repository.submoduleNameOf(path: String): String =
  * 지운 데이터는 되돌릴 수 없으므로 **모르면 지우지 않는다**.
  */
 private fun File.resolveInside(candidate: String): File {
+    if (File(candidate).isAbsolute) throw outsideAllowedDirectory(candidate)
     val root = canonicalFile
     val target = File(this, candidate).canonicalFile
     if (target == root || !target.toPath().startsWith(root.toPath())) {
-        throw UndineException.StateViolation("서브모듈 경로가 허용된 디렉터리 밖을 가리킵니다: '$candidate'")
+        throw outsideAllowedDirectory(candidate)
     }
     return target
 }
+
+/**
+ * 절대 경로를 기준 디렉터리 아래로 **조용히 접어 넣지 않는다** — `File(parent, "/밖")` 은 기준 안의
+ * `parent/밖` 이 돼 이탈은 막히지만, 남의 저장소가 적어 둔 절대 경로를 우리가 만든 경로인 양 삭제
+ * 대상으로 삼게 된다. 의도를 알 수 없는 입력은 거부한다.
+ */
+private fun outsideAllowedDirectory(candidate: String): UndineException.StateViolation =
+    UndineException.StateViolation("서브모듈 경로가 허용된 디렉터리 밖을 가리킵니다: '$candidate'")
 
 /** 서브모듈이 차지하는 부모 워킹트리 안의 디렉터리. 워킹트리를 벗어나는 경로는 거부한다. */
 internal fun Repository.submoduleWorkTreeDirectory(path: String): File = workTree.resolveInside(path)
