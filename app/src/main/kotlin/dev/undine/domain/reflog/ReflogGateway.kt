@@ -54,14 +54,56 @@ sealed interface RecoveryTarget {
  * 기존 ref 를 옮기는 것이 **그 ref 의 현재 커밋을 밀어낸다**는 사실을 사용자가 확인했다는 증거.
  *
  * Boolean 이 아니라 타입인 이유는 호출부가 확인 절차를 건너뛸 수 없게 하려는 것이다 — 확인 없는
- * 이동은 컴파일되지 않는다. [displacedCommit] 은 화면이 "이 커밋이 밀려납니다" 로 보여 준 값이고,
- * 실행 직전 지금 값과 대조해 그 사이 바뀌었으면 옮기지 않는다(낡은 확인).
+ * 이동은 컴파일되지 않는다. [displacedCommit] 은 화면이 "이 커밋이 밀려납니다" 로 보여 준 값이다.
  */
 class RefMoveConfirmation private constructor(val displacedCommit: CommitId) {
 
+    /**
+     * 실행 직전의 실제 밀려날 커밋 [displacedNow] 이 확인 시점 값과 같은지 재검증한다.
+     *
+     * 조회와 실행 사이에 ref 가 움직였다면 사용자는 **다른 커밋이 밀려난다는 것을 모르고** 확인한
+     * 것이므로 옮기지 않고 재조회를 요구한다. `AmendConfirmation` 의 낡은 확인 거부와 같은 문제라
+     * 같은 방식으로 다룬다.
+     *
+     * @throws UndineException.StateViolation 확인 값과 지금 밀려날 커밋이 다르거나, 옮길 ref 가
+     *   가리키는 커밋이 없을 때
+     */
+    fun validateFor(displacedNow: CommitId?) {
+        if (displacedNow != displacedCommit) {
+            throw UndineException.StateViolation(
+                "$STALE_CONFIRMATION (확인: ${displacedCommit.value}, 현재: ${displacedNow?.value ?: NO_COMMIT})",
+            )
+        }
+    }
+
     companion object {
+        private const val STALE_CONFIRMATION =
+            "확인한 커밋과 지금 밀려날 커밋이 달라 옮기지 않았습니다. 대상을 다시 조회한 뒤 확인하세요"
+        private const val NO_COMMIT = "없음"
+
         fun ofDisplacedCommit(displacedCommit: CommitId): RefMoveConfirmation =
             RefMoveConfirmation(displacedCommit)
+    }
+}
+
+/**
+ * 도달 불가 커밋 탐색 결과.
+ *
+ * 빈 목록으로 "없음" 과 "이 저장소에서는 탐색할 수 없음" 을 뭉개지 않는다 — 잃어버린 커밋을 찾으러
+ * 온 사용자에게 조용한 fallback 은 "없다" 는 오답이 된다.
+ */
+sealed interface UnreachableCommitScan {
+
+    /** 객체 DB 를 실제로 훑었다. [commits] 가 비면 정말로 도달 불가 커밋이 없다는 뜻이다. */
+    data class Scanned(val commits: List<Commit>) : UnreachableCommitScan
+
+    /** 이 저장소의 객체 저장 방식으로는 훑을 수 없다. 화면은 "없음" 이 아니라 미지원으로 알린다. */
+    data class NotSupported(val reason: Reason) : UnreachableCommitScan {
+
+        enum class Reason {
+            /** 파일 기반 객체 DB 가 아니다 — 객체를 나열하는 공개 API 가 없다. */
+            NON_FILE_OBJECT_DATABASE,
+        }
     }
 }
 
@@ -77,18 +119,22 @@ interface ReflogGateway {
     suspend fun headReflog(limit: Int): ReflogPage
 
     /**
-     * [ref] 의 reflog. 삭제된 브랜치의 기록도 파일이 남아 있으면 읽힌다.
+     * [ref] 의 reflog. 최신 항목이 앞이다.
      *
-     * @throws UndineException.NotFound 그 ref 의 reflog 파일 자체가 없을 때
+     * 브랜치를 지우면 그 ref 의 기록도 함께 사라진다 — 삭제된 브랜치를 되찾는 단서는 [headReflog] 다.
+     *
+     * @throws UndineException.NotFound 그 ref 가 없을 때. 빈 결과로 뭉개면 화면이 "움직인 적 없는
+     *   브랜치" 로 오해한다.
      */
     suspend fun refReflog(ref: RefName, limit: Int): ReflogPage
 
     /**
-     * 어떤 참조에서도 닿지 않는 커밋. **느리다** — 객체 DB 전체를 훑으므로 별도 진입점으로 둔다.
+     * 어떤 참조에서도 닿지 않고 **reflog 에도 남지 않은** 커밋. reflog 로 되찾을 수 없을 때의 마지막
+     * 수단이다.
      *
-     * reflog 에도 남지 않은 커밋을 마지막으로 찾는 수단이다.
+     * **느리다** — 객체 DB 전체를 훑으므로 reflog 조회와 별도 진입점으로 둔다.
      */
-    suspend fun unreachableCommits(limit: Int): List<Commit>
+    suspend fun unreachableCommits(limit: Int): UnreachableCommitScan
 
     /**
      * [at] 지점을 [target] 방식으로 되살린다.
