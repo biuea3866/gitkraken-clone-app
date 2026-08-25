@@ -197,6 +197,7 @@ private class RecordingSubmoduleGateway(
     override suspend fun initialize(path: String, recursive: Boolean) { initialized += path }
     override suspend fun update(path: String, recursive: Boolean) = Unit
     override suspend fun add(url: String, path: String, branch: String?): Submodule = error("사용하지 않는다")
+    override suspend fun remove(path: String, confirmed: Boolean) = error("사용하지 않는다")
 }
 
 private class RecordingWorktreeGateway(
