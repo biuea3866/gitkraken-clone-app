@@ -72,6 +72,12 @@ sealed class UndineException(message: String, cause: Throwable? = null) : Except
 
             /** 그 커밋에 그 경로가 없다. 삭제된 파일을 잘못된 기준 커밋으로 조회한 경우가 대표적이다. */
             PATH("경로"),
+
+            /** `.gitmodules` 나 인덱스에 그 서브모듈이 없다. */
+            SUBMODULE("서브모듈"),
+
+            /** `.git/worktrees` 에 그 워크트리가 없다. 다른 도구가 이미 제거한 경우가 대표적이다. */
+            WORKTREE("워크트리"),
         }
     }
 

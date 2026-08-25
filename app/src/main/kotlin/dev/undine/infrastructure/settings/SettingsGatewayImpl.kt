@@ -12,7 +12,6 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 
 private const val CORRUPT_SUFFIX = ".corrupt-"
-private const val NEWER_SCHEMA_SUFFIX = ".newer-"
 private const val TEMPORARY_SUFFIX = ".tmp"
 
 /**
@@ -65,7 +64,8 @@ class SettingsGatewayImpl(
     private fun readSettings(): Settings {
         val content = readContentOrNull() ?: return DEFAULT_SETTINGS
         return when (val result = decodeSettings(content)) {
-            is SettingsDecodeResult.Decoded -> result.settings
+            is SettingsDecodeResult.Decoded ->
+                if (result.fromOlderSchema) restoreRolledBackFields(result.settings) else result.settings
 
             SettingsDecodeResult.FromNewerSchema -> {
                 logFailure("settings.load.newer_schema", "파일 스키마가 앱보다 새로워 기본값으로 시작합니다")
@@ -77,6 +77,24 @@ class SettingsGatewayImpl(
                 DEFAULT_SETTINGS
             }
         }
+    }
+
+    /**
+     * 구버전 스키마 파일을 읽었을 때만 탄다 — 구버전이 담지 못한 필드를 그 구버전이 남긴 백업에서 되살린다.
+     * 되살릴 것이 없으면 읽은 값을 그대로 쓴다. 복구는 로드를 실패시키지 않는다.
+     */
+    private fun restoreRolledBackFields(loaded: Settings): Settings {
+        val restored = try {
+            recoverFieldsFromNewerSchemaBackup(settingsFile, loaded)
+        } catch (failure: IOException) {
+            logFailure("settings.load.rollback_recovery_failed", failure.toString())
+            null
+        } ?: return loaded
+        logFailure(
+            "settings.load.rollback_recovered",
+            "구버전 스키마 파일이 담지 못한 필드를 newer 백업에서 되살렸습니다",
+        )
+        return restored
     }
 
     private fun readContentOrNull(): String? {
@@ -124,7 +142,7 @@ class SettingsGatewayImpl(
      */
     private fun preserveNewerSchemaFile() {
         val content = readContentOrNull() ?: return
-        if (decodeSettings(content) != SettingsDecodeResult.FromNewerSchema) return
+        if (decodeSettings(content) !is SettingsDecodeResult.FromNewerSchema) return
         val backup = settingsFile.resolveSibling(
             "${settingsFile.fileName}$NEWER_SCHEMA_SUFFIX${currentTimeMillis()}",
         )
