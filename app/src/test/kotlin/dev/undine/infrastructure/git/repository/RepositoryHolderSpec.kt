@@ -34,6 +34,9 @@ private fun countingHolder(): RepositoryHolder =
 
 private fun Repository.closeCount(): Int = (this as CloseCountingRepository).closeCount
 
+/** 세션 키로 꺼낸 핸들 — 방금 연 세션이므로 없으면 그 자체가 실패다. */
+private fun Repository?.require(): Repository = requireNotNull(this) { "세션 핸들이 없습니다" }
+
 private fun committedRepositoryAt(directory: File): File {
     initRepository(directory).use { git -> git.commitFile("a.txt", "a\n", "first") }
     return directory
@@ -120,15 +123,87 @@ class RepositoryHolderSpec : FunSpec({
         val secondDirectory = committedRepositoryAt(tempdir())
         val holder = countingHolder()
 
-        val first = holder.openSession(RepositoryPath(firstDirectory.path))
-        val second = holder.openSession(RepositoryPath(secondDirectory.path))
-        holder.release(RepositoryPath(firstDirectory.path))
+        val firstKey = holder.openSession(RepositoryPath(firstDirectory.path))
+        val first = holder.sessionAt(firstKey).require()
+        val secondKey = holder.openSession(RepositoryPath(secondDirectory.path))
+        val second = holder.sessionAt(secondKey).require()
+        holder.releaseSession(firstKey)
 
         first.closeCount() shouldBe 1
         second.closeCount() shouldBe 0
         holder.current() shouldBe second
         holder.close()
     }
+
+    test("경로 표기가 달라도 같은 세션 키를 돌려주므로 회수가 활성 핸들을 닫지 않는다") {
+        val directory = committedRepositoryAt(tempdir())
+        val other = committedRepositoryAt(tempdir())
+        val holder = countingHolder()
+
+        val key = holder.openSession(RepositoryPath(directory.path))
+        val aliasKey = holder.openSession(RepositoryPath(File(directory, ".").path))
+        val otherKey = holder.openSession(RepositoryPath(other.path))
+
+        aliasKey shouldBe key
+        holder.releaseSession(otherKey)
+        // 별칭으로 연 탭을 회수해도 같은 저장소를 보는 활성 핸들이 살아 있어야 한다.
+        holder.sessionAt(key).require().closeCount() shouldBe 0
+        holder.close()
+    }
+
+    test("활성 세션을 회수하면 그 핸들만 닫고 활성 세션을 비운다") {
+        val firstDirectory = committedRepositoryAt(tempdir())
+        val secondDirectory = committedRepositoryAt(tempdir())
+        val holder = countingHolder()
+
+        val firstKey = holder.openSession(RepositoryPath(firstDirectory.path))
+        val first = holder.sessionAt(firstKey).require()
+        val secondKey = holder.openSession(RepositoryPath(secondDirectory.path))
+        val second = holder.sessionAt(secondKey).require()
+        holder.releaseSession(secondKey)
+
+        second.closeCount() shouldBe 1
+        first.closeCount() shouldBe 0
+        holder.current() shouldBe null
+        holder.close()
+        first.closeCount() shouldBe 1
+    }
+
+    test("close 는 열려 있는 모든 세션을 닫는다") {
+        val firstDirectory = committedRepositoryAt(tempdir())
+        val secondDirectory = committedRepositoryAt(tempdir())
+        val holder = countingHolder()
+
+        val first = holder.sessionAt(holder.openSession(RepositoryPath(firstDirectory.path))).require()
+        val second = holder.sessionAt(holder.openSession(RepositoryPath(secondDirectory.path))).require()
+        holder.close()
+
+        first.closeCount() shouldBe 1
+        second.closeCount() shouldBe 1
+        holder.current() shouldBe null
+    }
+
+    test("restoreSessions 는 목록 밖 세션을 회수하고 닫힌 세션을 다시 연다") {
+        val firstDirectory = committedRepositoryAt(tempdir())
+        val secondDirectory = committedRepositoryAt(tempdir())
+        val holder = countingHolder()
+
+        val firstKey = holder.openSession(RepositoryPath(firstDirectory.path))
+        val first = holder.sessionAt(firstKey).require()
+        val secondKey = holder.openSession(RepositoryPath(secondDirectory.path))
+        holder.releaseSession(secondKey)
+
+        val restored = holder.restoreSessions(listOf(secondKey), active = secondKey)
+
+        restored shouldBe listOf(secondKey)
+        first.closeCount() shouldBe 1
+        holder.sessionAt(firstKey) shouldBe null
+        holder.current() shouldBe holder.sessionAt(secondKey)
+        holder.close()
+    }
+
+    // 되살릴 수 없는 세션을 결과에서 빼는 경로는 RepositorySessionGatewayImplSpec 이 실제 저장소로 본다
+    // — 여기 세는 홀더는 존재 검사 없는 FileRepository 를 쓰므로 그 분기를 재현하지 못한다.
 
     test("동시 열기·회수·해제가 홀더의 한 임계구역에서 안전하게 끝난다") {
         val firstDirectory = committedRepositoryAt(tempdir())
@@ -141,14 +216,15 @@ class RepositoryHolderSpec : FunSpec({
             repeat(20) { index ->
                 launch(Dispatchers.Default) {
                     val path = if (index % 2 == 0) firstPath else secondPath
-                    holder.openSession(path)
-                    holder.release(path)
+                    holder.releaseSession(holder.openSession(path))
                     holder.open(path)
                 }
             }
         }
 
+        // 마지막 활성 세션은 인터리빙이 정하므로 단정하지 않는다 — 여기서 보는 것은 손상 없이 끝나는가다.
         holder.current() shouldNotBe null
         holder.close()
+        holder.current() shouldBe null
     }
 })

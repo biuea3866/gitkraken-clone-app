@@ -58,25 +58,57 @@ class RepositoryHolder internal constructor(
      * 다중 세션 캐시에 핸들을 연다. 활성 전환과 LRU 회수는 이 Holder의 같은 임계구역에서 끝난다.
      *
      * 기존 단일 저장소 경로는 [open]을 쓰므로, 비활성 핸들을 즉시 놓는 동작은 그대로 유지된다.
+     *
+     * **정규화된 세션 키를 돌려준다.** 호출부는 이 값으로만 회수·되돌리기를 지시한다 — 원본 경로를
+     * 자기 식별자로 들고 있으면 `./` 나 심볼릭 링크 별칭에서 다른 탭의 활성 핸들을 닫게 된다.
      */
     @Synchronized
-    fun openSession(path: RepositoryPath): Repository {
+    fun openSession(path: RepositoryPath): Path {
         val requestedKey = sessionKeyOf(path.value)
-        val repository = sessions[requestedKey] ?: openWorkTreeRepository(path.value, requestedKey).also {
-            sessions[requestedKey] = it
+        if (!sessions.containsKey(requestedKey)) {
+            sessions[requestedKey] = openWorkTreeRepository(path.value, requestedKey)
         }
         activeSessionKey = requestedKey
-        return repository
+        return requestedKey
     }
+
+    /** [key] 로 열려 있는 핸들. 세션 키를 이미 아는 호출부(테스트·되돌리기)만 쓴다. */
+    @Synchronized
+    fun sessionAt(key: Path): Repository? = sessions[key]
 
     /** 현재 열려 있는 핸들. 열기 전이거나 [close] 후에는 null 이다. */
     @Synchronized
     fun current(): Repository? = activeSessionKey?.let(sessions::get)
 
-    /** 특정 비활성/LRU 세션의 핸들을 닫는다. 현재 세션을 회수하면 활성 세션도 비운다. */
+    /**
+     * 특정 비활성/LRU 세션의 핸들을 닫는다. 현재 세션을 회수하면 활성 세션도 비운다.
+     *
+     * 인자는 [openSession] 이 돌려준 **정규화된 키**다. 원본 경로를 다시 정규화하지 않는다 —
+     * 정규화 지점이 둘이면 별칭 경로에서 서로 다른 세션을 가리키게 된다.
+     */
     @Synchronized
-    fun release(path: RepositoryPath) {
-        releaseByKey(sessionKeyOf(path.value))
+    fun releaseSession(key: Path) {
+        releaseByKey(key)
+    }
+
+    /**
+     * 열린 세션 집합을 [sessionKeys] 와 일치시키고 [active] 를 활성 세션으로 만든다 — 되돌리기 전용이다.
+     *
+     * 회수(목록 밖)와 다시 열기(목록 안인데 닫힌 것)를 **한 임계구역**에서 끝낸다. 되살릴 수 없는
+     * 세션은 예외로 올리지 않고 결과에서 빼 호출부의 장부가 실제 집합과 같아지게 한다 — 되돌리기가
+     * 다시 실패를 만들면 원래 실패를 가린다.
+     *
+     * @return 이 호출 뒤 실제로 열려 있는 세션 키 (인자 순서를 유지한다)
+     */
+    @Synchronized
+    fun restoreSessions(sessionKeys: List<Path>, active: Path?): List<Path> {
+        val retained = sessionKeys.distinct().filter(::reopened)
+
+        sessions.keys.toList()
+            .filterNot(retained::contains)
+            .forEach(::releaseByKey)
+        activeSessionKey = active?.takeIf(retained::contains)
+        return retained
     }
 
     /** 현재 핸들을 닫고 세션을 비운다. 열려 있지 않으면 아무 일도 하지 않는다. */
@@ -87,10 +119,27 @@ class RepositoryHolder internal constructor(
         activeSessionKey = null
     }
 
+    /**
+     * 활성 세션을 회수하면 활성 키를 **비운다** — 남아 있는 아무 세션으로 슬쩍 옮기지 않는다.
+     * 다음에 어느 탭을 활성화할지는 호출부의 정책이고, 여기서 정하면 조용한 결정이 된다.
+     */
     private fun releaseByKey(key: Path) {
         sessions.remove(key)?.close()
-        if (activeSessionKey == key) activeSessionKey = sessions.keys.lastOrNull()
+        if (activeSessionKey == key) activeSessionKey = null
     }
+
+    /**
+     * 되돌리기용 열기 — 이미 열려 있으면 그대로 두고, 닫혀 있으면 다시 연다.
+     * 열 수 없는 세션은 `false` 다. 조용한 실패가 아니라 [restoreSessions] 의 결과에서 빠져
+     * 호출부 장부에 그대로 반영된다.
+     *
+     * 인자가 이미 정규화된 키이므로 여기서 다시 정규화하지 않는다.
+     */
+    private fun reopened(key: Path): Boolean =
+        sessions.containsKey(key) ||
+            runCatching { openWorkTreeRepository(key.toString(), key) }
+                .getOrNull()
+                ?.also { repository -> sessions[key] = repository } != null
 
     private fun openWorkTreeRepository(raw: String, sessionKey: Path): Repository {
         val opened = try {

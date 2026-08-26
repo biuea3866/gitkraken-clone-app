@@ -19,6 +19,8 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.semantics.Role
+import dev.undine.application.session.TabAvailability
+import dev.undine.application.session.TabId
 import dev.undine.domain.RepositoryPath
 import dev.undine.presentation.design.UndineTokens
 import dev.undine.presentation.i18n.strings
@@ -34,7 +36,7 @@ import dev.undine.presentation.i18n.tabs
 @Composable
 fun RepositoryTabs(
     state: RepositoryTabsState,
-    onActivate: (RepositoryPath) -> Unit,
+    onActivate: (TabId) -> Unit,
     onCloseRequested: (TabCloseRequest) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -52,13 +54,13 @@ fun RepositoryTabs(
             .focusable(),
     ) {
         state.tabs.forEach { tab ->
-            val selected = tab.path == state.activePath
+            val selected = tab.id == state.activeTabId
             Column(
                 modifier = Modifier
                     .background(if (selected) colors.background else colors.surface)
                     .clickable(role = Role.Tab) {
-                        state.activate(tab.path)
-                        onActivate(tab.path)
+                        state.activate(tab.id)
+                        onActivate(tab.id)
                     }
                     .padding(horizontal = spacing.medium, vertical = spacing.small),
             ) {
@@ -66,13 +68,13 @@ fun RepositoryTabs(
                     text = tab.path.displayName(),
                     color = if (selected) colors.foregroundPrimary else colors.foregroundSecondary,
                 )
-                if (tab.availability == dev.undine.application.session.TabAvailability.MissingPath) {
+                if (tab.availability == TabAvailability.MissingPath) {
                     Text(text = tabStrings.missingPath, color = colors.warning)
                 }
                 Text(
                     text = tabStrings.closeTab,
                     color = colors.foregroundSecondary,
-                    modifier = Modifier.clickable { onCloseRequested(state.requestClose(tab.path)) },
+                    modifier = Modifier.clickable { onCloseRequested(state.requestClose(tab.id)) },
                 )
             }
         }
@@ -81,7 +83,7 @@ fun RepositoryTabs(
 
 private fun RepositoryTabsState.handleKeyEvent(
     event: KeyEvent,
-    onActivate: (RepositoryPath) -> Unit,
+    onActivate: (TabId) -> Unit,
     onCloseRequested: (TabCloseRequest) -> Unit,
 ): Boolean {
     val action = if (event.type == KeyEventType.KeyDown && event.isCtrlPressed) {
@@ -91,7 +93,7 @@ private fun RepositoryTabsState.handleKeyEvent(
     }
     return action?.let { requestedAction ->
         when (val result = handleKeyboard(requestedAction)) {
-            is TabKeyboardResult.Activated -> onActivate(result.path)
+            is TabKeyboardResult.Activated -> onActivate(result.tabId)
             is TabKeyboardResult.CloseRequested -> onCloseRequested(result.request)
             TabKeyboardResult.Ignored -> Unit
         }
