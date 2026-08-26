@@ -12,7 +12,7 @@ Undine 구현을 **60개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2
 | 범위 | wave | 티켓 | 내용 |
 |---|---|---|---|
 | **1차 — 일상 사용** | 1~6 | 29건 | 저장소·그래프·diff·스테이징·브랜치·원격·병합·충돌·리베이스·검색 |
-| **2차 — 완성도** | 2, 7~10 | 25건 | cherry-pick·blame·reflog·patch·submodule·LFS·worktree·bisect·서명·undo·설정 화면·드래그&드롭·탭·접근성·자동 업데이트 |
+| **2차 — 완성도** | 2, 7~10 | 31건 | cherry-pick·blame·reflog·patch·submodule·LFS·worktree·bisect·서명·undo·설정 화면·드래그&드롭·탭·접근성·자동 업데이트 |
 
 **1차만 끝나도 매일 쓸 수 있다.** 2차는 "GitKraken 과 비슷해지는" 구간이며,
 필요 없다고 판단되는 티켓은 지워도 1차 결과물이 깨지지 않도록 의존을 설계했다.
@@ -71,7 +71,7 @@ Undine 구현을 **60개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2
 | [UND-37](UND-37-git-identity-profiles.md) | Git identity 프로필 | S | 7 | UND-06 · UND-11 · UND-59 | `domain/identity/` · `application/identity/` · `infrastructure/identity/` |
 | [UND-38](UND-38-operation-history-undo.md) | 실행 이력 · Undo 스택 | L | 7 | UND-09 · UND-21 | `domain/undo/` · `application/undo/` |
 | [UND-39](UND-39-external-diff-merge-tool.md) | 외부 diff/merge 도구 연동 | S | 7 | UND-05 · UND-11 · UND-59 | `domain/externaltool/` · `infrastructure/externaltool/` |
-| [UND-40](UND-40-preferences-screen.md) | 설정 화면 | M | 8 | UND-10 · UND-11 · UND-22 · UND-37 · UND-39 · UND-63 | `presentation/preferences/` · `application/preferences/` |
+| [UND-40](UND-40-preferences-screen.md) | 설정 화면 골격 · 공통 설정 행 계약 | M | 8 | UND-10 · UND-11 · UND-49 · UND-63 | `presentation/preferences/PreferencesScreen.kt` · `PreferencesState.kt` · `PreferencesRow.kt` · `PreferencesTab.kt` · `application/preferences/` · `presentation/i18n/PreferencesStrings.kt` |
 | [UND-41](UND-41-blame-history-view.md) | Blame 뷰 · 파일 이력 화면 | M | 8 | UND-10 · UND-29 · UND-63 | `presentation/blame/` · `application/blame/`(확장) |
 | [UND-42](UND-42-graph-drag-drop.md) | 그래프 드래그&드롭 조작 | L | 8 | UND-14 · UND-21 · UND-28 · UND-38 · UND-63 | `presentation/graph/` (dnd 확장) |
 | [UND-43](UND-43-undo-history-panel.md) | Undo 버튼 · 실행 이력 패널 | M | 8 | UND-10 · UND-38 · UND-63 | `presentation/undo/` · `application/undo/`(확장) |
@@ -80,8 +80,8 @@ Undine 구현을 **60개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2
 | [UND-46](UND-46-reflog-bisect-screen.md) | Reflog · Bisect 화면 | M | 8 | UND-10 · UND-30 · UND-35 · UND-63 | `presentation/recovery/` · `application/reflog/` |
 | [UND-47](UND-47-patch-screen.md) | Patch 화면 | M | 8 | UND-10 · UND-60 · UND-63 | `presentation/patch/` |
 | [UND-48](UND-48-auto-update.md) | 자동 업데이트 | M | 8 | UND-25 · UND-63 · UND-64 | `domain/update/` · `application/update/` · `infrastructure/update/` · `build.gradle.kts` |
-| [UND-50](UND-50-accessibility-audit.md) | 접근성 감사 · 보강 | M | 10 | UND-40 · UND-41 · UND-42 · UND-43 · UND-44 · UND-45 · UND-46 · UND-47 · UND-51 | `presentation/**` (감사 결과 보강) |
-| [UND-51](UND-51-wiring-phase2.md) | 2차 통합 와이어업 | M | 9 | UND-22 · UND-26 · UND-38 · UND-40 · UND-41 · UND-42 · UND-43 · UND-44 · UND-45 · UND-46 · UND-47 · UND-48 | `presentation/App.kt` · `di/` · `presentation/palette/` (등록) |
+| [UND-50](UND-50-accessibility-audit.md) | 접근성 감사 · 보강 | M | 10 | UND-40 · UND-65 · UND-66 · UND-67 · UND-68 · UND-69 · UND-70 · UND-41 · UND-42 · UND-43 · UND-44 · UND-45 · UND-46 · UND-47 · UND-51 | `presentation/**` (감사 결과 보강) |
+| [UND-51](UND-51-wiring-phase2.md) | 2차 통합 와이어업 | M | 9 | UND-22 · UND-26 · UND-38 · UND-40 · UND-65 · UND-66 · UND-67 · UND-68 · UND-69 · UND-70 · UND-41 · UND-42 · UND-43 · UND-44 · UND-45 · UND-46 · UND-47 · UND-48 | `presentation/App.kt` · `di/` · `presentation/palette/` (등록) |
 | [UND-62](UND-62-submodule-remove-safety.md) | 서브모듈 제거 안전성 (파괴적 정리 재설계) | M | 8 | UND-32 | `domain/submodule/SubmoduleGateway.kt` · `infrastructure/git/submodule/` (제거 경로) |
 | [UND-63](UND-63-wave8-common-contract.md) | wave 8 공통 계약 확장 | M | 8 | UND-38 · UND-49 · UND-59 | `domain/Settings.kt` · `infrastructure/settings/SettingsCodec.kt` · `domain/undo/GitOperationKind.kt` · `presentation/i18n/` |
 | [UND-64](UND-64-release-publishing.md) | 릴리즈 발행 파이프라인 | S | 8 | UND-25 | `.github/workflows/` (릴리즈 워크플로) · `packaging/`(체크섬) |
@@ -90,6 +90,12 @@ Undine 구현을 **60개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2
 | [UND-56](UND-56-gitkraken-visual-tuning.md) | GitKraken 계열 시각 튜닝 · 렌더 확인 수단 | S | 5 | UND-26 · UND-10 | `presentation/design/` · `presentation/graph/`(그리기) · `presentation/shell/`(분할선) |
 | [UND-57](UND-57-list-remotes-contract.md) | 원격 목록 계약 · 툴바 활성화 | S | 5 | UND-18 · UND-26 | `domain/RemoteGateway.kt` · `infrastructure/git/remote/` · `di/` |
 | [UND-59](UND-59-wave7-common-contract.md) | wave 7 공통 계약 확장 | S | 7 | UND-01 | `domain/Settings.kt` · `domain/SettingsGateway.kt` · `domain/UndineException.kt` · `infrastructure/settings/` |
+| [UND-65](UND-65-preferences-general-tab.md) | 설정 — 일반 탭 | S | 8 | UND-40 · UND-11 | `presentation/preferences/GeneralPreferences*.kt` |
+| [UND-66](UND-66-preferences-git-tab.md) | 설정 — Git 탭 | S | 8 | UND-40 · UND-11 · UND-36 | `presentation/preferences/GitPreferences*.kt` |
+| [UND-67](UND-67-preferences-account-tab.md) | 설정 — 계정 탭 (identity 프로필) | M | 8 | UND-40 · UND-37 | `presentation/preferences/AccountPreferences*.kt` |
+| [UND-68](UND-68-preferences-tools-tab.md) | 설정 — 도구 탭 | S | 8 | UND-40 · UND-39 | `presentation/preferences/ToolsPreferences*.kt` |
+| [UND-69](UND-69-preferences-shortcuts-tab.md) | 설정 — 단축키 탭 | M | 8 | UND-40 · UND-22 · UND-63 | `presentation/preferences/ShortcutPreferences*.kt` |
+| [UND-70](UND-70-preferences-advanced-tab.md) | 설정 — 고급 탭 · 전체 초기화 | S | 8 | UND-40 · UND-11 | `presentation/preferences/AdvancedPreferences*.kt` |
 
 > **UND-49(i18n)만 wave 2 에 있다.** 2차 범위에서 추가됐지만, 나중에 넣으면 이미 작성된 전 화면의
 > 문자열을 추출해야 해 거대한 retrofit 티켓이 된다. 구현 착수 전인 지금 선행 티켓으로 옮겨
@@ -149,7 +155,7 @@ flowchart LR
     end
     subgraph P2["2차 — 완성도"]
         W7["wave 7<br/>Gateway 확장<br/>(13)"]
-        W8["wave 8<br/>공통계약·화면·업데이트<br/>(12)"]
+        W8["wave 8<br/>공통계약·화면·설정탭<br/>(18)"]
         W9["wave 9<br/>2차 와이어업<br/>(1)"]
         W10["wave 10<br/>접근성·2차 E2E<br/>(2)"]
     end
@@ -180,13 +186,14 @@ flowchart LR
 | 7b | UND-32, UND-34, UND-35, UND-37, UND-39 | 5 |
 | 8a | UND-62, UND-63, UND-64 | 3 |
 | 8b | UND-40, UND-41, UND-42, UND-43, UND-44, UND-45, UND-46, UND-47, UND-48 | 9 |
+| 8c | UND-65, UND-66, UND-67, UND-68, UND-69, UND-70 | 6 |
 | 9 | UND-51 | 1 |
 | 10 | UND-50, UND-52 | 2 |
 
-- **너비 분포**: [1, 11, 11, 5, 3, 1, 8, 5, 3, 9, 1, 2]
-- **평균 wave 너비**: 5.00
+- **너비 분포**: [1, 11, 11, 5, 3, 1, 8, 5, 3, 9, 6, 1, 2]
+- **평균 wave 너비**: 5.08
 - **판정: 통과** — 모든 wave 너비가 1~2 인 직선형 DAG 가 아니다.
-  wave 2·3·7a·8b 에서 각각 11·11·8·9 개가 동시에 열린다.
+  wave 2·3·7a·8b·8c 에서 각각 11·11·8·9·6 개가 동시에 열린다.
 > UND-54·UND-56·UND-57 은 이 표에서 누락돼 있었다 — 티켓 헤더의 wave 값으로 채웠다.
 > **UND-56·UND-57 은 헤더가 wave 5 지만 의존(UND-26)이 wave 5 다** — 실제로는 UND-26 뒤에 선다.
 > 헤더가 정본이므로 값은 그대로 두고 사실만 남긴다.
