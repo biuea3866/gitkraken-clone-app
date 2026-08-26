@@ -8,16 +8,32 @@ import dev.undine.domain.UndineException
 /**
  * blame 한 줄 — 그 줄을 마지막으로 고친 커밋.
  *
+ * **커밋은 id 가 아니라 [Commit] 전체를 담는다.** 화면은 줄마다 상대 시각을 그리고, 커밋 상세로
+ * 이동하고, 첫 부모 기준으로 재귀 blame 을 한다 — id 만 주면 그 값들을 다른 조회(파일 이력 등)에서
+ * 찾아야 하고, 그 조회가 제한(limit)에 걸리거나 실패하면 세 기능이 조용히 사라진다.
+ *
  * @param line 1부터 세는 줄 번호. 화면이 코드와 나란히 놓는 기준이다.
  * @param originLine 그 커밋에서의 줄 번호. 줄이 옮겨졌으면 [line] 과 다르다.
  */
 data class BlameLine(
     val line: Int,
     val originLine: Int,
-    val commit: CommitId,
+    val commit: Commit,
     val author: Person,
     val content: String,
 )
+
+/**
+ * 파일 이력 한 건. 같은 파일이라도 rename 전후에는 커밋이 가리키는 경로가 다르므로 경로를 커밋과
+ * 분리해 보관한다. 화면은 [previousPath] 로 이름 변경 지점을 명시적으로 표시한다.
+ */
+data class FileHistoryEntry(
+    val commit: Commit,
+    val path: String,
+    val previousPath: String? = null,
+) {
+    val isRename: Boolean get() = previousPath != null
+}
 
 /**
  * blame 결과.
@@ -101,5 +117,5 @@ interface BlameGateway {
      * @param at 기준 커밋. null 이면 현재 HEAD 다. 삭제된 파일도 그 파일이 있던 커밋을 주면 조회된다.
      * @throws UndineException.NotFound 그 커밋에서 그 경로의 이력을 찾을 수 없을 때
      */
-    suspend fun fileHistory(path: String, at: CommitId? = null, limit: Int): List<Commit>
+    suspend fun fileHistory(path: String, at: CommitId? = null, limit: Int): List<FileHistoryEntry>
 }

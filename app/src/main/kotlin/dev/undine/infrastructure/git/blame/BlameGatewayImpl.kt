@@ -7,6 +7,7 @@ import dev.undine.domain.UndineException
 import dev.undine.domain.blame.BlameGateway
 import dev.undine.domain.blame.BlameLine
 import dev.undine.domain.blame.BlameResult
+import dev.undine.domain.blame.FileHistoryEntry
 import dev.undine.domain.blame.LineRange
 import dev.undine.infrastructure.git.history.toCommit
 import dev.undine.infrastructure.git.repository.GitAccess
@@ -15,6 +16,8 @@ import org.eclipse.jgit.api.errors.GitAPIException
 import org.eclipse.jgit.api.errors.JGitInternalException
 import org.eclipse.jgit.blame.BlameResult as JGitBlameResult
 import org.eclipse.jgit.diff.DiffConfig
+import org.eclipse.jgit.diff.DiffEntry
+import org.eclipse.jgit.diff.DiffFormatter
 import org.eclipse.jgit.diff.RawText
 import org.eclipse.jgit.diff.RawTextComparator
 import org.eclipse.jgit.lib.Constants
@@ -24,6 +27,8 @@ import org.eclipse.jgit.lib.Repository
 import org.eclipse.jgit.revwalk.RevWalk
 import org.eclipse.jgit.revwalk.FollowFilter
 import org.eclipse.jgit.treewalk.TreeWalk
+import org.eclipse.jgit.treewalk.CanonicalTreeParser
+import org.eclipse.jgit.util.io.DisabledOutputStream
 import java.io.IOException
 
 private const val OPERATION_BLAME = "blame.blame"
@@ -58,21 +63,31 @@ class BlameGatewayImpl(private val gitAccess: GitAccess) : BlameGateway {
             .setFollowFileRenames(true)
             .call()
             ?: return@gitOperation BlameResult.Lines(emptyList())
-        BlameResult.Lines(blamed.linesIn(range))
+        BlameResult.Lines(git.repository.linesIn(blamed, range))
     }
 
     /**
      * **이름 변경을 따라간다.** `LogCommand.addPath` 는 rename 지점에서 이력이 끊겨 파일의 진짜
      * 시작점을 볼 수 없다 — JGit 의 `FollowFilter` 가 걸으면서 경로를 갈아타므로 그것을 쓴다.
      */
-    override suspend fun fileHistory(path: String, at: CommitId?, limit: Int): List<Commit> =
+    override suspend fun fileHistory(path: String, at: CommitId?, limit: Int): List<FileHistoryEntry> =
         gitOperation(OPERATION_HISTORY) { git ->
             val start = git.repository.startPoint(at)
             git.repository.requirePathAt(path, start)
             RevWalk(git.repository).use { walk ->
                 walk.markStart(walk.parseCommit(start))
                 walk.treeFilter = FollowFilter.create(path, git.repository.config.get(DiffConfig.KEY))
-                walk.take(limit).map { revision -> revision.toCommit() }
+                var currentPath = path
+                walk.take(limit).map { revision ->
+                    val previousPath = git.repository.previousPathFor(revision, currentPath)
+                    FileHistoryEntry(
+                        commit = revision.toCommit(),
+                        path = currentPath,
+                        previousPath = previousPath,
+                    ).also {
+                        if (previousPath != null) currentPath = previousPath
+                    }
+                }
             }
         }
 
@@ -100,20 +115,27 @@ class BlameGatewayImpl(private val gitAccess: GitAccess) : BlameGateway {
 private fun comparatorFor(ignoreWhitespace: Boolean): RawTextComparator =
     if (ignoreWhitespace) RawTextComparator.WS_IGNORE_ALL else RawTextComparator.DEFAULT
 
-/** 요청 구간만 잘라 [BlameLine] 으로 옮긴다. 파일 길이를 넘는 요청은 있는 만큼만 준다. */
-private fun JGitBlameResult.linesIn(range: LineRange): List<BlameLine> {
-    val contents = resultContents ?: return emptyList()
+/**
+ * 요청 구간만 잘라 [BlameLine] 으로 옮긴다. 파일 길이를 넘는 요청은 있는 만큼만 준다.
+ *
+ * 줄마다 소스 커밋을 **여기서 직접 파싱해 담는다** — 화면이 상대 시각·부모를 다른 조회에서 찾지 않게
+ * 하기 위해서다. `RevWalk` 는 파싱한 객체를 재사용하므로 같은 커밋이 여러 줄에 걸쳐도 한 번만 읽는다.
+ */
+private fun Repository.linesIn(blamed: JGitBlameResult, range: LineRange): List<BlameLine> {
+    val contents = blamed.resultContents ?: return emptyList()
     // 요청이 파일 끝을 넘으면 빈 범위가 되어 비어 있는 목록이 나온다 — 따로 분기하지 않는다.
     val last = if (range.isWhole) contents.size() else minOf(range.end, contents.size())
-    return (range.start..last).map { line ->
-        val index = line - 1
-        BlameLine(
-            line = line,
-            originLine = getSourceLine(index) + 1,
-            commit = CommitId.of(getSourceCommit(index).name),
-            author = getSourceAuthor(index).toPerson(),
-            content = contents.getString(index),
-        )
+    return RevWalk(this).use { walk ->
+        (range.start..last).map { line ->
+            val index = line - 1
+            BlameLine(
+                line = line,
+                originLine = blamed.getSourceLine(index) + 1,
+                commit = walk.parseCommit(blamed.getSourceCommit(index)).toCommit(),
+                author = blamed.getSourceAuthor(index).toPerson(),
+                content = contents.getString(index),
+            )
+        }
     }
 }
 
@@ -146,3 +168,27 @@ private fun Repository.findBlobAt(path: String, start: ObjectId): ObjectId? =
         val tree = walk.parseCommit(start).tree
         TreeWalk.forPath(this, path, tree)?.use { treeWalk -> treeWalk.getObjectId(0) }
     }
+
+/**
+ * 현재 이력 경로가 이 커밋에서 rename 된 경우의 이전 경로. FollowFilter 는 어떤 커밋을 이력에 넣을지
+ * 판단하고, 이 함수는 화면이 보여 줄 rename 지점 메타데이터를 만든다.
+ */
+private fun Repository.previousPathFor(revision: org.eclipse.jgit.revwalk.RevCommit, currentPath: String): String? {
+    if (revision.parentCount == 0) return null
+    return newObjectReader().use { reader ->
+        RevWalk(reader).use { walk ->
+            val current = walk.parseCommit(revision)
+            val parent = walk.parseCommit(current.getParent(0))
+            DiffFormatter(DisabledOutputStream.INSTANCE).use { formatter ->
+                formatter.setRepository(this)
+                formatter.setDetectRenames(true)
+                formatter.scan(
+                    CanonicalTreeParser(null, reader, parent.tree),
+                    CanonicalTreeParser(null, reader, current.tree),
+                ).firstOrNull { entry ->
+                    entry.changeType == DiffEntry.ChangeType.RENAME && entry.newPath == currentPath
+                }?.oldPath
+            }
+        }
+    }
+}

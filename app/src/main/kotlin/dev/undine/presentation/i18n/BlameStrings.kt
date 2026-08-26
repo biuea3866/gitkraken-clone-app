@@ -19,13 +19,64 @@ import java.util.Locale
 internal const val BLAME_NAMESPACE: String = "blame"
 
 /** Blame 화면이 추가할 `blame.*` 키의 자리. */
-object BlameKeys
+object BlameKeys {
+    val loading = StringKey("$BLAME_NAMESPACE.loading")
+    val loadMore = StringKey("$BLAME_NAMESPACE.loadMore")
+    val ignoreWhitespace = StringKey("$BLAME_NAMESPACE.ignoreWhitespace")
+    val recurseBefore = StringKey("$BLAME_NAMESPACE.recurseBefore")
+    val unsupported = StringKey("$BLAME_NAMESPACE.unsupported")
+    val noLines = StringKey("$BLAME_NAMESPACE.noLines")
+    val loadFailed = StringKey("$BLAME_NAMESPACE.loadFailed")
+    val fileHistory = StringKey("$BLAME_NAMESPACE.fileHistory")
+    val renamedFrom = StringKey("$BLAME_NAMESPACE.renamedFrom")
+    val comparisonStart = StringKey("$BLAME_NAMESPACE.comparisonStart")
+    val comparisonResult = StringKey("$BLAME_NAMESPACE.comparisonResult")
+}
 
 /** Blame 문구 접근자. UND-41 이 여기에 화면별 문자열을 추가한다. */
 @JvmInline
-value class BlameStrings internal constructor(private val strings: Strings)
+value class BlameStrings internal constructor(private val strings: Strings) {
+    val loading: String get() = strings.text(BlameKeys.loading)
+    val loadMore: String get() = strings.text(BlameKeys.loadMore)
+    val ignoreWhitespace: String get() = strings.text(BlameKeys.ignoreWhitespace)
+    val recurseBefore: String get() = strings.text(BlameKeys.recurseBefore)
+    val unsupported: String get() = strings.text(BlameKeys.unsupported)
+    val noLines: String get() = strings.text(BlameKeys.noLines)
+    val loadFailed: String get() = strings.text(BlameKeys.loadFailed)
+    val fileHistory: String get() = strings.text(BlameKeys.fileHistory)
+    fun renamedFrom(path: String): String = strings.text(BlameKeys.renamedFrom, path)
+    fun comparisonStart(path: String): String = strings.text(BlameKeys.comparisonStart, path)
+    fun comparisonResult(hunkCount: Int): String = strings.text(BlameKeys.comparisonResult, hunkCount)
+}
 
 /** Blame 문구 네임스페이스 진입점. */
 val Strings.blame: BlameStrings get() = BlameStrings(this)
 
-internal val blameTranslations: Map<Locale, Map<StringKey, String>> = emptyMap()
+internal val blameTranslations: Map<Locale, Map<StringKey, String>> = mapOf(
+    Locale.KOREAN to mapOf(
+        BlameKeys.loading to "Blame을 읽는 중",
+        BlameKeys.loadMore to "더 불러오기",
+        BlameKeys.ignoreWhitespace to "공백 무시",
+        BlameKeys.recurseBefore to "이 커밋 이전으로",
+        BlameKeys.unsupported to "이 파일은 blame을 지원하지 않습니다",
+        BlameKeys.noLines to "표시할 줄이 없습니다",
+        BlameKeys.loadFailed to "Blame을 읽지 못했습니다",
+        BlameKeys.fileHistory to "파일 이력",
+        BlameKeys.renamedFrom to "이전 경로 {0}",
+        BlameKeys.comparisonStart to "비교 시작: {0}",
+        BlameKeys.comparisonResult to "비교 diff {0}개 hunk",
+    ),
+    Locale.ENGLISH to mapOf(
+        BlameKeys.loading to "Loading blame",
+        BlameKeys.loadMore to "Load more",
+        BlameKeys.ignoreWhitespace to "Ignore whitespace",
+        BlameKeys.recurseBefore to "Blame before this commit",
+        BlameKeys.unsupported to "Blame is not supported for this file",
+        BlameKeys.noLines to "No lines to display",
+        BlameKeys.loadFailed to "Could not load blame",
+        BlameKeys.fileHistory to "File history",
+        BlameKeys.renamedFrom to "from {0}",
+        BlameKeys.comparisonStart to "Compare from: {0}",
+        BlameKeys.comparisonResult to "Comparison diff: {0} hunks",
+    ),
+)

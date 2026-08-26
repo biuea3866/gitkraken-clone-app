@@ -14,6 +14,7 @@ import androidx.compose.runtime.Stable
 @Stable
 class AppShellSlots(
     val toolbar: @Composable (AppShellSelection) -> Unit = {},
+    val tabs: @Composable () -> Unit = {},
     val sidebar: @Composable (AppShellSelection) -> Unit = {},
     val center: @Composable (AppShellSelection) -> Unit = {},
     val bottom: @Composable (AppShellSelection) -> Unit = {},

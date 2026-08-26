@@ -48,6 +48,23 @@ class BlameGatewayImplSpec : FunSpec({
         lines.map { it.content } shouldContainExactly listOf("첫 줄", "둘째가 고친 줄", "셋째 줄")
     }
 
+    test("각 줄이 상대 시각·재귀에 필요한 커밋 전체를 들고 온다") {
+        // 화면은 커밋 메타데이터를 파일 이력에서 찾지 않는다 — 그 조회는 limit 에 걸리거나 실패한다.
+        val work = tempdir().also(::seedTwoAuthors)
+        val gateway = gatewayFor(work)
+
+        val result = gateway.blame(CODE, LineRange.whole(), ignoreWhitespace = false)
+
+        val lines = result.shouldBeInstanceOf<BlameResult.Lines>().lines
+        lines.map { it.commit.message.trim() } shouldContainExactly
+            listOf("처음 만든다", "둘째 줄을 고친다", "처음 만든다")
+        // 첫 커밋은 부모가 없고, 그 뒤 커밋은 첫 부모가 있어야 "이 커밋 이전으로" 가 성립한다.
+        lines.first().commit.parents.shouldBeEmpty()
+        lines[1].commit.parents.single() shouldBe lines.first().commit.id
+        // Git 은 초 단위로 저장하므로 초로 맞춰 본다.
+        lines[1].commit.committedAt.epochSecond shouldBe SECOND_AUTHOR.whenAsInstant.epochSecond
+    }
+
     test("범위를 지정하면 그 구간만 돌려준다") {
         val work = tempdir().also(::seedTwoAuthors)
         val gateway = gatewayFor(work)
@@ -99,8 +116,10 @@ class BlameGatewayImplSpec : FunSpec({
         val history = gateway.fileHistory(RENAMED, at = null, limit = 10)
 
         // rename 이후 커밋 + rename 커밋 + 그 이전 커밋까지 이어진다.
-        history.map { it.message.trim() } shouldContainExactly
+        history.map { it.commit.message.trim() } shouldContainExactly
             listOf("이름 바꾼 뒤 고친다", "이름을 바꾼다", "처음 만든다")
+        history.map { it.path } shouldContainExactly listOf(RENAMED, RENAMED, CODE)
+        history[1].previousPath shouldBe CODE
     }
 
     test("삭제된 파일도 그 파일이 있던 커밋 기준으로 이력을 조회한다") {
@@ -110,7 +129,7 @@ class BlameGatewayImplSpec : FunSpec({
 
         val history = gateway.fileHistory(CODE, at = beforeDelete, limit = 10)
 
-        history.map { it.message.trim() } shouldContainExactly listOf("지우기 전 마지막", "처음 만든다")
+        history.map { it.commit.message.trim() } shouldContainExactly listOf("지우기 전 마지막", "처음 만든다")
     }
 
     test("삭제된 파일을 HEAD 기준으로 조회하면 경로를 찾을 수 없다") {
