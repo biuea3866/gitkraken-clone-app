@@ -35,7 +35,9 @@ HEAD** 로 판정한다.
 
 ### 결과 형태와 취소 계약
 
-`runOnBranch` 는 **수행 브랜치를 담은** `Succeeded` · `Conflicted` · `NoChange` 를 준다.
+`runOnBranch` 는 `Succeeded` · `Conflicted` · `NoChange` 각각에 **수행 브랜치**(`performedOn`)와
+**조작 전 대상 브랜치 위치**(`previousTarget`, UND-72 가 추가)를 담아 준다. `previousTarget` 은
+임계 구역 안에서 조작을 시작하기 전에 읽은 값이라, 호출자가 밖에서 따로 읽을 때 생기는 창이 없다.
 충돌은 실패가 아니라 **진행 중 상태를 보존하는 결과**다 — 호출자가 해결 화면으로 이어 갈 수 있어야 한다.
 호출 전 HEAD 와 대상 브랜치 위치의 복구는 **예상하지 못한 실패에만** 적용한다.
 

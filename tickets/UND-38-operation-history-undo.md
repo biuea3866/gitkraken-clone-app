@@ -14,7 +14,7 @@ Git GUI 를 안심하고 쓰게 만드는 핵심 장치다.
 | commit | 직전 커밋으로 soft reset |
 | checkout | 이전 ref 로 재체크아웃 |
 | branch 생성 | 브랜치 삭제 |
-| merge / rebase / cherry-pick | 기록해 둔 `ORIG_HEAD` 로 reset |
+| merge / rebase / cherry-pick | 조작 결과의 `previousTarget` 으로 조건부 reset (`HardResetTo`) |
 | stash push | stash pop |
 | **push** | **복구 불가** — 스택에 명시 |
 | **hard reset · stash drop** | **복구 불가** — 스택에 명시 |
@@ -75,7 +75,7 @@ flowchart LR
 
 - 커밋 후 undo 하면 직전 상태로 soft reset 된다
 - 브랜치 생성 후 undo 하면 브랜치가 삭제된다
-- 병합 후 undo 하면 기록된 `ORIG_HEAD` 로 복구된다
+- 병합 후 undo 하면 조작 결과의 `previousTarget` 위치로 복구되고, 그 사이 다른 이동이 있었으면 거부된다
 - push 는 복구 불가로 기록되고 undo 시 사유가 반환된다
 - hard reset 은 복구 불가로 기록된다
 - 기록 이후 외부에서 저장소가 변경되면 undo 가 거부되고 사유가 반환된다

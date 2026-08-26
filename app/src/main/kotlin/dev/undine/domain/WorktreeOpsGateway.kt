@@ -45,14 +45,36 @@ sealed interface BranchOperationResult {
 
     val performedOn: RefName
 
+    /**
+     * [performedOn] 이 **조작 직전에** 가리키던 커밋.
+     *
+     * 호출자가 스스로 읽으면 그 읽기가 임계 구역 밖이라, 읽은 뒤 조작이 시작되기까지 사이에 앱
+     * 내부의 다른 조작이 끼어들 수 있다 — 그 값으로 되돌리면 엉뚱한 커밋으로 간다. 그래서
+     * [WorktreeOpsGateway.runOnBranch] 가 자기 임계 구역 안에서 읽어 결과에 담는다.
+     *
+     * **세 변이가 모두 갖는다** — 호출자가 결과 종류로 분기하지 않고 되돌리기를 구성할 수 있어야 한다.
+     */
+    val previousTarget: CommitId
+
     /** 조작이 끝나 대상 브랜치가 [head] 다. */
-    data class Succeeded(override val performedOn: RefName, val head: CommitId) : BranchOperationResult
+    data class Succeeded(
+        override val performedOn: RefName,
+        override val previousTarget: CommitId,
+        val head: CommitId,
+    ) : BranchOperationResult
 
     /** 충돌로 멈췄다. **실패가 아니다** — 저장소는 진행 중 상태로 남고 사용자가 이어서 해결한다. */
-    data class Conflicted(override val performedOn: RefName, val paths: List<String>) : BranchOperationResult
+    data class Conflicted(
+        override val performedOn: RefName,
+        override val previousTarget: CommitId,
+        val paths: List<String>,
+    ) : BranchOperationResult
 
     /** 적용할 변경이 없어 아무것도 바뀌지 않았다. */
-    data class NoChange(override val performedOn: RefName) : BranchOperationResult
+    data class NoChange(
+        override val performedOn: RefName,
+        override val previousTarget: CommitId,
+    ) : BranchOperationResult
 }
 
 /**
@@ -87,6 +109,10 @@ interface WorktreeOpsGateway {
      *
      * 실패하면 **호출 전 HEAD 와 대상 브랜치 위치로 되돌리고** 워킹트리에 조작 흔적을 남기지 않는다.
      * 성공하면 HEAD 는 조작을 수행한 브랜치에 남으며, 어느 브랜치였는지는 결과가 말한다.
+     *
+     * 결과의 [BranchOperationResult.previousTarget] 은 이 임계 구역 안에서, 체크아웃과 조작을
+     * 시작하기 전에 읽은 대상 브랜치 위치다. 되돌리기를 구성하는 호출자가 그 값을 스스로 읽지
+     * 않게 하려는 것이다. 실패는 결과가 아니라 예외이므로 이 약속의 대상이 아니다.
      *
      * 검사와 실행 사이의 **외부 프로세스** 변경은 방어 대상이 아니다 (결정 A-M1).
      *
