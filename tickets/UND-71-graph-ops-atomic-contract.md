@@ -1,6 +1,6 @@
 # [UND-71] 그래프 조작 계약 — 원자 실행 · 조건부 ref 갱신 · Undo 전략
 
-> wave 8 · 사이즈 M · 의존 UND-21 · UND-28 · UND-38 · UND-63 · 소유 `domain/RefGateway.kt` · `domain/WorktreeOpsGateway.kt` · `domain/undo/UndoStrategy.kt` · `infrastructure/git/ref/` · `infrastructure/git/worktreeops/`
+> wave 8 · 사이즈 M · 의존 UND-21 · UND-28 · UND-38 · UND-63 · 소유 `application/undo/` · `domain/RefGateway.kt` · `domain/WorktreeOpsGateway.kt` · `domain/undo/UndoStrategy.kt` · `infrastructure/git/cherrypick/` · `infrastructure/git/merge/` · `infrastructure/git/ref/` · `infrastructure/git/repository/` · `infrastructure/git/worktreeops/`
 
 ## 작업 내용 (설계 의도)
 
@@ -33,14 +33,26 @@ HEAD 로 되돌린다. 호출자에게는 "어느 브랜치에서 무엇을 했�
 같은 조건부 규칙을 따른다. 대상이 현재 브랜치인지 여부는 **화면 스냅샷이 아니라 실행 시점의 실제
 HEAD** 로 판정한다.
 
+### 결과 형태와 취소 계약
+
+`runOnBranch` 는 **수행 브랜치를 담은** `Succeeded` · `Conflicted` · `NoChange` 를 준다.
+충돌은 실패가 아니라 **진행 중 상태를 보존하는 결과**다 — 호출자가 해결 화면으로 이어 갈 수 있어야 한다.
+호출 전 HEAD 와 대상 브랜치 위치의 복구는 **예상하지 못한 실패에만** 적용한다.
+
+**변경과 그 결과의 소비(Undo 기록)는 호출자가 한 `NonCancellable` 구간으로 묶는다.**
+임계 구역 안의 조작은 중간에 끊기지 않지만, 완료 뒤 취소가 떨어지면 호출자는 결과 대신
+`CancellationException` 을 받는다 — 그때 저장소는 바뀐 채 Undo 항목만 없어진다 (결정 A-L2).
+
 ### 3. Undo 전략 3종을 추가한다
 
 `MoveBranchTo` · `MoveTagTo` · `HardResetTo` 를 되돌릴 수 있는 전략으로 정의한다.
 되돌리기 실행은 1·2 의 계약을 그대로 쓴다.
 
 **범위 밖**: 드래그&드롭 UI · 드롭 판정 · 확인 다이얼로그 · 팔레트 등가 경로 (전부 UND-42).
-`application/undo/` 는 UND-43 소유이므로 건드리지 않는다 — 이 티켓은 `domain/undo/UndoStrategy.kt`
-까지만 확장한다.
+
+`domain/undo/UndoStrategy.kt` 와 `application/undo/UndoService.kt` 는 이 티켓이 확장한다 —
+새 이동 변이를 실행할 분기가 UndoService 에 있어야 하고, 두 파일의 앞선 소유 티켓(UND-42 · UND-43)은
+재분해·머지로 닫혔다. 근거는 결정문 `G1 정정` · `G5`.
 
 **롤백**: 계약 추가는 기존 호출부를 깨지 않는 확장이다. 되돌리기는 revert 로 끝난다.
 
@@ -62,7 +74,7 @@ sequenceDiagram
         GW->>Git: 호출 전 HEAD 로 복귀
     end
     deactivate GW
-    GW-->>UC: 실행 결과 (수행 브랜치 · Undo 전략)
+    GW-->>UC: Succeeded · Conflicted · NoChange (수행 브랜치 포함)
 ```
 
 ### 클래스 의존
