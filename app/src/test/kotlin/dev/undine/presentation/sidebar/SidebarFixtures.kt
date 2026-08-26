@@ -12,6 +12,8 @@ import dev.undine.domain.RefName
 import dev.undine.domain.StashEntry
 import dev.undine.domain.Tag
 import dev.undine.domain.WorktreeOpsGateway
+import dev.undine.domain.submodule.Submodule
+import dev.undine.domain.worktree.Worktree
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
@@ -74,6 +76,8 @@ internal fun sampleRefs(): SidebarRefs = SidebarRefs(
 internal class SidebarStateHarness(
     val refGateway: RefGateway = mockk(relaxUnitFun = true),
     val worktreeOpsGateway: WorktreeOpsGateway = mockk(relaxUnitFun = true),
+    submodules: () -> List<Submodule> = { emptyList() },
+    worktrees: () -> List<Worktree> = { emptyList() },
 ) {
     val state: SidebarState = SidebarState(
         loadRefs = LoadSidebarRefsUseCase(refGateway, worktreeOpsGateway),
@@ -81,6 +85,7 @@ internal class SidebarStateHarness(
         renameBranch = RenameBranchUseCase(refGateway),
         deleteBranch = DeleteBranchUseCase(refGateway),
         scope = CoroutineScope(Dispatchers.Unconfined),
+        sections = SidebarSectionSource(submodules = submodules, worktrees = worktrees),
     )
 
     fun withRefs(refs: SidebarRefs = sampleRefs()): SidebarStateHarness {

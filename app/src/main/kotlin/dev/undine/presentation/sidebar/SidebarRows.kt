@@ -21,6 +21,7 @@ import dev.undine.presentation.design.component.UndineListRow
 import dev.undine.presentation.design.component.UndineToolbarButton
 import dev.undine.presentation.i18n.sidebar
 import dev.undine.presentation.i18n.strings
+import dev.undine.presentation.i18n.submoduleWorktree
 
 private const val EXPANDED_GLYPH = "▾"
 private const val COLLAPSED_GLYPH = "▸"
@@ -62,6 +63,8 @@ private fun groupLabel(group: SidebarGroup): String {
         SidebarGroup.REMOTE_BRANCHES -> sidebarStrings.remoteBranches
         SidebarGroup.TAGS -> sidebarStrings.tags
         SidebarGroup.STASHES -> sidebarStrings.stashes
+        SidebarGroup.SUBMODULES -> strings.submoduleWorktree.submodulesTitle
+        SidebarGroup.WORKTREES -> strings.submoduleWorktree.worktreesTitle
     }
 }
 

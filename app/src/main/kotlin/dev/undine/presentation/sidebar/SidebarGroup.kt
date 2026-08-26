@@ -9,4 +9,6 @@ enum class SidebarGroup {
     REMOTE_BRANCHES,
     TAGS,
     STASHES,
+    SUBMODULES,
+    WORKTREES,
 }
