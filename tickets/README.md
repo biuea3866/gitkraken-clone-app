@@ -12,7 +12,7 @@ Undine 구현을 **60개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2
 | 범위 | wave | 티켓 | 내용 |
 |---|---|---|---|
 | **1차 — 일상 사용** | 1~6 | 29건 | 저장소·그래프·diff·스테이징·브랜치·원격·병합·충돌·리베이스·검색 |
-| **2차 — 완성도** | 2, 7~10 | 31건 | cherry-pick·blame·reflog·patch·submodule·LFS·worktree·bisect·서명·undo·설정 화면·드래그&드롭·탭·접근성·자동 업데이트 |
+| **2차 — 완성도** | 2, 7~10 | 32건 | cherry-pick·blame·reflog·patch·submodule·LFS·worktree·bisect·서명·undo·설정 화면·드래그&드롭·탭·접근성·자동 업데이트 |
 
 **1차만 끝나도 매일 쓸 수 있다.** 2차는 "GitKraken 과 비슷해지는" 구간이며,
 필요 없다고 판단되는 티켓은 지워도 1차 결과물이 깨지지 않도록 의존을 설계했다.
@@ -73,7 +73,8 @@ Undine 구현을 **60개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2
 | [UND-39](UND-39-external-diff-merge-tool.md) | 외부 diff/merge 도구 연동 | S | 7 | UND-05 · UND-11 · UND-59 | `domain/externaltool/` · `infrastructure/externaltool/` |
 | [UND-40](UND-40-preferences-screen.md) | 설정 화면 골격 · 공통 설정 행 계약 | M | 8 | UND-10 · UND-11 · UND-49 · UND-63 | `presentation/preferences/PreferencesScreen.kt` · `PreferencesState.kt` · `PreferencesRow.kt` · `PreferencesTab.kt` · `application/preferences/` · `presentation/i18n/PreferencesStrings.kt` |
 | [UND-41](UND-41-blame-history-view.md) | Blame 뷰 · 파일 이력 화면 | M | 8 | UND-10 · UND-29 · UND-63 | `presentation/blame/` · `application/blame/`(확장) |
-| [UND-42](UND-42-graph-drag-drop.md) | 그래프 드래그&드롭 조작 | L | 8 | UND-14 · UND-21 · UND-28 · UND-38 · UND-63 | `presentation/graph/` (dnd 확장) |
+| [UND-71](UND-71-graph-ops-atomic-contract.md) | 그래프 조작 계약 — 원자 실행 · 조건부 ref 갱신 · Undo 전략 | M | 8 | UND-21 · UND-28 · UND-38 · UND-63 | `domain/RefGateway.kt` · `domain/WorktreeOpsGateway.kt` · `domain/undo/UndoStrategy.kt` · `infrastructure/git/ref/` · `infrastructure/git/worktreeops/` |
+| [UND-42](UND-42-graph-drag-drop.md) | 그래프 드래그&드롭 조작 | M | 8 | UND-14 · UND-38 · UND-63 · UND-71 | `presentation/graph/` (dnd 확장) · `domain/graphops/` · `application/graphops/` |
 | [UND-43](UND-43-undo-history-panel.md) | Undo 버튼 · 실행 이력 패널 | M | 8 | UND-10 · UND-38 · UND-63 | `presentation/undo/` · `application/undo/`(확장) |
 | [UND-44](UND-44-multi-repo-tabs.md) | 다중 저장소 탭 | L | 8 | UND-02 · UND-12 · UND-63 | `presentation/tabs/` · `presentation/shell/` · `application/session/` · `infrastructure/git/repository/` (다중 세션 확장) |
 | [UND-45](UND-45-submodule-worktree-panel.md) | Submodule · Worktree 패널 | M | 8 | UND-10 · UND-32 · UND-34 · UND-63 | `presentation/submodule/` · `application/submodule/` · `application/worktree/` |
@@ -155,7 +156,7 @@ flowchart LR
     end
     subgraph P2["2차 — 완성도"]
         W7["wave 7<br/>Gateway 확장<br/>(13)"]
-        W8["wave 8<br/>공통계약·화면·설정탭<br/>(18)"]
+        W8["wave 8<br/>공통계약·화면·설정탭<br/>(19)"]
         W9["wave 9<br/>2차 와이어업<br/>(1)"]
         W10["wave 10<br/>접근성·2차 E2E<br/>(2)"]
     end
@@ -185,13 +186,14 @@ flowchart LR
 | 7a | UND-28, UND-29, UND-30, UND-36, UND-38, UND-59, UND-60, UND-61 | 8 |
 | 7b | UND-32, UND-34, UND-35, UND-37, UND-39 | 5 |
 | 8a | UND-62, UND-63, UND-64 | 3 |
+| 8a2 | UND-71 | 1 |
 | 8b | UND-40, UND-41, UND-42, UND-43, UND-44, UND-45, UND-46, UND-47, UND-48 | 9 |
 | 8c | UND-65, UND-66, UND-67, UND-68, UND-69, UND-70 | 6 |
 | 9 | UND-51 | 1 |
 | 10 | UND-50, UND-52 | 2 |
 
-- **너비 분포**: [1, 11, 11, 5, 3, 1, 8, 5, 3, 9, 6, 1, 2]
-- **평균 wave 너비**: 5.08
+- **너비 분포**: [1, 11, 11, 5, 3, 1, 8, 5, 3, 1, 9, 6, 1, 2]
+- **평균 wave 너비**: 4.79
 - **판정: 통과** — 모든 wave 너비가 1~2 인 직선형 DAG 가 아니다.
   wave 2·3·7a·8b·8c 에서 각각 11·11·8·9·6 개가 동시에 열린다.
 > UND-54·UND-56·UND-57 은 이 표에서 누락돼 있었다 — 티켓 헤더의 wave 값으로 채웠다.

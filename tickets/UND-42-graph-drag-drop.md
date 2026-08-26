@@ -1,6 +1,6 @@
 # [UND-42] 그래프 드래그&드롭 조작
 
-> wave 8 · 사이즈 L · 의존 UND-14, UND-21, UND-28, UND-38, UND-63 · 소유 `presentation/graph/` (dnd 확장)
+> wave 8 · 사이즈 M · 의존 UND-14 · UND-38 · UND-63 · UND-71 · 소유 `presentation/graph/` (dnd 확장) · `domain/graphops/` · `application/graphops/`
 
 ## 작업 내용 (설계 의도)
 **GitKraken 의 시그니처 기능**이다. 그래프에서 브랜치를 다른 브랜치 위로 끌어다 놓아 병합·리베이스하고,
@@ -27,6 +27,15 @@
 
 **키보드 대체 경로를 반드시 제공한다** — 드래그는 접근성 관점에서 배타적 입력이다.
 컨텍스트 메뉴와 커맨드 팔레트로 같은 동작에 도달할 수 있어야 한다.
+
+**실행은 UND-71 의 계약을 호출만 한다.** 브랜치 대상 조작의 원자 실행(checkout+조작 한 임계 구역),
+ref 이동의 조건부 갱신, Undo 전략 3종은 전부 gateway 소유다 — 이 티켓은 그 계약을 **쓰기만 하고
+직접 만들지 않는다.** `domain/RefGateway.kt` · `domain/WorktreeOpsGateway.kt` ·
+`infrastructure/git/{ref,worktreeops}/` · `application/undo/` 를 수정하면 소유 위반이다
+(`application/undo/` 는 UND-43 소유다).
+
+**이 경계는 앞선 실패의 결과다.** 1차 구현이 소유 밖 13개 파일로 번지면서 gateway 층의 원자성 결함을
+UI 티켓 안에서 고치려 했고, 같은 p0 가 4라운드 동안 형태만 바꿔 재발했다.
 
 **롤백**: 모든 동작은 UND-38 Undo 스택에 기록되며, 충돌 시 UND-21 의 abort 로 복구한다.
 
