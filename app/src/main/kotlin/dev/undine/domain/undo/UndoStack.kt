@@ -39,6 +39,21 @@ class UndoStack(private val capacity: Int = DEFAULT_CAPACITY) {
     /** 최상단 항목을 꺼낸다. 되돌렸든 거부됐든 소비된 항목은 스택에서 사라진다. */
     fun pop(): OperationEntry? = synchronized(lock) { entries.removeLastOrNull() }
 
+    /**
+     * 최상단이 [expected] 와 같을 때만 꺼낸다 — **확인과 제거가 한 임계 구역**에서 끝난다.
+     *
+     * [peek] 로 본 것을 [pop] 으로 꺼내면 그 사이에 다른 코루틴이 새 연산을 기록할 수 있고,
+     * 그러면 사용자에게 보여준 것과 **다른 항목을 되돌린다**. 기록은 여러 연산 UseCase 에서
+     * 들어오므로 그 창은 실재한다.
+     *
+     * @return 꺼냈으면 true. 최상단이 바뀌었으면 false 이고 **스택은 그대로**다.
+     */
+    fun popIf(expected: OperationEntry): Boolean = synchronized(lock) {
+        if (entries.lastOrNull() != expected) return@synchronized false
+        entries.removeLast()
+        true
+    }
+
     /** 최신 우선 이력. 화면이 그대로 나열할 수 있는 순서다. */
     fun history(): List<OperationEntry> = synchronized(lock) { entries.reversed() }
 

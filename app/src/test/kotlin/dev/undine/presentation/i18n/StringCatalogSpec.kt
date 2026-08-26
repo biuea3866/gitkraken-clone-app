@@ -139,8 +139,7 @@ class StringCatalogSpec : FunSpec({
         displayed shouldBe "OK"
     }
 
-    test("구현 전인 wave 8 화면의 빈 네임스페이스 스텁이 등록돼도 병합이 성공한다") {
-            WAVE8_STUB_NAMESPACES.count { namespace -> namespace != BLAME_NAMESPACE }
+    test("채워진 undo와 남은 wave 8 빈 네임스페이스 스텁이 함께 병합된다") {
         val merged = mergeTranslations(builtInTranslations)
         val withoutStubs = mergeTranslations(builtInTranslations.filter { it.isNotEmpty() })
 

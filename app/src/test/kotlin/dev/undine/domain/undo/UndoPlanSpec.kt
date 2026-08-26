@@ -6,6 +6,7 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
+import java.time.Instant
 
 private val MAIN = RefName("main")
 private val FEATURE = RefName("feature")
@@ -13,9 +14,16 @@ private val HEAD_AFTER = commitId(2)
 private val HEAD_BEFORE = commitId(1)
 
 private val RECORDED = RepositoryBaseline(branch = MAIN, head = HEAD_AFTER)
+private val RECORDED_AT = Instant.parse("2026-08-25T01:02:03Z")
 
 private fun entryOf(strategy: UndoStrategy, operation: GitOperationKind = GitOperationKind.COMMIT) =
-    OperationEntry(operation = operation, strategy = strategy, baseline = RECORDED)
+    OperationEntry(
+        operation = operation,
+        strategy = strategy,
+        baseline = RECORDED,
+        targetLabel = operation.label,
+        recordedAt = RECORDED_AT,
+    )
 
 /**
  * 되돌리기 전 판단 규칙 — 복구 불가, detached HEAD, 외부 변경, 커밋되지 않은 변경.

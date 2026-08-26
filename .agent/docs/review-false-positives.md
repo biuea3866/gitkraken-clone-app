@@ -55,6 +55,7 @@
 | FP-B11 | UI 티켓이 `application/<자기 slug>/` 와 `presentation/i18n/<자기>Strings.kt` 를 함께 소유 | 결정문 A1·A3 이 승인한 범위다 (`.claude-local/WAVE3-DECISIONS.md` §A1·§122–126). UND-13 → `application/sidebar/`, UND-16 → `application/diff/`, UND-19 → `application/welcome/` 식으로 각 UI 티켓이 자기 UseCase 를 소유한다 — "승인되지 않은 소유 범위 확장" 이 아니다 |
 | FP-B12 | 정적 소스 검사 테스트가 `Mutex`·`withContext`·`Dispatchers` 문자열을 훑음 | 그 테스트는 **금지 패턴이 실행 코드에 없음**을 지키는 것이고 현재 통과한다. 같은 낱말이 주석·KDoc 에 등장하는 것을 "오검출" 로 지적하지 않는다 — 검사 대상은 테스트가 정의하며, 실패하지 않는 검사를 결함으로 올리지 않는다 |
 | FP-B13 | 축 산출물(`axis-review.json`)에 `verdict` 키가 없음 | 그 스키마는 `verdict` 를 **선언하지 않는다** — 축은 `findings` 만 올리고 판정은 요약 노드가 한다. fail-closed 는 `verdict` 를 선언하는 스키마(`review.json`·`final-summary.json`·`ticket-review.json`)에만 적용된다 ([`review-grading`](./review-grading.md) "판정 불가 시"). 이것을 지적으로 올리면 코드에 문제가 없는 티켓도 APPROVED 에 도달하지 못한다 |
+| FP-B14 | `java.util.logging` 사용을 `app/build.gradle.kts` 의 `modules(...)` 목록에 `java.logging` 이 없다는 이유로 배포 회귀(p0)로 지적 | Compose Gradle 플러그인이 `java.base`·`java.desktop`·**`java.logging`** 을 jlink `--add-modules` 에 기본으로 넣는다 (`app/build/compose/tmp/createRuntimeImage.args.txt` 로 확인). 빌드된 런타임 이미지의 `release` 파일 `MODULES` 에도 `java.logging` 이 있다. `modules(...)` 블록은 **플러그인 기본값에 더하는** 목록이지 전체 목록이 아니다. 덧붙여 `java.sql`(목록에 있음)이 `java.logging` 을 transitive 로 요구한다 |
 | FP-B9 | `DirCacheBuilder.add()` 를 정렬 순서와 무관하게 호출 | `commit()` → `finish()` 가 `sorted` 플래그를 보고 `resort()` 한다 (JGit 7.3 확인). 엔트리를 뒤에 덧붙여도 인덱스 순서는 깨지지 않는다 |
 
 ## C. 코멘트 작성 형태
