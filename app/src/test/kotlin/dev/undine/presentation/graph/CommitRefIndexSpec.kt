@@ -3,6 +3,11 @@ package dev.undine.presentation.graph
 import dev.undine.domain.Branch
 import dev.undine.domain.RefName
 import dev.undine.domain.Tag
+import dev.undine.domain.graphops.GraphDragSource
+import dev.undine.domain.graphops.GraphDropProposal
+import dev.undine.domain.graphops.GraphDropRefusal
+import dev.undine.domain.graphops.GraphDropTarget
+import dev.undine.domain.graphops.proposeGraphDrop
 import dev.undine.testsupport.commitId
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -22,11 +27,11 @@ private fun branch(name: RefName, target: Int, isCurrent: Boolean = false) = Bra
     behind = 0,
 )
 
-private fun tag(name: String, target: Int) = Tag(
+private fun tag(name: String, target: Int, isAnnotated: Boolean = false) = Tag(
     name = RefName(name),
     target = commitId(target),
-    isAnnotated = false,
-    message = null,
+    isAnnotated = isAnnotated,
+    message = if (isAnnotated) "release" else null,
     tagger = null,
 )
 
@@ -41,11 +46,11 @@ class CommitRefIndexSpec : FunSpec({
         )
 
         index.chipsFor(commitId(1)) shouldContainExactly listOf(
-            GraphRefChip("main", GraphRefKind.BRANCH),
+            GraphRefChip("main", GraphRefKind.BRANCH, target = commitId(1)),
         )
         index.chipsFor(commitId(2)) shouldContainExactly listOf(
-            GraphRefChip("feature", GraphRefKind.BRANCH),
-            GraphRefChip("v1.0.0", GraphRefKind.TAG),
+            GraphRefChip("feature", GraphRefKind.BRANCH, target = commitId(2)),
+            GraphRefChip("v1.0.0", GraphRefKind.TAG, target = commitId(2)),
         )
     }
 
@@ -57,8 +62,8 @@ class CommitRefIndexSpec : FunSpec({
         )
 
         index.chipsFor(commitId(1)) shouldContainExactly listOf(
-            GraphRefChip(refName = null, kind = GraphRefKind.HEAD),
-            GraphRefChip("main", GraphRefKind.BRANCH),
+            GraphRefChip(refName = null, kind = GraphRefKind.HEAD, target = commitId(1)),
+            GraphRefChip("main", GraphRefKind.BRANCH, target = commitId(1)),
         )
     }
 
@@ -81,6 +86,31 @@ class CommitRefIndexSpec : FunSpec({
 
         index.chipsFor(commitId(9)).shouldBeEmpty()
         CommitRefIndex.EMPTY.chipsFor(commitId(1)).shouldBeEmpty()
+    }
+
+    test("annotated 태그는 그 사실을 칩에 실어 옮길 수 없는 source 로 만든다") {
+        val index = CommitRefIndex.of(
+            branches = emptyList(),
+            tags = listOf(tag("v1.0.0", 2, isAnnotated = true), tag("nightly", 2)),
+            currentBranch = null,
+        )
+
+        index.chipsFor(commitId(2)) shouldContainExactly listOf(
+            GraphRefChip("v1.0.0", GraphRefKind.TAG, target = commitId(2), isAnnotated = true),
+            GraphRefChip("nightly", GraphRefKind.TAG, target = commitId(2), isAnnotated = false),
+        )
+
+        // 칩이 실어 준 값이 그대로 드롭 불가 판정까지 이어져야 한다 — 여기서 끊기면 화면은
+        // annotated 태그를 옮길 수 있는 것처럼 보여 준다.
+        val annotated = index.chipsFor(commitId(2)).first { it.refName == "v1.0.0" }
+        proposeGraphDrop(
+            GraphDragSource.Tag(
+                RefName(requireNotNull(annotated.refName)),
+                requireNotNull(annotated.target),
+                annotated.isAnnotated,
+            ),
+            GraphDropTarget.Commit(commitId(1)),
+        ) shouldBe GraphDropProposal.Unavailable(GraphDropRefusal.ANNOTATED_TAG)
     }
 
     test("현재 브랜치 이름이 브랜치 목록에 없으면 HEAD 칩을 그리지 않는다") {

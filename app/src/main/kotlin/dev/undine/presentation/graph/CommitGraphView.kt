@@ -36,11 +36,13 @@ import java.time.Instant
  * @param refIndex 커밋에 붙일 HEAD·브랜치·태그 칩. 참조를 아직 모르면 [CommitRefIndex.EMPTY] 다.
  */
 @Composable
+@Suppress("LongParameterList")
 fun CommitGraphView(
     state: GraphViewState,
     now: Instant,
     modifier: Modifier = Modifier,
     refIndex: CommitRefIndex = CommitRefIndex.EMPTY,
+    dragDropState: GraphDragDropState? = null,
     onCommitSelected: (Commit) -> Unit = {},
 ) {
     val listState = rememberLazyListState()
@@ -57,10 +59,11 @@ fun CommitGraphView(
         val status = state.status
         when {
             status is GraphLoadStatus.Failed -> GraphStatusMessage(GraphTags.ERROR, failure = true)
-            state.rows.isNotEmpty() -> CommitList(state, listState, refIndex, now, onCommitSelected)
+            state.rows.isNotEmpty() -> CommitList(state, listState, refIndex, now, onCommitSelected, dragDropState)
             status == GraphLoadStatus.Loaded -> GraphStatusMessage(GraphTags.EMPTY, failure = false)
             else -> GraphLoadingMessage()
         }
+        dragDropState?.let { GraphDragDropOverlay(state = it) }
     }
 }
 
@@ -81,12 +84,14 @@ private suspend fun GraphViewState.loadWhenScrolledToBottom(listState: LazyListS
 }
 
 @Composable
+@Suppress("LongParameterList")
 private fun CommitList(
     state: GraphViewState,
     listState: LazyListState,
     refIndex: CommitRefIndex,
     now: Instant,
     onCommitSelected: (Commit) -> Unit,
+    dragDropState: GraphDragDropState?,
 ) {
     val currentStrings = strings
     val laneCount = state.laneCount
@@ -109,6 +114,7 @@ private fun CommitList(
                     state.selectCommit(item.commit.id)
                     onCommitSelected(item.commit)
                 },
+                dragDropState = dragDropState,
             )
         }
     }

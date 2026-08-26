@@ -23,6 +23,8 @@ enum class GraphRefKind {
 data class GraphRefChip(
     val refName: String?,
     val kind: GraphRefKind,
+    val target: CommitId? = null,
+    val isAnnotated: Boolean = false,
 )
 
 /**
@@ -55,15 +57,15 @@ class CommitRefIndex private constructor(
             val grouped = LinkedHashMap<CommitId, MutableList<GraphRefChip>>()
             headTarget(branches, currentBranch)?.let { target ->
                 grouped.getOrPut(target) { mutableListOf() } +=
-                    GraphRefChip(refName = null, kind = GraphRefKind.HEAD)
+                    GraphRefChip(refName = null, kind = GraphRefKind.HEAD, target = target)
             }
             branches.forEach { branch ->
                 grouped.getOrPut(branch.target) { mutableListOf() } +=
-                    GraphRefChip(branch.name.value, GraphRefKind.BRANCH)
+                    GraphRefChip(branch.name.value, GraphRefKind.BRANCH, target = branch.target)
             }
             tags.forEach { tag ->
                 grouped.getOrPut(tag.target) { mutableListOf() } +=
-                    GraphRefChip(tag.name.value, GraphRefKind.TAG)
+                    GraphRefChip(tag.name.value, GraphRefKind.TAG, target = tag.target, isAnnotated = tag.isAnnotated)
             }
             return CommitRefIndex(grouped.mapValues { (_, chips) -> chips.toList() })
         }
