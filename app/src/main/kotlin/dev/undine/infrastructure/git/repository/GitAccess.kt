@@ -1,12 +1,15 @@
 package dev.undine.infrastructure.git.repository
 
 import dev.undine.domain.RepositoryPath
+import dev.undine.domain.RepositorySessionKey
+import dev.undine.domain.RepositorySessions
 import dev.undine.domain.UndineException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.eclipse.jgit.lib.Repository
+import java.nio.file.Path
 
 internal const val REPOSITORY_NOT_OPEN = "저장소가 열려 있지 않습니다"
 
@@ -35,6 +38,19 @@ class GitAccess(
         onGitThread { block(holder.open(path)) }
 
     /**
+     * 탭 세션 전이 **하나 전체**를 이 클래스의 임계구역 안에서 수행한다.
+     *
+     * 락을 전이의 시작과 끝에 한 번씩 잡는 것이 요점이다 — 세션 조작마다 잡았다 놓으면 호출 사이에
+     * 다른 전이가 끼어들어, 먼저 시작한 전이의 되돌리기가 뒤 전이의 상태를 덮는다 (결정 C2 정정 5).
+     * [block] 이 받는 [RepositorySessions] 는 이미 락을 쥔 채 홀더를 직접 부르므로 다시 잠그지 않는다.
+     *
+     * 설정 저장처럼 Git 이 아닌 대기도 이 구역 안에서 일어난다. 그동안 다른 Git 접근이 기다리는 것은
+     * 의도된 비용이다 — 장부와 핸들이 갈라지는 쪽이 훨씬 비싸다.
+     */
+    suspend fun <T> withSessions(block: suspend (RepositorySessions) -> T): T =
+        withContext(Dispatchers.IO) { serialAccess.withLock { block(HeldSessions(holder)) } }
+
+    /**
      * 현재 열려 있는 핸들로 [block] 을 수행한다.
      *
      * 열기 전이나 [close] 후의 호출은 빈 결과가 아니라 실패다 — 빈 결과를 주면 화면이
@@ -47,9 +63,44 @@ class GitAccess(
         block(repository)
     }
 
-    /** 현재 핸들을 닫는다. 열려 있지 않으면 아무 일도 하지 않는다. */
+    /** 열려 있는 모든 핸들을 닫는다. 열려 있지 않으면 아무 일도 하지 않는다. */
     suspend fun close(): Unit = onGitThread { holder.close() }
 
     private suspend fun <T> onGitThread(block: () -> T): T =
         withContext(Dispatchers.IO) { serialAccess.withLock { block() } }
 }
+
+/**
+ * [GitAccess.withSessions] 가 락을 쥔 동안에만 살아 있는 세션 조작.
+ *
+ * 홀더를 **직접** 부른다 — [GitAccess] 의 공개 메서드를 거치면 이미 쥔 락을 다시 잡으려다 멈춘다.
+ * 홀더 자신의 인스턴스 잠금이 있으므로 여기서 추가로 감싸지 않는다 (결정 A-N1).
+ */
+private class HeldSessions(private val holder: RepositoryHolder) : RepositorySessions {
+
+    override suspend fun open(path: RepositoryPath): RepositorySessionKey =
+        holder.openSession(path).toSessionKey()
+
+    override suspend fun release(key: RepositorySessionKey) {
+        holder.releaseSession(key.toPath())
+    }
+
+    override suspend fun close() {
+        holder.close()
+    }
+
+    override suspend fun restoreSessions(
+        sessions: List<RepositorySessionKey>,
+        active: RepositorySessionKey?,
+    ): List<RepositorySessionKey> =
+        holder.restoreSessions(sessions.map(RepositorySessionKey::toPath), active?.toPath())
+            .map(Path::toSessionKey)
+}
+
+/**
+ * 세션 키는 홀더가 정한 **정규화된 절대 경로**의 문자열 표현이다. 이 두 변환이 domain 계약과
+ * 홀더 사이의 유일한 통로이며, 여기서 경로를 다시 해석(정규화·상대 경로 해소)하지 않는다.
+ */
+private fun Path.toSessionKey(): RepositorySessionKey = RepositorySessionKey(toString())
+
+private fun RepositorySessionKey.toPath(): Path = Path.of(value)

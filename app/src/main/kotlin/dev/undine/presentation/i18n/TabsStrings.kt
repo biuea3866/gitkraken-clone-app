@@ -18,14 +18,33 @@ import java.util.Locale
  */
 internal const val TABS_NAMESPACE: String = "tabs"
 
-/** 탭 화면이 추가할 `tabs.*` 키의 자리. */
-object TabsKeys
+/** `tabs.*` 키 정의. */
+object TabsKeys {
+    val closeTab = StringKey("$TABS_NAMESPACE.closeTab")
+    val closeTabConfirmation = StringKey("$TABS_NAMESPACE.closeTabConfirmation")
+    val missingPath = StringKey("$TABS_NAMESPACE.missingPath")
+}
 
 /** 탭 문구 접근자. UND-44 가 여기에 화면별 문자열을 추가한다. */
 @JvmInline
-value class TabsStrings internal constructor(private val strings: Strings)
+value class TabsStrings internal constructor(private val strings: Strings) {
+    val closeTab: String get() = strings.text(TabsKeys.closeTab)
+    val closeTabConfirmation: String get() = strings.text(TabsKeys.closeTabConfirmation)
+    val missingPath: String get() = strings.text(TabsKeys.missingPath)
+}
 
 /** 탭 문구 네임스페이스 진입점. */
 val Strings.tabs: TabsStrings get() = TabsStrings(this)
 
-internal val tabsTranslations: Map<Locale, Map<StringKey, String>> = emptyMap()
+internal val tabsTranslations: Map<Locale, Map<StringKey, String>> = mapOf(
+    Locale.KOREAN to mapOf(
+        TabsKeys.closeTab to "탭 닫기",
+        TabsKeys.closeTabConfirmation to "진행 중인 원격 작업이 있습니다. 탭을 닫을까요?",
+        TabsKeys.missingPath to "경로를 찾을 수 없음",
+    ),
+    Locale.ENGLISH to mapOf(
+        TabsKeys.closeTab to "Close tab",
+        TabsKeys.closeTabConfirmation to "A remote operation is in progress. Close this tab?",
+        TabsKeys.missingPath to "Path not found",
+    ),
+)
