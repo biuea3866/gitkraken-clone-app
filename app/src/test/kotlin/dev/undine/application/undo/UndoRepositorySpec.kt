@@ -89,6 +89,16 @@ private class UndoHarness(private val directory: File) {
     val recorder = OperationRecorder(refGateway, stack)
     val service = UndoService(stack, refGateway, repositoryGateway, worktreeOpsGateway)
 
+    /**
+     * 화면과 같은 순서로 되돌린다 — 미리 본 최상단을 **그대로 대상으로 지목**해 넘긴다.
+     * 인자 없는 "마지막 것 되돌리기" 는 더 이상 없다 (wave 8 결정 G4).
+     */
+    suspend fun undoTop(): UndoOutcome {
+        val expected = requireNotNull(stack.peek()) { "되돌릴 기록이 없습니다" }
+        val execution = service.undo(expected)
+        return (execution as UndoExecution.Completed).outcome
+    }
+
     suspend fun <T> use(block: suspend UndoHarness.() -> T): T {
         gitAccess.open(RepositoryPath(directory.absolutePath)) { }
         return try {
@@ -119,7 +129,7 @@ class UndoRepositorySpec : FunSpec({
 
         val outcome = UndoHarness(directory).use {
             recorder.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(CommitId.of(parent)))
-            service.undo()
+            undoTop()
         }
 
         outcome.shouldBeInstanceOf<UndoOutcome.Undone>().operation shouldBe GitOperationKind.COMMIT
@@ -140,7 +150,7 @@ class UndoRepositorySpec : FunSpec({
 
         val outcome = UndoHarness(directory).use {
             recorder.record(GitOperationKind.BRANCH_CREATE, UndoStrategy.DeleteBranch(RefName(FEATURE_BRANCH)))
-            service.undo()
+            undoTop()
         }
 
         outcome.shouldBeInstanceOf<UndoOutcome.Undone>()
@@ -168,7 +178,7 @@ class UndoRepositorySpec : FunSpec({
 
         val outcome = UndoHarness(directory).use {
             recorder.record(GitOperationKind.MERGE, UndoStrategy.HardResetTo(CommitId.of(beforeMerge)))
-            service.undo()
+            undoTop()
         }
 
         outcome.shouldBeInstanceOf<UndoOutcome.Undone>()
@@ -189,7 +199,7 @@ class UndoRepositorySpec : FunSpec({
 
         val outcome = UndoHarness(directory).use {
             recorder.record(GitOperationKind.STASH_PUSH, UndoStrategy.PopStash(stashEntryOf(stashed)))
-            service.undo()
+            undoTop()
         }
 
         outcome.shouldBeInstanceOf<UndoOutcome.Undone>()
@@ -217,7 +227,7 @@ class UndoRepositorySpec : FunSpec({
             git.createStash()
         }
 
-        val outcome = harness.use { service.undo() }
+        val outcome = harness.use { undoTop() }
 
         outcome.shouldBeInstanceOf<UndoOutcome.Undone>()
         File(directory, FILE_NAME).readText() shouldBe "앱에서 한 작업\n"
@@ -248,7 +258,7 @@ class UndoRepositorySpec : FunSpec({
             git.createStash()
         }
 
-        val thrown = harness.use { shouldThrow<UndineException.NotFound> { service.undo() } }
+        val thrown = harness.use { shouldThrow<UndineException.NotFound> { undoTop() } }
 
         thrown.kind shouldBe UndineException.NotFound.Kind.STASH
         thrown.name shouldBe recordedStash
@@ -270,7 +280,7 @@ class UndoRepositorySpec : FunSpec({
             recorder.recordIrreversible(GitOperationKind.HARD_RESET, "hard reset 이 지운 변경은 남아 있지 않습니다")
             recorder.recordIrreversible(GitOperationKind.STASH_DROP, "지운 stash 는 되살릴 수 없습니다")
             recorder.recordIrreversible(GitOperationKind.PUSH, "원격에 올라간 커밋은 앱이 되돌릴 수 없습니다")
-            listOf(service.undo(), service.undo(), service.undo())
+            listOf(undoTop(), undoTop(), undoTop())
         }
 
         outcomes.map { it.shouldBeInstanceOf<UndoOutcome.Irreversible>().operation } shouldBe listOf(
@@ -302,7 +312,7 @@ class UndoRepositorySpec : FunSpec({
             git.commitFile(FILE_NAME, "three\n", "밖에서 만든 커밋")
         }
 
-        val outcome = harness.use { service.undo() }
+        val outcome = harness.use { undoTop() }
 
         outcome.shouldBeInstanceOf<UndoOutcome.ExternalChange>()
         inRepository(directory) { git -> git.repository.headCommit() shouldBe externalHead }
@@ -319,7 +329,7 @@ class UndoRepositorySpec : FunSpec({
 
         val outcome = UndoHarness(directory).use {
             recorder.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(CommitId.of(parent)))
-            service.undo()
+            undoTop()
         }
 
         outcome.shouldBeInstanceOf<UndoOutcome.NoCurrentBranch>().reason shouldContain "detached"
@@ -337,8 +347,8 @@ class UndoRepositorySpec : FunSpec({
         UndoHarness(directory).use {
             recorder.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(CommitId.of(parent)))
             recorder.recordIrreversible(GitOperationKind.PUSH, "원격에 올라간 커밋은 앱이 되돌릴 수 없습니다")
-            service.undo()
-            service.undo()
+            undoTop()
+            undoTop()
         }
 
         inRepository(directory) { git ->
@@ -356,13 +366,16 @@ class UndoRepositorySpec : FunSpec({
             first
         }
 
-        UndoHarness(directory).use {
-            recorder.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(CommitId.of(parent)))
-            stack.peek() shouldNotBe null
+        val previousEntry = UndoHarness(directory).use {
+            recorder.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(CommitId.of(parent))).also {
+                stack.peek() shouldNotBe null
+            }
         }
 
         val nextSession = UndoHarness(directory)
         nextSession.stack.history().shouldBeEmpty()
-        nextSession.use { service.undo() } shouldBe UndoOutcome.NothingToUndo
+        // 이전 세션의 기록을 그대로 들이밀어도 이 세션의 최상단이 아니므로 아무것도 하지 않는다.
+        nextSession.use { service.undo(previousEntry) } shouldBe UndoExecution.TargetChanged
+        inRepository(directory) { git -> git.repository.headCommit() shouldNotBe parent }
     }
 })

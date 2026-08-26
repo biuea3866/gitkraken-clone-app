@@ -24,8 +24,13 @@ object UndoKeys {
     val idleLabel = StringKey("$UNDO_NAMESPACE.button.idle")
     val undoLabel = StringKey("$UNDO_NAMESPACE.button.undo")
     val undoTooltip = StringKey("$UNDO_NAMESPACE.button.tooltip")
+    val discardLabel = StringKey("$UNDO_NAMESPACE.button.discard")
     val running = StringKey("$UNDO_NAMESPACE.running")
     val undone = StringKey("$UNDO_NAMESPACE.result.undone")
+    val discarded = StringKey("$UNDO_NAMESPACE.result.discarded")
+    val failed = StringKey("$UNDO_NAMESPACE.result.failed")
+    val loadFailed = StringKey("$UNDO_NAMESPACE.result.loadFailed")
+    val targetChanged = StringKey("$UNDO_NAMESPACE.reason.targetChanged")
     val nothingToUndo = StringKey("$UNDO_NAMESPACE.reason.nothingToUndo")
     val irreversible = StringKey("$UNDO_NAMESPACE.reason.irreversible")
     val externalChange = StringKey("$UNDO_NAMESPACE.reason.externalChange")
@@ -39,8 +44,9 @@ object UndoKeys {
 
     /** 번역 누락 검사가 키를 하나씩 나열하지 않도록 전체 목록을 노출한다. */
     val all: List<StringKey> = listOf(
-        idleLabel, undoLabel, undoTooltip, running, undone,
-        nothingToUndo, irreversible, externalChange, detachedHead, uncommittedChanges, unmergedBranch,
+        idleLabel, undoLabel, undoTooltip, discardLabel, running, undone, discarded, failed, loadFailed,
+        targetChanged, nothingToUndo, irreversible, externalChange, detachedHead, uncommittedChanges,
+        unmergedBranch,
         historyTitle, historyEmpty, historyReversible, historyIrreversible,
     )
 }
@@ -57,7 +63,14 @@ value class UndoStrings internal constructor(private val strings: Strings) {
     /** 되돌릴 것이 없을 때의 버튼 레이블. 대상이 없으니 동작 이름을 붙이지 않는다. */
     val idleLabel: String get() = strings.text(UndoKeys.idleLabel)
 
+    /** 되돌릴 수 없는 최상단 기록을 이력에서 지우는 동작. 저장소가 아니라 세션 기록만 지운다. */
+    val discardLabel: String get() = strings.text(UndoKeys.discardLabel)
+
     val running: String get() = strings.text(UndoKeys.running)
+
+    /** 보여준 대상과 실제 최상단이 어긋나 아무것도 하지 않았을 때. */
+    val targetChanged: String get() = strings.text(UndoKeys.targetChanged)
+
     val nothingToUndo: String get() = strings.text(UndoKeys.nothingToUndo)
     val externalChange: String get() = strings.text(UndoKeys.externalChange)
     val detachedHead: String get() = strings.text(UndoKeys.detachedHead)
@@ -77,6 +90,19 @@ value class UndoStrings internal constructor(private val strings: Strings) {
 
     fun undone(operation: String): String = strings.text(UndoKeys.undone, operation)
 
+    /** 되돌리지 않고 기록만 지웠다 — 되돌렸다는 문구와 절대 섞이지 않게 따로 둔다. */
+    fun discarded(operation: String): String = strings.text(UndoKeys.discarded, operation)
+
+    /**
+     * 되돌리다 실패했다. [detail]은 이미 번역·마스킹된 도메인 예외 메시지다 —
+     * JGit 원문이나 원격 URL 이 여기로 오지 않는다 (예외 처리 규칙 2).
+     */
+    fun failed(operation: String, detail: String): String =
+        strings.text(UndoKeys.failed, operation, detail)
+
+    /** 대상·이력을 읽지 못했을 때. 버튼이 왜 잠겼는지를 빈 화면으로 두지 않는다. */
+    fun loadFailed(detail: String): String = strings.text(UndoKeys.loadFailed, detail)
+
     fun irreversible(operation: String): String = strings.text(UndoKeys.irreversible, operation)
 }
 
@@ -88,8 +114,13 @@ internal val undoTranslations: Map<Locale, Map<StringKey, String>> = mapOf(
         UndoKeys.idleLabel to "실행 취소",
         UndoKeys.undoLabel to "{0} 취소",
         UndoKeys.undoTooltip to "{0} 취소 — 대상: {1}",
+        UndoKeys.discardLabel to "이 기록 지우기",
         UndoKeys.running to "되돌리는 중…",
         UndoKeys.undone to "{0} 을(를) 되돌렸습니다.",
+        UndoKeys.discarded to "되돌릴 수 없는 {0} 기록을 이력에서 지웠습니다.",
+        UndoKeys.failed to "{0} 을(를) 되돌리지 못했습니다: {1}",
+        UndoKeys.loadFailed to "되돌리기 상태를 읽지 못했습니다: {0}",
+        UndoKeys.targetChanged to "되돌릴 대상이 바뀌어 아무것도 실행하지 않았습니다. 다시 확인하세요.",
         UndoKeys.nothingToUndo to "되돌릴 작업이 없습니다",
         UndoKeys.irreversible to "{0} 는 되돌릴 수 없습니다",
         UndoKeys.externalChange to "저장소가 외부에서 변경되어 되돌릴 수 없습니다",
@@ -106,8 +137,13 @@ internal val undoTranslations: Map<Locale, Map<StringKey, String>> = mapOf(
         UndoKeys.idleLabel to "Undo",
         UndoKeys.undoLabel to "Undo {0}",
         UndoKeys.undoTooltip to "Undo {0} — target: {1}",
+        UndoKeys.discardLabel to "Remove this entry",
         UndoKeys.running to "Undoing…",
         UndoKeys.undone to "Undid {0}.",
+        UndoKeys.discarded to "Removed the {0} entry, which could not be undone, from the history.",
+        UndoKeys.failed to "Could not undo {0}: {1}",
+        UndoKeys.loadFailed to "Could not read the undo state: {0}",
+        UndoKeys.targetChanged to "The undo target changed, so nothing was run. Please check again.",
         UndoKeys.nothingToUndo to "There is nothing to undo.",
         UndoKeys.irreversible to "{0} cannot be undone.",
         UndoKeys.externalChange to "The repository changed outside the app, so this cannot be undone.",

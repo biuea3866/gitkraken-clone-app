@@ -49,13 +49,26 @@ class UndoUseCasesSpec : FunSpec({
         LoadUndoHistoryUseCase(stack).execute() shouldContainExactly listOf(ENTRY, older)
     }
 
-    test("Undo UseCase는 최상단 한 단계 실행 결과를 가공하지 않고 전달한다") {
+    test("Undo UseCase는 미리 본 항목을 그대로 실어 보내고 결과를 가공하지 않는다") {
         val service = mockk<UndoService>()
-        val expected = UndoOutcome.Undone(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(PARENT))
-        coEvery { service.undo() } returns expected
+        val expected = UndoExecution.Completed(
+            UndoOutcome.Undone(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(PARENT)),
+        )
+        coEvery { service.undo(ENTRY) } returns expected
 
-        UndoLastOperationUseCase(service).execute() shouldBe expected
+        UndoLastOperationUseCase(service).execute(ENTRY) shouldBe expected
 
-        coVerify(exactly = 1) { service.undo() }
+        coVerify(exactly = 1) { service.undo(ENTRY) }
+    }
+
+    test("폐기 UseCase는 되돌리기가 아니라 기록 지우기를 요청한다") {
+        val service = mockk<UndoService>()
+        val expected = UndoExecution.Discarded(ENTRY, UndoOutcome.Irreversible(GitOperationKind.PUSH, "원격 반영"))
+        coEvery { service.discardBlocked(ENTRY) } returns expected
+
+        DiscardBlockedUndoEntryUseCase(service).execute(ENTRY) shouldBe expected
+
+        coVerify(exactly = 1) { service.discardBlocked(ENTRY) }
+        coVerify(exactly = 0) { service.undo(any()) }
     }
 })

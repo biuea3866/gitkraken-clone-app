@@ -1,6 +1,8 @@
 package dev.undine.presentation.undo
 
+import dev.undine.application.undo.UndoExecution
 import dev.undine.application.undo.UndoTarget
+import dev.undine.domain.UndineException
 import dev.undine.domain.undo.OperationEntry
 import dev.undine.domain.undo.UndoOutcome
 import dev.undine.presentation.i18n.Strings
@@ -73,11 +75,35 @@ fun undoHistoryPresentation(entries: List<OperationEntry>, strings: Strings): Li
         )
     }
 
-/** 실행 결과를 화면 안내 문구로 옮긴다. 거부 결과는 절대 성공 문구로 바꾸지 않는다. */
-fun undoOutcomeMessage(outcome: UndoOutcome?, strings: Strings): String? = when (outcome) {
+/**
+ * 실행 결말을 화면 안내 문구로 옮긴다.
+ *
+ * 거부·대상 어긋남·실패 중 어느 것도 성공 문구로 바뀌지 않는다. 특히 [UndoExecution.Failed] 는
+ * **일부만 적용된 뒤 실패**했을 수 있어, 무엇이 실패했고 왜인지를 함께 말한다 (예외 처리 규칙 6).
+ * `UndineException` 의 메시지는 infrastructure 가 이미 번역·마스킹한 것이라 그대로 실을 수 있다.
+ */
+fun undoExecutionMessage(execution: UndoExecution?, strings: Strings): String? = when (execution) {
     null -> null
-    is UndoOutcome.Undone -> strings.undo.undone(outcome.operation.label)
-    is UndoOutcome.Refused -> outcome.toUndoDisabledReason(strings)
+    is UndoExecution.Completed -> execution.outcome.toUndoMessage(strings)
+    is UndoExecution.Discarded -> strings.undo.discarded(execution.entry.operation.label)
+    UndoExecution.TargetChanged -> strings.undo.targetChanged
+    is UndoExecution.Failed -> strings.undo.failed(
+        execution.entry.operation.label,
+        execution.cause.message.orEmpty(),
+    )
+}
+
+/**
+ * 대상·이력을 읽지 못했을 때의 안내.
+ *
+ * 읽기 실패는 실행 결말과 다른 축이다 — 실행하지도 못한 상태이므로 결과 문구 자리에 섞지 않는다.
+ */
+fun undoLoadFailureMessage(failure: UndineException?, strings: Strings): String? =
+    failure?.let { strings.undo.loadFailed(it.message.orEmpty()) }
+
+private fun UndoOutcome.toUndoMessage(strings: Strings): String = when (this) {
+    is UndoOutcome.Undone -> strings.undo.undone(operation.label)
+    is UndoOutcome.Refused -> toUndoDisabledReason(strings)
 }
 
 private fun OperationEntry.toUndoButtonPresentation(

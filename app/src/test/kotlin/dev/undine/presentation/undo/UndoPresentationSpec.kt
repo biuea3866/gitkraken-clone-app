@@ -1,8 +1,10 @@
 package dev.undine.presentation.undo
 
+import dev.undine.application.undo.UndoExecution
 import dev.undine.application.undo.UndoTarget
 import dev.undine.domain.CommitId
 import dev.undine.domain.RefName
+import dev.undine.domain.UndineException
 import dev.undine.domain.undo.GitOperationKind
 import dev.undine.domain.undo.OperationEntry
 import dev.undine.domain.undo.RepositoryBaseline
@@ -95,10 +97,32 @@ class UndoPresentationSpec : FunSpec({
     test("실행 뒤 거부된 외부 변경도 성공 문구가 아닌 지정 문구로 나타낸다") {
         val recorded = RepositoryBaseline(branch = MAIN, head = HEAD)
 
-        undoOutcomeMessage(
-            UndoOutcome.ExternalChange(recorded, recorded.copy(head = PARENT)),
+        undoExecutionMessage(
+            UndoExecution.Completed(UndoOutcome.ExternalChange(recorded, recorded.copy(head = PARENT))),
             undoStrings(),
         ) shouldBe "저장소가 외부에서 변경되어 되돌릴 수 없습니다"
+    }
+
+    test("대상이 어긋나 아무것도 하지 않은 결말은 성공도 실패도 아닌 다시 확인 안내다") {
+        undoExecutionMessage(UndoExecution.TargetChanged, undoStrings()) shouldBe
+            "되돌릴 대상이 바뀌어 아무것도 실행하지 않았습니다. 다시 확인하세요."
+    }
+
+    test("실행 실패는 무엇이 왜 실패했는지 함께 말한다") {
+        undoExecutionMessage(
+            UndoExecution.Failed(entry(), UndineException.StateViolation("인덱스가 잠겨 있습니다")),
+            undoStrings(),
+        ) shouldBe "커밋 을(를) 되돌리지 못했습니다: 현재 저장소 상태에서 수행할 수 없습니다: 인덱스가 잠겨 있습니다"
+    }
+
+    test("기록을 지운 결말은 되돌렸다는 문구와 섞이지 않는다") {
+        val discarded = UndoExecution.Discarded(
+            entry(operation = GitOperationKind.PUSH, strategy = UndoStrategy.Irreversible("원격 반영")),
+            UndoOutcome.Irreversible(GitOperationKind.PUSH, "원격 반영"),
+        )
+
+        undoExecutionMessage(discarded, undoStrings()) shouldBe
+            "되돌릴 수 없는 push 기록을 이력에서 지웠습니다."
     }
 
     test("실행 이력은 받은 최신 우선 순서를 바꾸지 않고 시각·대상·가능 여부를 보존한다") {

@@ -47,6 +47,30 @@ class UndoStackSpec : FunSpec({
         stack.history().shouldBeEmpty()
     }
 
+    test("기대한 항목이 최상단일 때만 꺼낸다") {
+        val stack = UndoStack()
+        stack.record(entry(1))
+        stack.record(entry(2))
+
+        stack.popIf(entry(2)) shouldBe true
+        stack.peek() shouldBe entry(1)
+    }
+
+    test("기대한 항목이 최상단이 아니면 꺼내지 않고 스택을 그대로 둔다") {
+        val stack = UndoStack()
+        stack.record(entry(1))
+        // 미리 본 뒤 다른 연산이 새 기록을 남긴 상황이다.
+        stack.record(entry(2))
+
+        stack.popIf(entry(1)) shouldBe false
+        stack.size shouldBe 2
+        stack.history() shouldContainExactly listOf(entry(2), entry(1))
+    }
+
+    test("빈 스택에서는 어떤 항목도 꺼내지 않는다") {
+        UndoStack().popIf(entry(1)) shouldBe false
+    }
+
     test("상한을 넘으면 가장 오래된 항목부터 제거한다") {
         val stack = UndoStack(capacity = 3)
         (1..5).forEach { stack.record(entry(it)) }

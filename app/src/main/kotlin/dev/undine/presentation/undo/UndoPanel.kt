@@ -1,15 +1,20 @@
 package dev.undine.presentation.undo
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -19,6 +24,8 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import dev.undine.presentation.design.UndineTokens
 import dev.undine.presentation.design.component.UndineEmptyState
 import dev.undine.presentation.design.component.UndineToolbarButton
@@ -54,25 +61,30 @@ fun UndoPanel(
             .testTag(UndoTags.ROOT),
         verticalArrangement = Arrangement.spacedBy(spacing.small),
     ) {
-        UndineToolbarButton(
-            label = button.label,
-            onClick = state::undo,
-            modifier = Modifier.fillMaxWidth().testTag(UndoTags.BUTTON),
-            enabled = button.enabled,
-        )
-        button.tooltip?.let { tooltip ->
-            BasicText(
-                text = tooltip,
-                style = UndineTokens.typography.caption.copy(color = colors.foregroundSecondary),
-            )
-        }
+        UndoActionButton(button, onClick = state::undo)
         button.disabledReason?.let { reason ->
             BasicText(
                 text = reason,
                 style = UndineTokens.typography.caption.copy(color = colors.foregroundSecondary),
             )
         }
-        undoOutcomeMessage(state.lastOutcome, strings)?.let { message ->
+        // 복구 불가 최상단을 지우는 경로가 없으면 그 아래의 되돌릴 수 있는 기록에 닿을 방법이 없다.
+        // 저장소 상태로 막힌 기록에는 이 버튼을 내주지 않는다 — 해소되면 되돌릴 수 있는 기록이다.
+        if (state.canDiscardBlocked) {
+            UndineToolbarButton(
+                label = texts.discardLabel,
+                onClick = state::discardBlocked,
+                modifier = Modifier.fillMaxWidth().testTag(UndoTags.DISCARD),
+            )
+        }
+        undoLoadFailureMessage(state.loadFailure, strings)?.let { notice ->
+            BasicText(
+                text = notice,
+                style = UndineTokens.typography.caption.copy(color = colors.foregroundSecondary),
+                modifier = Modifier.testTag(UndoTags.LOAD_FAILURE),
+            )
+        }
+        undoExecutionMessage(state.lastExecution, strings)?.let { message ->
             BasicText(
                 text = message,
                 style = UndineTokens.typography.caption.copy(color = colors.foregroundSecondary),
@@ -92,6 +104,53 @@ fun UndoPanel(
             }
         }
     }
+}
+
+/**
+ * Undo 버튼과 그 툴팁.
+ *
+ * 툴팁은 **가리켰을 때 뜨는 진짜 툴팁**이어야 한다. 같은 문구를 버튼 아래 상시 노출하면 그건
+ * 툴팁이 아니라 설명문이고, 툴바에 놓았을 때 줄만 늘린다. 마우스를 쓸 수 없는 경로를 위해 같은
+ * 문구를 접근성 설명으로도 붙여 둔다 — 포커스로 읽는 사용자도 대상을 알 수 있어야 한다.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun UndoActionButton(button: UndoButtonPresentation, onClick: () -> Unit) {
+    val tooltip = button.tooltip
+    val buttonModifier = Modifier
+        .fillMaxWidth()
+        .semantics { if (tooltip != null) contentDescription = tooltip }
+        .testTag(UndoTags.BUTTON)
+
+    if (tooltip == null) {
+        UndineToolbarButton(button.label, onClick, buttonModifier, button.enabled)
+        return
+    }
+
+    TooltipArea(
+        tooltip = { UndoTooltipBubble(tooltip) },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        UndineToolbarButton(button.label, onClick, buttonModifier, button.enabled)
+    }
+}
+
+@Composable
+private fun UndoTooltipBubble(text: String) {
+    val colors = UndineTokens.color
+    val spacing = UndineTokens.spacing
+    val shape = UndineTokens.shape
+
+    BasicText(
+        text = text,
+        style = UndineTokens.typography.caption.copy(color = colors.foregroundPrimary),
+        modifier = Modifier
+            .clip(RoundedCornerShape(shape.cornerSmall))
+            .background(colors.surface)
+            .border(shape.borderThin, colors.border, RoundedCornerShape(shape.cornerSmall))
+            .padding(horizontal = spacing.small, vertical = spacing.extraSmall)
+            .testTag(UndoTags.TOOLTIP),
+    )
 }
 
 @Composable

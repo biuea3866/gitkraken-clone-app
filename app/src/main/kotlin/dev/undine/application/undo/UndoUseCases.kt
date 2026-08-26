@@ -1,7 +1,6 @@
 package dev.undine.application.undo
 
 import dev.undine.domain.undo.OperationEntry
-import dev.undine.domain.undo.UndoOutcome
 import dev.undine.domain.undo.UndoStack
 
 /**
@@ -31,9 +30,26 @@ class LoadUndoHistoryUseCase(private val undoStack: UndoStack) {
  * 특정 이력 행을 골라 되돌리거나 어느 지점까지 일괄로 되돌리는 경로는 만들지 않는다 — 중간 단계를
  * 건너뛴 되돌리기는 예측이 어렵고, Git 에서 그건 되돌리기가 아니라 새로운 사고다.
  *
- * 거부는 예외가 아니라 [UndoOutcome.Refused] 결과로 올라온다 — 화면이 성공으로 표시하지 않게.
+ * [expected] 는 화면이 사용자에게 **보여준 바로 그 기록**이다. 인자 없이 "마지막 것" 을 되돌리면
+ * 미리 보기와 실행 사이에 다른 연산이 끼어들었을 때 엉뚱한 항목을 되돌린다.
+ *
+ * 거부·어긋남·실패는 예외가 아니라 [UndoExecution] 결과로 올라온다 — 화면이 성공으로 표시하지 않게.
  */
 class UndoLastOperationUseCase(private val undoService: UndoService) {
 
-    suspend fun execute(): UndoOutcome = undoService.undo()
+    suspend fun execute(expected: OperationEntry): UndoExecution = undoService.undo(expected)
+}
+
+/**
+ * 되돌릴 수 없는 최상단 기록을 사용자가 확인한 뒤 이력에서 지운다.
+ *
+ * 되돌리기가 아니다 — 저장소를 건드리지 않고 세션 기록만 소비한다. 이 경로가 있어야 막힌 최상단
+ * 아래의 되돌릴 수 있는 기록에 닿을 수 있다.
+ *
+ * **지우는 대상은 기록 시점부터 복구 불가였던 항목뿐이다.** 저장소 상태 때문에 일시적으로 막힌
+ * 기록은 지우지 않고 [UndoExecution.TargetChanged] 로 돌려보낸다 ([UndoService.discardBlocked]).
+ */
+class DiscardBlockedUndoEntryUseCase(private val undoService: UndoService) {
+
+    suspend fun execute(expected: OperationEntry): UndoExecution = undoService.discardBlocked(expected)
 }
