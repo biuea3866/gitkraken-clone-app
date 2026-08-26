@@ -27,10 +27,38 @@ sealed interface UndoStrategy {
     data class DeleteBranch(val branch: RefName) : Reversible
 
     /**
-     * 병합·리베이스·cherry-pick 되돌리기 — 기록해 둔 `ORIG_HEAD` 로 hard reset 한다.
-     * 워킹트리를 덮어쓰므로 [OperationEntry.planUndo] 가 깨끗할 때만 허용한다.
+     * 브랜치 이동 되돌리기 — [branch] 를 [previous] 로 다시 옮긴다.
+     *
+     * **[expected] 를 함께 갖는 이유**: 되돌릴 때도 남의 이동을 덮어쓰지 않기 위해서다 (결정 G2).
+     * 이전 값만 저장하면, 기록 뒤 다른 경로가 이 브랜치를 옮겼을 때 되돌리기가 그 이동을 조용히
+     * 지운다 — 그 커밋으로만 도달하던 이력을 잃는다. [expected] 는 **이 연산이 만든 위치**이고,
+     * 되돌리기는 브랜치가 여전히 그 위치일 때만 수행한다.
      */
-    data class HardResetTo(val commit: CommitId) : Reversible
+    data class MoveBranchTo(
+        val branch: RefName,
+        val previous: CommitId,
+        val expected: CommitId,
+    ) : Reversible
+
+    /** 태그 이동 되돌리기 — [MoveBranchTo] 와 같은 조건부 규칙을 태그에 적용한다. */
+    data class MoveTagTo(
+        val tag: RefName,
+        val previous: CommitId,
+        val expected: CommitId,
+    ) : Reversible
+
+    /**
+     * 병합·리베이스·cherry-pick·reset 되돌리기 — [branch] 를 기록해 둔 [previous](`ORIG_HEAD`)로
+     * hard reset 한다. 워킹트리를 덮어쓰므로 [OperationEntry.planUndo] 가 깨끗할 때만 허용한다.
+     *
+     * [expected] 는 [MoveBranchTo] 와 같은 이유로 **필수**다 (결정 G5) — 기본값을 두어 조건부
+     * 갱신을 선택으로 만들면, 달성 가능한 방어를 쓰지 않는 기록이 조용히 생긴다.
+     */
+    data class HardResetTo(
+        val branch: RefName,
+        val previous: CommitId,
+        val expected: CommitId,
+    ) : Reversible
 
     /**
      * stash 저장 되돌리기 — 저장한 변경을 워킹트리로 되돌린다.

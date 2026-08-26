@@ -157,8 +157,27 @@ class UndoService(
             DeleteBranchResult.REFUSED_UNMERGED -> UndoOutcome.UnmergedBranch(strategy.branch)
         }
 
+        /*
+         * 이동 되돌리기는 **되돌릴 때도 조건부 갱신**을 쓴다 (결정 G2). 기록 이후 다른 경로가 그
+         * ref 를 옮겼다면 되돌리기가 그 이동을 덮어써 도달할 수 없는 커밋을 만든다. 어긋났을 때
+         * Gateway 가 올리는 거부는 여기서 잡지 않는다 — 성공으로 숨기면 사용자는 되돌려진 줄 안다.
+         */
+        is UndoStrategy.MoveBranchTo -> {
+            refGateway.moveBranch(strategy.branch, to = strategy.previous, expected = strategy.expected)
+            UndoOutcome.Undone(entry.operation, strategy)
+        }
+
+        is UndoStrategy.MoveTagTo -> {
+            refGateway.moveTag(strategy.tag, to = strategy.previous, expected = strategy.expected)
+            UndoOutcome.Undone(entry.operation, strategy)
+        }
+
         is UndoStrategy.HardResetTo -> {
-            worktreeOpsGateway.hardReset(strategy.commit)
+            worktreeOpsGateway.hardResetBranch(
+                strategy.branch,
+                to = strategy.previous,
+                expected = strategy.expected,
+            )
             UndoOutcome.Undone(entry.operation, strategy)
         }
 

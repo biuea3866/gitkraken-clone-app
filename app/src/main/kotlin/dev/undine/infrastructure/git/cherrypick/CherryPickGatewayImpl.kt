@@ -22,7 +22,7 @@ import java.io.IOException
 import org.eclipse.jgit.api.CherryPickResult as JGitCherryPickResult
 
 private const val OPERATION_ORDER = "cherrypick.orderOldestFirst"
-private const val OPERATION_APPLY = "cherrypick.apply"
+internal const val OPERATION_APPLY = "cherrypick.apply"
 private const val OPERATION_STATE = "cherrypick.repositoryState"
 private const val OPERATION_STOPPED = "cherrypick.stoppedAt"
 private const val OPERATION_CONTINUE = "cherrypick.continueAfterResolve"
@@ -33,7 +33,7 @@ private const val START_POINT_MISSING = "되돌릴 시작 지점(ORIG_HEAD)이 �
 private const val UNRESOLVED_REMAIN = "해결하지 않은 충돌이 남아 있습니다"
 
 /** `git cherry-pick -x` 가 남기는 줄. 원본 커밋을 추적하는 유일한 단서다. */
-private const val ORIGIN_NOTE_PREFIX = "(cherry picked from commit "
+internal const val ORIGIN_NOTE_PREFIX = "(cherry picked from commit "
 
 /**
  * [CherryPickGateway] 의 JGit 구현.
@@ -72,22 +72,7 @@ class CherryPickGatewayImpl(private val gitAccess: GitAccess) : CherryPickGatewa
      * 옵션이 없어, 만들어진 커밋의 메시지 끝에 한 줄을 붙이는 방식으로 같은 결과를 만든다.
      */
     override suspend fun apply(commit: CommitId, recordOrigin: Boolean): CherryPickStep =
-        gitOperation(OPERATION_APPLY) { git ->
-            val before = git.repository.resolve(Constants.HEAD)
-            git.repository.rememberStartPoint()
-            val picked = git.cherryPick()
-                .include(git.repository.requireObject(commit))
-                .call()
-            when (picked.status) {
-                JGitCherryPickResult.CherryPickStatus.OK ->
-                    git.stepFor(before, commit, recordOrigin)
-
-                JGitCherryPickResult.CherryPickStatus.CONFLICTING ->
-                    CherryPickStep.Conflicted(git.conflictedPaths())
-
-                else -> throw UndineException.GitOperationFailed(OPERATION_APPLY)
-            }
-        }
+        gitOperation(OPERATION_APPLY) { git -> git.applyHeld(commit, recordOrigin) }
 
     override suspend fun stoppedAt(): CommitId? =
         gitOperation(OPERATION_STOPPED) { git ->
@@ -138,34 +123,9 @@ class CherryPickGatewayImpl(private val gitAccess: GitAccess) : CherryPickGatewa
         }
 }
 
-/**
- * HEAD 가 움직였는지로 "만들어졌다" 와 "적용할 것이 없었다" 를 가른다.
- *
- * JGit 은 두 경우 모두 `OK` 를 주므로 상태만으로는 구분되지 않는다 — 빈 커밋을 실패로 처리하면
- * 사용자가 고칠 것이 없는데 고치려 하게 된다.
- */
-private fun Git.stepFor(before: ObjectId?, origin: CommitId, recordOrigin: Boolean): CherryPickStep {
-    val after = repository.resolve(Constants.HEAD)
-    return when {
-        after == null || after == before -> CherryPickStep.Empty
-        !recordOrigin -> CherryPickStep.Created(CommitId.of(after.name))
-        else -> CherryPickStep.Created(CommitId.of(recordOrigin(CommitId.of(after.name), origin).name))
-    }
-}
+internal fun Git.conflictedPaths(): List<String> = status().call().conflicting.sorted()
 
-/** 만들어진 커밋의 메시지 끝에 원본 해시 줄을 붙인다 (`git cherry-pick -x` 상당). */
-private fun Git.recordOrigin(created: CommitId, origin: CommitId): RevCommit =
-    commit()
-        .setAmend(true)
-        .setMessage(repository.messageOf(created).withOriginNote(origin))
-        .call()
-
-private fun String.withOriginNote(origin: CommitId): String =
-    "${trimEnd()}\n\n$ORIGIN_NOTE_PREFIX$origin)\n"
-
-private fun Git.conflictedPaths(): List<String> = status().call().conflicting.sorted()
-
-private fun Repository.messageOf(commit: CommitId): String =
+internal fun Repository.messageOf(commit: CommitId): String =
     RevWalk(this).use { walk -> walk.parseCommit(requireObject(commit)).fullMessage }
 
 /**
@@ -174,7 +134,7 @@ private fun Repository.messageOf(commit: CommitId): String =
  * `resolve` 는 완전한 40자 hex 를 **존재 여부와 무관하게** 그대로 ObjectId 로 만들어 준다 — 그것만
  * 믿으면 없는 커밋이 한참 뒤 JGit 내부 오류로 터져 "찾을 수 없다" 가 "알 수 없는 실패" 로 보인다.
  */
-private fun Repository.requireObject(commit: CommitId): ObjectId {
+internal fun Repository.requireObject(commit: CommitId): ObjectId {
     val id = resolve(commit.value)
     if (id == null || !objectDatabase.has(id)) {
         throw UndineException.NotFound(UndineException.NotFound.Kind.COMMIT, commit.value)
@@ -186,14 +146,6 @@ private fun Repository.requireCherryPicking() {
     if (toOpenedRepository().state != RepositoryState.CHERRY_PICKING) {
         throw UndineException.StateViolation(NOT_IN_PROGRESS)
     }
-}
-
-/**
- * 시작 전 HEAD 를 `ORIG_HEAD` 에 남긴다 — 중단이 되돌릴 지점이다. git 도 cherry-pick 시작 시 같은
- * 참조를 갱신한다. 커밋이 없는 저장소는 되돌릴 지점 자체가 없어 남기지 않는다.
- */
-private fun Repository.rememberStartPoint() {
-    resolve(Constants.HEAD)?.let { writeOrigHead(it) }
 }
 
 /** 이름을 JGit 의 `readCherryPickHead()` 와 다르게 둔다 — 같으면 확장이 자기를 부른다. */

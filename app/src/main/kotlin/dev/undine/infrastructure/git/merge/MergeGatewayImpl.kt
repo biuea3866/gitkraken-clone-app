@@ -27,33 +27,16 @@ import java.io.IOException
 import org.eclipse.jgit.api.RebaseResult as JGitRebaseResult
 
 private const val OPERATION_STATE = "merge.repositoryState"
-private const val OPERATION_MERGE = "merge.merge"
+internal const val OPERATION_MERGE = "merge.merge"
 private const val OPERATION_CONTINUE_MERGE = "merge.continueMerge"
 private const val OPERATION_ABORT_MERGE = "merge.abortMerge"
-private const val OPERATION_REBASE = "merge.rebase"
+internal const val OPERATION_REBASE = "merge.rebase"
 private const val OPERATION_CONTINUE_REBASE = "merge.continueRebase"
 private const val OPERATION_REBASING_COMMIT = "merge.rebasingCommit"
 private const val OPERATION_SKIP_REBASE_COMMIT = "merge.skipRebaseCommit"
 private const val OPERATION_ABORT_REBASE = "merge.abortRebase"
 
 private const val START_POINT_MISSING = "되돌릴 시작 지점(ORIG_HEAD)이 없습니다"
-/**
- * 진행 중인데 새로 시작하면 `rememberStartPoint` 가 `ORIG_HEAD` 를 **부분 진행 HEAD** 로 덮어써
- * 그 뒤의 abort 가 되돌릴 지점을 잃는다 — 복구 불가다. `MergeService` 는 시작 전에 워킹트리 더티만
- * 보고 진행 중 상태는 보지 않는다(충돌 해결 중 워킹트리는 항상 더티라 그 검사가 통과한다).
- */
-private const val ALREADY_IN_PROGRESS = "진행 중인 병합·리베이스가 있어 새로 시작하지 않았습니다"
-
-/**
- * 시작을 막아야 하는 상태. **DETACHED·EMPTY 는 여기 없다** — detached HEAD 에서 병합을 시작하는 것은
- * git 이 허용하는 정상 동작이고, 빈 저장소는 대상 참조를 못 찾아 다른 사유로 실패한다.
- * 막아야 하는 것은 "이미 무언가 진행 중" 뿐이다.
- */
-private val IN_PROGRESS_STATES = setOf(
-    RepositoryState.MERGING,
-    RepositoryState.REBASING,
-    RepositoryState.REVERTING,
-)
 private const val MERGE_NOT_IN_PROGRESS = "병합이 진행 중이 아닙니다"
 private const val REBASE_NOT_IN_PROGRESS = "리베이스가 진행 중이 아닙니다"
 private const val UNCONFIRMED_DISCARD = "확인한 뒤에 생긴 편집이 있어 중단하지 않았습니다"
@@ -93,19 +76,7 @@ class MergeGatewayImpl(private val gitAccess: GitAccess) : MergeGateway {
         gitOperation(OPERATION_STATE) { git -> git.repository.toOpenedRepository().state }
 
     override suspend fun merge(target: RefName, allowFastForward: Boolean): MergeResult =
-        gitOperation(OPERATION_MERGE) { git ->
-            val targetRef = git.repository.requireRef(target)
-            // 진행 중이면 시작하지 않는다 — 아래 rememberStartPoint 가 ORIG_HEAD 를 덮어쓰기 전에 막는다.
-            if (git.repository.toOpenedRepository().state in IN_PROGRESS_STATES) {
-                throw UndineException.StateViolation(ALREADY_IN_PROGRESS)
-            }
-            git.repository.rememberStartPoint()
-            git.merge()
-                .include(targetRef)
-                .setFastForward(fastForwardModeOf(allowFastForward))
-                .call()
-                .toDomain(git, OPERATION_MERGE)
-        }
+        gitOperation(OPERATION_MERGE) { git -> git.mergeHeld(target, allowFastForward) }
 
     /**
      * 인덱스에 올라간 해결 결과로 병합 커밋을 만든다. 미해결 파일이 남아 있으면 커밋하지 않고
@@ -145,19 +116,7 @@ class MergeGatewayImpl(private val gitAccess: GitAccess) : MergeGateway {
     }
 
     override suspend fun rebase(target: RefName): RebaseResult =
-        gitOperation(OPERATION_REBASE) { git ->
-            val targetRef = git.repository.requireRef(target)
-            // 진행 중이면 시작하지 않는다 — 아래 rememberStartPoint 가 ORIG_HEAD 를 덮어쓰기 전에 막는다.
-            if (git.repository.toOpenedRepository().state in IN_PROGRESS_STATES) {
-                throw UndineException.StateViolation(ALREADY_IN_PROGRESS)
-            }
-            git.repository.rememberStartPoint()
-            git.rebase()
-                .setUpstream(requireCommitOf(targetRef, target))
-                .setUpstreamName(targetRef.name)
-                .call()
-                .toDomain(git, OPERATION_REBASE)
-        }
+        gitOperation(OPERATION_REBASE) { git -> git.rebaseHeld(target) }
 
     override suspend fun continueRebase(): RebaseResult =
         gitOperation(OPERATION_CONTINUE_REBASE) { git ->
@@ -236,29 +195,6 @@ class MergeGatewayImpl(private val gitAccess: GitAccess) : MergeGateway {
         } catch (failure: IOException) {
             throw UndineException.GitOperationFailed(operation, failure)
         }
-}
-
-private fun fastForwardModeOf(allowFastForward: Boolean): MergeCommand.FastForwardMode =
-    if (allowFastForward) MergeCommand.FastForwardMode.FF else MergeCommand.FastForwardMode.NO_FF
-
-/**
- * 대상 참조를 찾는다. 오타나 이미 사라진 브랜치는 **사용자가 고칠 수 있는** 실패이므로
- * 예상 못 한 실패로 뭉뚱그리지 않고 [UndineException.NotFound] 로 알린다.
- */
-private fun Repository.requireRef(target: RefName): Ref =
-    findRef(target.value) ?: throw UndineException.NotFound(UndineException.NotFound.Kind.REF, target.value)
-
-/** 참조는 있는데 가리키는 커밋이 없는 경우를 참조 부재와 구분한다. */
-private fun requireCommitOf(ref: Ref, target: RefName): ObjectId =
-    ref.objectId ?: throw UndineException.NotFound(UndineException.NotFound.Kind.COMMIT, target.value)
-
-/**
- * 시작 전 HEAD 를 `ORIG_HEAD` 에 남긴다 — git 도 병합·리베이스 시작 시 같은 참조를 갱신하고,
- * [MergeGatewayImpl.abortMerge] 가 이 지점으로 되돌린다.
- * 커밋이 하나도 없는 저장소는 되돌릴 지점 자체가 없어 남기지 않는다.
- */
-private fun Repository.rememberStartPoint() {
-    resolve(Constants.HEAD)?.let { writeOrigHead(it) }
 }
 
 /**

@@ -105,6 +105,9 @@ private class UndoFixture(
         coEvery { refGateway.deleteBranch(any(), any()) } returns DeleteBranchResult.DELETED
         coEvery { worktreeOpsGateway.reset(any(), any()) } just Runs
         coEvery { worktreeOpsGateway.hardReset(any()) } just Runs
+        coEvery { worktreeOpsGateway.hardResetBranch(any(), any(), any()) } just Runs
+        coEvery { refGateway.moveBranch(any(), any(), any()) } just Runs
+        coEvery { refGateway.moveTag(any(), any(), any()) } just Runs
         coEvery { worktreeOpsGateway.stashApply(any()) } just Runs
         coEvery { worktreeOpsGateway.stashDrop(any()) } just Runs
     }
@@ -132,6 +135,9 @@ private class UndoFixture(
     fun verifyNoGitChange() {
         coVerify(exactly = 0) { worktreeOpsGateway.reset(any(), any()) }
         coVerify(exactly = 0) { worktreeOpsGateway.hardReset(any()) }
+        coVerify(exactly = 0) { worktreeOpsGateway.hardResetBranch(any(), any(), any()) }
+        coVerify(exactly = 0) { refGateway.moveBranch(any(), any(), any()) }
+        coVerify(exactly = 0) { refGateway.moveTag(any(), any(), any()) }
         coVerify(exactly = 0) { worktreeOpsGateway.stashApply(any()) }
         coVerify(exactly = 0) { worktreeOpsGateway.stashDrop(any()) }
         coVerify(exactly = 0) { refGateway.checkout(any(), any()) }
@@ -217,14 +223,17 @@ class UndoServiceSpec : BehaviorSpec({
 
     Given("병합을 기록한 세션") {
         val fixture = UndoFixture()
-        fixture.recorder.record(GitOperationKind.MERGE, UndoStrategy.HardResetTo(PARENT))
+        fixture.recorder.record(
+            GitOperationKind.MERGE,
+            UndoStrategy.HardResetTo(MAIN, previous = PARENT, expected = HEAD),
+        )
 
         When("되돌리기를 요청하면") {
             val outcome = fixture.undoTop()
 
-            Then("기록된 ORIG_HEAD 로 hard reset 한다") {
+            Then("기록된 브랜치를 ORIG_HEAD 로 조건부 hard reset 한다") {
                 outcome.shouldBeInstanceOf<UndoOutcome.Undone>()
-                coVerify(exactly = 1) { fixture.worktreeOpsGateway.hardReset(PARENT) }
+                coVerify(exactly = 1) { fixture.worktreeOpsGateway.hardResetBranch(MAIN, PARENT, HEAD) }
             }
         }
     }
@@ -349,7 +358,10 @@ class UndoServiceSpec : BehaviorSpec({
 
     Given("커밋되지 않은 변경이 있는 저장소") {
         val fixture = UndoFixture(status = DIRTY)
-        fixture.recorder.record(GitOperationKind.REBASE, UndoStrategy.HardResetTo(PARENT))
+        fixture.recorder.record(
+            GitOperationKind.REBASE,
+            UndoStrategy.HardResetTo(MAIN, previous = PARENT, expected = HEAD),
+        )
 
         When("ORIG_HEAD 복구를 요청하면") {
             val outcome = fixture.undoTop()
@@ -417,7 +429,10 @@ class UndoServiceSpec : BehaviorSpec({
     Given("미커밋 변경 때문에 막힌 hard reset 최상단") {
         val fixture = UndoFixture(status = DIRTY)
         val olderEntry = fixture.recorder.record(GitOperationKind.BRANCH_CREATE, UndoStrategy.DeleteBranch(FEATURE))
-        val entry = fixture.recorder.record(GitOperationKind.MERGE, UndoStrategy.HardResetTo(PARENT))
+        val entry = fixture.recorder.record(
+            GitOperationKind.MERGE,
+            UndoStrategy.HardResetTo(MAIN, previous = PARENT, expected = HEAD),
+        )
 
         When("그 기록을 지우려 하면") {
             val execution = fixture.service.discardBlocked(entry)
@@ -442,6 +457,58 @@ class UndoServiceSpec : BehaviorSpec({
                 coVerify(exactly = 1) { fixture.worktreeOpsGateway.reset(PARENT, ResetMode.SOFT) }
                 coVerify(exactly = 0) { fixture.refGateway.deleteBranch(any(), any()) }
                 fixture.stack.history().map { it.operation } shouldBe listOf(GitOperationKind.BRANCH_CREATE)
+            }
+        }
+    }
+
+    Given("브랜치 이동을 기록한 세션") {
+        val fixture = UndoFixture()
+        fixture.recorder.record(
+            GitOperationKind.BRANCH_MOVE,
+            UndoStrategy.MoveBranchTo(FEATURE, previous = PARENT, expected = HEAD),
+        )
+
+        When("되돌리기를 요청하면") {
+            val outcome = fixture.undoTop()
+
+            Then("기대 위치를 함께 넘겨 조건부로 이전 위치로 되돌린다") {
+                outcome.shouldBeInstanceOf<UndoOutcome.Undone>()
+                coVerify(exactly = 1) { fixture.refGateway.moveBranch(FEATURE, PARENT, HEAD) }
+            }
+        }
+    }
+
+    Given("태그 이동을 기록한 세션") {
+        val fixture = UndoFixture()
+        fixture.recorder.record(
+            GitOperationKind.TAG_MOVE,
+            UndoStrategy.MoveTagTo(FEATURE, previous = PARENT, expected = HEAD),
+        )
+
+        When("되돌리기를 요청하면") {
+            val outcome = fixture.undoTop()
+
+            Then("기대 위치를 함께 넘겨 조건부로 이전 위치로 되돌린다") {
+                outcome.shouldBeInstanceOf<UndoOutcome.Undone>()
+                coVerify(exactly = 1) { fixture.refGateway.moveTag(FEATURE, PARENT, HEAD) }
+            }
+        }
+    }
+
+    Given("기록 이후 대상 ref 가 다른 곳으로 옮겨진 저장소") {
+        val fixture = UndoFixture()
+        val mismatch = UndineException.StateViolation("기대한 위치와 달라 참조를 옮기지 않았습니다: feature")
+        coEvery { fixture.refGateway.moveBranch(any(), any(), any()) } throws mismatch
+        fixture.recorder.record(
+            GitOperationKind.BRANCH_MOVE,
+            UndoStrategy.MoveBranchTo(FEATURE, previous = PARENT, expected = HEAD),
+        )
+
+        When("되돌리기를 요청하면") {
+            val failure = shouldThrow<UndineException.StateViolation> { fixture.undoTop() }
+
+            Then("성공으로 숨기지 않고 거부 사유를 그대로 올린다") {
+                failure.detail shouldContain FEATURE.value
             }
         }
     }

@@ -8,11 +8,9 @@ import dev.undine.domain.RefName
 import dev.undine.domain.Tag
 import dev.undine.domain.UndineException
 import dev.undine.infrastructure.git.repository.GitAccess
-import org.eclipse.jgit.api.CreateBranchCommand
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.ListBranchCommand
 import org.eclipse.jgit.api.errors.NotMergedException
-import org.eclipse.jgit.lib.Ref
 import org.eclipse.jgit.lib.Repository
 import org.eclipse.jgit.revwalk.RevWalk
 
@@ -171,40 +169,30 @@ class RefGatewayImpl(private val gitAccess: GitAccess) : RefGateway {
      * 강제 체크아웃은 사용자의 편집을 되돌릴 수 없이 지우므로 기본값이 될 수 없다.
      */
     override suspend fun checkout(ref: RefName, force: Boolean) {
-        val candidates = validatedCheckoutCandidates(ref)
         gitAccess.withRepository { repository ->
             translatingGitFailure("ref.checkout") {
-                val resolved = candidates.firstNotNullOfOrNull { repository.exactRef(it) }
-                    ?: throw UndineException.NotFound(UndineException.NotFound.Kind.REF, ref.value)
-                Git.wrap(repository).use { git ->
-                    if (!force) git.rejectIfDirty()
-                    if (resolved.name.startsWith(REMOTE_BRANCH_PREFIX)) {
-                        checkoutTracking(git, repository, resolved, force)
-                    } else {
-                        git.checkout().setName(resolved.name).setForced(force).call()
-                    }
-                }
+                Git.wrap(repository).use { git -> git.checkoutHeld(ref, force) }
             }
         }
     }
 
     /**
-     * 원격 ref 를 그대로 체크아웃하면 detached HEAD 가 되어 사용자가 커밋을 잃기 쉽다.
-     * 같은 이름의 로컬 브랜치가 이미 있으면 그것으로, 없으면 원격을 추적하는 로컬 브랜치를 만들어 옮긴다.
+     * 조건부 갱신이라 **읽기와 쓰기가 한 임계 구역 안**에 있어야 한다 — 기대 위치를 밖에서 읽어
+     * 넘기면 그 사이의 이동을 놓친다. 검사와 갱신은 [moveBranchHeld] 가 한 번에 한다.
      */
-    private fun checkoutTracking(git: Git, repository: Repository, remoteRef: Ref, force: Boolean) {
-        val localName = localTrackingNameOf(remoteRef.name)
-        val existingLocal = repository.exactRef(LOCAL_BRANCH_PREFIX + localName)
-        if (existingLocal != null) {
-            git.checkout().setName(existingLocal.name).setForced(force).call()
-            return
+    override suspend fun moveBranch(branch: RefName, to: CommitId, expected: CommitId) {
+        gitAccess.withRepository { repository ->
+            translatingGitFailure("ref.moveBranch") {
+                Git.wrap(repository).use { git -> git.moveBranchHeld(branch, to, expected) }
+            }
         }
-        git.checkout()
-            .setName(localName)
-            .setCreateBranch(true)
-            .setStartPoint(remoteRef.name)
-            .setUpstreamMode(CreateBranchCommand.SetupUpstreamMode.TRACK)
-            .setForced(force)
-            .call()
+    }
+
+    override suspend fun moveTag(tag: RefName, to: CommitId, expected: CommitId) {
+        gitAccess.withRepository { repository ->
+            translatingGitFailure("ref.moveTag") {
+                Git.wrap(repository).use { git -> git.moveTagHeld(tag, to, expected) }
+            }
+        }
     }
 }
