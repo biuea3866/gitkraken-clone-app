@@ -2,6 +2,7 @@ package dev.undine.infrastructure.git.diff
 
 import dev.undine.domain.ChangeType
 import dev.undine.domain.CommitId
+import dev.undine.domain.FileComparison
 import dev.undine.domain.UndineException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
@@ -9,6 +10,7 @@ import io.kotest.engine.spec.tempdir
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import org.eclipse.jgit.api.Git
 import java.io.File
 
@@ -70,6 +72,26 @@ class DiffGatewayImplSpec : FunSpec({
         changes.single().changeType shouldBe ChangeType.RENAMED
         changes.single().path shouldBe "b.txt"
         changes.single().previousPath shouldBe "a.txt"
+    }
+
+    test("부모 자식이 아닌 두 커밋과 각 시점 경로를 비교한다") {
+        val git = newRepository()
+        git.writeFile("before.txt", "one\n")
+        val first = git.commitAll("first")
+        val mainBranch = git.repository.branch
+        git.checkout().setCreateBranch(true).setName("side").setStartPoint(first).call()
+        git.writeFile("before.txt", "one\nside\n")
+        val side = git.commitAll("side change")
+        git.checkout().setName(mainBranch).call()
+        File(git.repository.workTree, "before.txt").renameTo(File(git.repository.workTree, "after.txt"))
+        git.writeFile("after.txt", "one\ntwo\n")
+        val renamed = git.commitAll("rename and change")
+
+        val result = git.diffGateway().hunksBetween(
+            FileComparison(side.id(), "before.txt", renamed.id(), "after.txt"),
+        )
+
+        result.shouldBeInstanceOf<dev.undine.domain.DiffResult.Computed>().hunks.isNotEmpty() shouldBe true
     }
 
     test("인덱스↔HEAD 변경은 changedFilesStaged 가 돌려준다") {

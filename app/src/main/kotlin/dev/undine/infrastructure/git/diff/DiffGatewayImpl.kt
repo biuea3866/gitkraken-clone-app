@@ -3,6 +3,7 @@ package dev.undine.infrastructure.git.diff
 import dev.undine.domain.CommitId
 import dev.undine.domain.DiffGateway
 import dev.undine.domain.DiffResult
+import dev.undine.domain.FileComparison
 import dev.undine.domain.FileChange
 import dev.undine.infrastructure.git.repository.GitAccess
 import org.eclipse.jgit.diff.DiffEntry
@@ -63,6 +64,9 @@ class DiffGatewayImpl(private val gitAccess: GitAccess) : DiffGateway {
      */
     override suspend fun hunksOf(commit: CommitId, path: String, parentIndex: Int): DiffResult =
         diffOperation("hunksOf") { repository -> repository.hunksIn(commit, path, parentIndex) }
+
+    override suspend fun hunksBetween(comparison: FileComparison): DiffResult =
+        diffOperation("hunksBetween") { repository -> repository.hunksBetween(comparison) }
 
     private fun Repository.changedFilesIn(commit: CommitId, parentIndex: Int): List<FileChange> =
         newObjectReader().use { reader ->

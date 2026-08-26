@@ -1,13 +1,26 @@
 package dev.undine.domain.undo
 
+import java.time.Instant
+
 /**
  * 스택에 쌓이는 기록 1건 — **연산·되돌리는 방법·기록 시점의 기준 상태** 셋이 함께 있어야
  * 나중에 안전하게 되돌릴 수 있다. 셋 중 하나라도 빠지면 되돌리기가 추측이 된다.
+ *
+ * [targetLabel] 과 [recordedAt] 은 되돌리기 판단에 끼어들지 않는다 — **실행 이력 패널이
+ * "언제 무엇을" 을 말하기 위한 표시값**이다 (wave 8 결정 E5). 되돌릴 수 있는지는 그대로
+ * [strategy] 가 정한다.
  */
 data class OperationEntry(
     val operation: GitOperationKind,
     val strategy: UndoStrategy,
     val baseline: RepositoryBaseline,
+    /**
+     * 이 연산이 무엇에 가해졌는지 — 사람이 읽는 짧은 한 줄이다 (커밋 제목·브랜치 이름 등).
+     * 구조를 만들지 않는다: 화면은 이 문자열을 그대로 보여준다.
+     */
+    val targetLabel: String,
+    /** 기록 시각. 이력을 최신 우선으로 보여줄 때 각 행에 붙는 값이다. */
+    val recordedAt: Instant,
 ) {
 
     /** 복구 불가로 기록됐다면 그 사유, 되돌릴 수 있으면 null. */

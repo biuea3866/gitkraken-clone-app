@@ -2,8 +2,12 @@ package dev.undine.application.blame
 
 import dev.undine.domain.Commit
 import dev.undine.domain.CommitId
+import dev.undine.domain.DiffGateway
+import dev.undine.domain.DiffResult
+import dev.undine.domain.FileComparison
 import dev.undine.domain.blame.BlameGateway
 import dev.undine.domain.blame.BlameResult
+import dev.undine.domain.blame.FileHistoryEntry
 import dev.undine.domain.blame.LineRange
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
@@ -54,6 +58,20 @@ class BlameUseCaseSpec : FunSpec({
 
         gateway.lastLimit shouldBe 5
     }
+
+    test("임의 두 시점의 파일 diff는 부모 인덱스 없이 비교 계약에 전달한다") {
+        val gateway = RecordingDiffGateway()
+        val comparison = FileComparison(
+            before = CommitId.of("a".repeat(HASH_LENGTH)),
+            beforePath = "before.txt",
+            after = CommitId.of("b".repeat(HASH_LENGTH)),
+            afterPath = "after.txt",
+        )
+
+        CompareFileHistoryUseCase(gateway).execute(comparison)
+
+        gateway.lastComparison shouldBe comparison
+    }
 })
 
 private const val HASH_LENGTH = 40
@@ -85,9 +103,28 @@ private class RecordingBlameGateway : BlameGateway {
         return BlameResult.Lines(emptyList())
     }
 
-    override suspend fun fileHistory(path: String, at: CommitId?, limit: Int): List<Commit> {
+    override suspend fun fileHistory(path: String, at: CommitId?, limit: Int): List<FileHistoryEntry> {
         lastAt = at
         lastLimit = limit
         return emptyList()
+    }
+}
+
+private class RecordingDiffGateway : DiffGateway {
+
+    var lastComparison: FileComparison? = null
+        private set
+
+    override suspend fun changedFiles(commit: CommitId, parentIndex: Int) = emptyList<dev.undine.domain.FileChange>()
+
+    override suspend fun changedFilesStaged() = emptyList<dev.undine.domain.FileChange>()
+
+    override suspend fun changedFilesUnstaged() = emptyList<dev.undine.domain.FileChange>()
+
+    override suspend fun hunksOf(commit: CommitId, path: String, parentIndex: Int) = DiffResult.Computed(emptyList())
+
+    override suspend fun hunksBetween(comparison: FileComparison): DiffResult {
+        lastComparison = comparison
+        return DiffResult.Computed(emptyList())
     }
 }
