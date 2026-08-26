@@ -2,9 +2,13 @@ package dev.undine.application.blame
 
 import dev.undine.domain.Commit
 import dev.undine.domain.CommitId
+import dev.undine.domain.DiffGateway
+import dev.undine.domain.DiffResult
+import dev.undine.domain.FileComparison
 import dev.undine.domain.UndineException
 import dev.undine.domain.blame.BlameGateway
 import dev.undine.domain.blame.BlameResult
+import dev.undine.domain.blame.FileHistoryEntry
 import dev.undine.domain.blame.LineRange
 
 private const val DEFAULT_HISTORY_LIMIT = 100
@@ -38,5 +42,13 @@ class LoadFileHistoryUseCase(private val blameGateway: BlameGateway) {
         path: String,
         at: CommitId? = null,
         limit: Int = DEFAULT_HISTORY_LIMIT,
-    ): List<Commit> = blameGateway.fileHistory(path, at, limit)
+    ): List<FileHistoryEntry> = blameGateway.fileHistory(path, at, limit)
+}
+
+/**
+ * 파일 이력에서 고른 두 시점을 비교한다. 부모 인덱스는 두 시점의 관계를 표현하지 못하므로 받지 않는다.
+ */
+class CompareFileHistoryUseCase(private val diffGateway: DiffGateway) {
+
+    suspend fun execute(comparison: FileComparison): DiffResult = diffGateway.hunksBetween(comparison)
 }

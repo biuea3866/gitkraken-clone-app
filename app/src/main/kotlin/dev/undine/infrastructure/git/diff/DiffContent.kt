@@ -24,6 +24,14 @@ private val EMPTY_CONTENT = ByteArray(0)
 internal fun hunksOfEntry(reader: ObjectReader, entry: DiffEntry): DiffResult {
     val oldBlob = blobIdOf(entry.oldId, entry.oldMode)
     val newBlob = blobIdOf(entry.newId, entry.newMode)
+    return hunksOfBlobs(reader, oldBlob, newBlob)
+}
+
+/**
+ * 두 트리에서 경로를 직접 골라 비교할 때 쓰는 hunk 계산. DiffEntry rename 탐지가 점수 미달로
+ * 추가·삭제로 나뉘어도, 이력 화면이 이미 확정한 두 경로의 내용 비교는 계속 가능해야 한다.
+ */
+internal fun hunksOfBlobs(reader: ObjectReader, oldBlob: ObjectId?, newBlob: ObjectId?): DiffResult {
     val sides = listOfNotNull(oldBlob, newBlob)
     return when {
         sides.any { blob -> reader.isBinaryBlob(blob) } ->
