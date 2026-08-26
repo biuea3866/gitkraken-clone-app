@@ -130,15 +130,43 @@ private fun ReflogSection(
                     state.selectRecoveryMode(RecoveryMode.NewBranch)
                     onRecover(selected, RecoveryMode.NewBranch)
                 }
-                ActionButton(copy.moveExisting) {
-                    state.selectRecoveryMode(RecoveryMode.MoveExisting)
-                    onRecover(selected, RecoveryMode.MoveExisting)
-                }
+                // 기본 경로가 아닌 이동은 이 클릭에서 실행하지 않는다 — 경고 메뉴만 연다.
+                ActionButton(copy.moveExisting) { state.requestRefMove() }
             }
             if (state.requiresRefMoveWarning) {
-                BasicText(copy.moveWarning, style = typography.caption.copy(color = colors.warning))
+                RefMoveConfirmation(state, copy, selected, onRecover)
             }
         }
+        // 복구는 적용됐는데 Undo 항목만 없어진 경우다. 알리지 않으면 사용자는 되돌릴 수 있다고 믿는다.
+        if (state.recoveryUndoRecordFailure != null) {
+            BasicText(copy.undoRecordFailed, style = typography.caption.copy(color = colors.warning))
+        }
+    }
+}
+
+/**
+ * 기존 ref 이동의 경고·확인 메뉴.
+ *
+ * 실행은 오직 확인 버튼에서만 일어난다. 목록 옆 버튼 한 번으로 ref 가 움직이면 잃은 커밋을 되찾으러
+ * 온 사용자가 다른 커밋을 새로 잃는다.
+ */
+@Composable
+private fun RefMoveConfirmation(
+    state: RecoveryState,
+    copy: RecoveryStrings,
+    selected: ReflogEntry,
+    onRecover: (ReflogEntry, RecoveryMode) -> Unit,
+) {
+    val colors = UndineTokens.color
+    val spacing = UndineTokens.spacing
+    val typography = UndineTokens.typography
+    BasicText(copy.moveWarning, style = typography.caption.copy(color = colors.warning))
+    Row(horizontalArrangement = Arrangement.spacedBy(spacing.small)) {
+        ActionButton(copy.moveConfirm) {
+            state.confirmRefMove()
+            onRecover(selected, RecoveryMode.MoveExisting)
+        }
+        ActionButton(copy.moveCancel) { state.cancelRefMove() }
     }
 }
 
@@ -202,112 +230,7 @@ private fun UnreachableSection(
 }
 
 @Composable
-private fun BisectSection(
-    state: RecoveryState,
-    copy: RecoveryStrings,
-    modifier: Modifier = Modifier,
-) {
-    val colors = UndineTokens.color
-    val spacing = UndineTokens.spacing
-    val typography = UndineTokens.typography
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(spacing.small)) {
-        BasicText(copy.bisect, style = typography.title.copy(color = colors.foregroundPrimary))
-        val session = state.bisectSession
-        session?.testing?.let { testing ->
-            BasicText(
-                copy.currentTarget(testing.value.take(SHORT_HASH_LENGTH)),
-                style = typography.mono.copy(color = colors.accent),
-            )
-        }
-        state.bisectResult?.let { result -> BisectResultText(result, copy) }
-        BisectHistoryText(state.bisectHistory, copy)
-        BasicText(
-            copy.historyNotChronological,
-            style = typography.caption.copy(color = colors.foregroundTertiary),
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(spacing.small)) {
-            ActionButton(copy.markGood) { state.markBisect(BisectVerdict.GOOD) }
-            ActionButton(copy.markBad) { state.markBisect(BisectVerdict.BAD) }
-            ActionButton(copy.skip) { state.markBisect(BisectVerdict.SKIP) }
-            if (state.resetVisible) {
-                ActionButton(copy.reset, enabled = session != null) { state.resetBisect() }
-            }
-        }
-        if (state.bisectFailure != null) {
-            BasicText(copy.loadFailed, style = typography.caption.copy(color = colors.deletion))
-        }
-    }
-}
-
-@Composable
-private fun BisectHistoryText(history: BisectHistoryDisplay, copy: RecoveryStrings) {
-    val colors = UndineTokens.color
-    val typography = UndineTokens.typography
-    if (history.good.isNotEmpty()) {
-        BasicText(
-            copy.historyGood(history.good.joinToString { it.value.take(SHORT_HASH_LENGTH) }),
-            style = typography.mono.copy(color = colors.addition),
-        )
-    }
-    history.currentBad?.let { bad ->
-        BasicText(
-            copy.historyCurrentBad(bad.value.take(SHORT_HASH_LENGTH)),
-            style = typography.mono.copy(color = colors.deletion),
-        )
-    }
-    if (history.skipped.isNotEmpty()) {
-        BasicText(
-            copy.historySkipped(history.skipped.joinToString { it.value.take(SHORT_HASH_LENGTH) }),
-            style = typography.mono.copy(color = colors.warning),
-        )
-    }
-}
-
-@Composable
-private fun BisectResultText(result: BisectResult, copy: RecoveryStrings) {
-    val colors = UndineTokens.color
-    val typography = UndineTokens.typography
-    when (result) {
-        is BisectResult.Testing -> Column {
-            BasicText(
-                copy.currentTarget(result.commit.value.take(SHORT_HASH_LENGTH)),
-                style = typography.mono.copy(color = colors.accent),
-            )
-            BasicText(
-                copy.remainingCandidates(result.remainingCandidates),
-                style = typography.body.copy(color = colors.foregroundSecondary),
-            )
-            BasicText(
-                copy.remainingChecks(result.expectedRemainingChecks),
-                style = typography.body.copy(color = colors.foregroundSecondary),
-            )
-        }
-
-        is BisectResult.FirstBad -> BasicText(
-            copy.firstBad(result.commit.value.take(SHORT_HASH_LENGTH)),
-            style = typography.body.copy(color = colors.addition),
-        )
-        is BisectResult.Inconclusive -> Column {
-            BasicText(copy.inconclusive, style = typography.body.copy(color = colors.warning))
-            BasicText(
-                copy.inconclusiveReason,
-                style = typography.caption.copy(color = colors.foregroundSecondary),
-            )
-            result.candidates.forEach { candidate ->
-                BasicText(
-                    candidate.value.take(SHORT_HASH_LENGTH),
-                    style = typography.mono.copy(color = colors.foregroundSecondary),
-                )
-            }
-        }
-
-        is BisectResult.ReversedRange, is BisectResult.Unsupported ->
-            BasicText(copy.loadFailed, style = typography.body.copy(color = colors.warning))
-    }
-}
-
-@Composable
-private fun ActionButton(label: String, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun ActionButton(label: String, enabled: Boolean = true, onClick: () -> Unit) {
     Button(
         onClick = onClick,
         enabled = enabled,
@@ -317,5 +240,5 @@ private fun ActionButton(label: String, enabled: Boolean = true, onClick: () -> 
     }
 }
 
-private const val SHORT_HASH_LENGTH = 7
+internal const val SHORT_HASH_LENGTH = 7
 private const val INDETERMINATE_PROGRESS = 0.5f

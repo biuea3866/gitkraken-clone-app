@@ -28,14 +28,24 @@ object RecoveryKeys {
     val preview = StringKey("$RECOVERY_NAMESPACE.preview")
     val changedFiles = StringKey("$RECOVERY_NAMESPACE.changedFiles")
     val loadFailed = StringKey("$RECOVERY_NAMESPACE.loadFailed")
+    val undoRecordFailed = StringKey("$RECOVERY_NAMESPACE.undoRecordFailed")
     val newBranch = StringKey("$RECOVERY_NAMESPACE.newBranch")
     val moveExisting = StringKey("$RECOVERY_NAMESPACE.moveExisting")
     val moveWarning = StringKey("$RECOVERY_NAMESPACE.moveWarning")
+    val moveConfirm = StringKey("$RECOVERY_NAMESPACE.moveConfirm")
+    val moveCancel = StringKey("$RECOVERY_NAMESPACE.moveCancel")
     val scanUnreachable = StringKey("$RECOVERY_NAMESPACE.scanUnreachable")
     val scanWarning = StringKey("$RECOVERY_NAMESPACE.scanWarning")
     val scanning = StringKey("$RECOVERY_NAMESPACE.scanning")
     val scanUnsupported = StringKey("$RECOVERY_NAMESPACE.scanUnsupported")
     val bisect = StringKey("$RECOVERY_NAMESPACE.bisect")
+    val bisectStart = StringKey("$RECOVERY_NAMESPACE.bisectStart")
+    val bisectPickGood = StringKey("$RECOVERY_NAMESPACE.bisectPickGood")
+    val bisectPickBad = StringKey("$RECOVERY_NAMESPACE.bisectPickBad")
+    val bisectBoundaryGood = StringKey("$RECOVERY_NAMESPACE.bisectBoundaryGood")
+    val bisectBoundaryBad = StringKey("$RECOVERY_NAMESPACE.bisectBoundaryBad")
+    val bisectBoundaryMissing = StringKey("$RECOVERY_NAMESPACE.bisectBoundaryMissing")
+    val summaryUnknownCounts = StringKey("$RECOVERY_NAMESPACE.summaryUnknownCounts")
     val currentTarget = StringKey("$RECOVERY_NAMESPACE.currentTarget")
     val remainingCandidates = StringKey("$RECOVERY_NAMESPACE.remainingCandidates")
     val remainingChecks = StringKey("$RECOVERY_NAMESPACE.remainingChecks")
@@ -63,14 +73,24 @@ value class RecoveryStrings internal constructor(private val strings: Strings) {
     val preview: String get() = strings.text(RecoveryKeys.preview)
     val changedFiles: String get() = strings.text(RecoveryKeys.changedFiles)
     val loadFailed: String get() = strings.text(RecoveryKeys.loadFailed)
+    val undoRecordFailed: String get() = strings.text(RecoveryKeys.undoRecordFailed)
     val newBranch: String get() = strings.text(RecoveryKeys.newBranch)
     val moveExisting: String get() = strings.text(RecoveryKeys.moveExisting)
     val moveWarning: String get() = strings.text(RecoveryKeys.moveWarning)
+    val moveConfirm: String get() = strings.text(RecoveryKeys.moveConfirm)
+    val moveCancel: String get() = strings.text(RecoveryKeys.moveCancel)
     val scanUnreachable: String get() = strings.text(RecoveryKeys.scanUnreachable)
     val scanWarning: String get() = strings.text(RecoveryKeys.scanWarning)
     val scanning: String get() = strings.text(RecoveryKeys.scanning)
     val scanUnsupported: String get() = strings.text(RecoveryKeys.scanUnsupported)
     val bisect: String get() = strings.text(RecoveryKeys.bisect)
+    val bisectStart: String get() = strings.text(RecoveryKeys.bisectStart)
+    val bisectPickGood: String get() = strings.text(RecoveryKeys.bisectPickGood)
+    val bisectPickBad: String get() = strings.text(RecoveryKeys.bisectPickBad)
+    fun bisectBoundaryGood(commit: String): String = strings.text(RecoveryKeys.bisectBoundaryGood, commit)
+    fun bisectBoundaryBad(commit: String): String = strings.text(RecoveryKeys.bisectBoundaryBad, commit)
+    val bisectBoundaryMissing: String get() = strings.text(RecoveryKeys.bisectBoundaryMissing)
+    val summaryUnknownCounts: String get() = strings.text(RecoveryKeys.summaryUnknownCounts)
     fun currentTarget(commit: String): String = strings.text(RecoveryKeys.currentTarget, commit)
     fun remainingCandidates(count: Int): String = strings.text(RecoveryKeys.remainingCandidates, count)
     fun remainingChecks(count: Int): String = strings.text(RecoveryKeys.remainingChecks, count)
@@ -100,14 +120,25 @@ internal val recoveryTranslations: Map<Locale, Map<StringKey, String>> = mapOf(
         RecoveryKeys.preview to "커밋 미리보기",
         RecoveryKeys.changedFiles to "변경 파일",
         RecoveryKeys.loadFailed to "복구 정보를 읽지 못했습니다.",
+        RecoveryKeys.undoRecordFailed to
+            "변경은 적용됐지만 되돌리기(Undo) 기록에 실패했습니다. 이 변경은 Undo 목록에 남아 있지 않습니다.",
         RecoveryKeys.newBranch to "새 브랜치로 복구",
         RecoveryKeys.moveExisting to "기존 ref 이동",
         RecoveryKeys.moveWarning to "기존 ref를 이동하면 현재 가리키는 커밋을 잃을 수 있습니다.",
+        RecoveryKeys.moveConfirm to "위험을 확인했고 이동합니다",
+        RecoveryKeys.moveCancel to "이동 취소",
         RecoveryKeys.scanUnreachable to "도달 불가 커밋 탐색",
         RecoveryKeys.scanWarning to "전체 객체를 탐색하므로 오래 걸릴 수 있습니다.",
         RecoveryKeys.scanning to "도달 불가 커밋을 탐색하는 중…",
         RecoveryKeys.scanUnsupported to "이 저장소에서는 도달 불가 커밋 탐색을 지원하지 않습니다.",
         RecoveryKeys.bisect to "Bisect",
+        RecoveryKeys.bisectStart to "Bisect 시작",
+        RecoveryKeys.bisectPickGood to "선택 커밋을 good 경계로",
+        RecoveryKeys.bisectPickBad to "선택 커밋을 bad 경계로",
+        RecoveryKeys.bisectBoundaryGood to "good 경계: {0}",
+        RecoveryKeys.bisectBoundaryBad to "bad 경계: {0}",
+        RecoveryKeys.bisectBoundaryMissing to "reflog 항목을 골라 good·bad 경계를 지정하면 시작할 수 있습니다.",
+        RecoveryKeys.summaryUnknownCounts to "복원한 세션이라 남은 후보 수는 다음 판정에서 계산됩니다.",
         RecoveryKeys.currentTarget to "현재 검사 대상: {0}",
         RecoveryKeys.remainingCandidates to "남은 후보: {0}개",
         RecoveryKeys.remainingChecks to "예상 남은 검사: {0}회",
@@ -132,14 +163,27 @@ internal val recoveryTranslations: Map<Locale, Map<StringKey, String>> = mapOf(
         RecoveryKeys.preview to "Commit preview",
         RecoveryKeys.changedFiles to "Changed files",
         RecoveryKeys.loadFailed to "Could not load recovery information.",
+        RecoveryKeys.undoRecordFailed to
+            "The change was applied, but recording it for undo failed. It is not in the undo list.",
         RecoveryKeys.newBranch to "Recover to new branch",
         RecoveryKeys.moveExisting to "Move existing ref",
         RecoveryKeys.moveWarning to "Moving an existing ref can displace its current commit.",
+        RecoveryKeys.moveConfirm to "I understand the risk; move it",
+        RecoveryKeys.moveCancel to "Cancel move",
         RecoveryKeys.scanUnreachable to "Scan unreachable commits",
         RecoveryKeys.scanWarning to "This can take a while because it scans all objects.",
         RecoveryKeys.scanning to "Scanning unreachable commits…",
         RecoveryKeys.scanUnsupported to "This repository does not support scanning unreachable commits.",
         RecoveryKeys.bisect to "Bisect",
+        RecoveryKeys.bisectStart to "Start bisect",
+        RecoveryKeys.bisectPickGood to "Use selected commit as good",
+        RecoveryKeys.bisectPickBad to "Use selected commit as bad",
+        RecoveryKeys.bisectBoundaryGood to "good boundary: {0}",
+        RecoveryKeys.bisectBoundaryBad to "bad boundary: {0}",
+        RecoveryKeys.bisectBoundaryMissing to
+            "Pick reflog entries as the good and bad boundaries to start.",
+        RecoveryKeys.summaryUnknownCounts to
+            "This session was restored, so remaining counts are computed on the next verdict.",
         RecoveryKeys.currentTarget to "Current target: {0}",
         RecoveryKeys.remainingCandidates to "Remaining candidates: {0}",
         RecoveryKeys.remainingChecks to "Estimated checks remaining: {0}",

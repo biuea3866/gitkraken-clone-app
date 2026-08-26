@@ -20,9 +20,6 @@ private val WAVE8_STUB_NAMESPACES = listOf(
     RECOVERY_NAMESPACE,
 )
 
-/** UND-46이 recovery 문구를 채웠으므로 나머지 화면만 아직 빈 스텁이다. */
-private val EMPTY_WAVE8_STUB_NAMESPACES = WAVE8_STUB_NAMESPACES - RECOVERY_NAMESPACE
-
 /**
  * 문자열 조회·로케일 결정·누락 키 폴백. 로케일 전환은 시스템 로케일만 다룬다 —
  * 사용자 설정 로케일은 이 티켓 범위 밖이다.
@@ -142,10 +139,10 @@ class StringCatalogSpec : FunSpec({
         displayed shouldBe "OK"
     }
 
-    test("채워지지 않은 wave 8 화면 스텁이 등록돼도 병합이 성공한다") {
-        // UND-46이 recovery 맵을 채운 뒤에도 나머지 6개 빈 맵은 병합에서 아무 키도 더하지 않는다.
-        builtInTranslations.count { it.isEmpty() } shouldBe EMPTY_WAVE8_STUB_NAMESPACES.size
-
+    test("채워지지 않은 화면 스텁이 등록돼도 병합이 성공한다") {
+        // 어느 화면이 번역을 채웠는지 열거하지 않는다. 열거하면 화면이 문구를 채울 때마다 이 공용
+        // 파일을 다시 고쳐야 해 wave 안에서 반복 충돌이 난다. 검증할 것은 "무엇이 등록됐든 빈 맵은
+        // 병합 결과를 바꾸지 않는다" 이다.
         val merged = mergeTranslations(builtInTranslations)
         val withoutStubs = mergeTranslations(builtInTranslations.filter { it.isNotEmpty() })
 
