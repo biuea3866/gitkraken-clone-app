@@ -16,12 +16,16 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
 import io.mockk.mockk
+import java.time.Clock
 import java.time.Instant
+import java.time.ZoneOffset
 
 private val MAIN = RefName("main")
 private val FEATURE = RefName("feature")
 private val HEAD = commitId(2)
 private val PARENT = commitId(1)
+private val RECORDED_AT = Instant.parse("2026-08-25T01:02:03Z")
+private val FIXED_CLOCK: Clock = Clock.fixed(RECORDED_AT, ZoneOffset.UTC)
 
 private val STASH = StashEntry(
     index = 0,
@@ -57,7 +61,7 @@ class OperationRecorderSpec : BehaviorSpec({
 
         When("커밋을 기록하면") {
             val stack = UndoStack()
-            val recorded = OperationRecorder(refGateway, stack).record(
+            val recorded = OperationRecorder(refGateway, stack, FIXED_CLOCK).record(
                 operation = GitOperationKind.COMMIT,
                 strategy = UndoStrategy.SoftResetTo(PARENT),
             )
@@ -67,6 +71,8 @@ class OperationRecorderSpec : BehaviorSpec({
                     operation = GitOperationKind.COMMIT,
                     strategy = UndoStrategy.SoftResetTo(PARENT),
                     baseline = RepositoryBaseline(branch = MAIN, head = HEAD),
+                    targetLabel = GitOperationKind.COMMIT.label,
+                    recordedAt = RECORDED_AT,
                 )
                 stack.peek() shouldBe recorded
             }
@@ -74,14 +80,17 @@ class OperationRecorderSpec : BehaviorSpec({
 
         When("복구 불가 연산을 기록하면") {
             val stack = UndoStack()
-            val recorded = OperationRecorder(refGateway, stack).recordIrreversible(
+            val recorded = OperationRecorder(refGateway, stack, FIXED_CLOCK).recordIrreversible(
                 operation = GitOperationKind.PUSH,
                 reason = "원격에 올라간 커밋은 앱이 되돌릴 수 없습니다",
+                targetLabel = "origin/main",
             )
 
             Then("조용히 넘기지 않고 사유와 함께 스택에 남는다") {
                 recorded.strategy shouldBe UndoStrategy.Irreversible("원격에 올라간 커밋은 앱이 되돌릴 수 없습니다")
                 recorded.irreversibleReason shouldBe "원격에 올라간 커밋은 앱이 되돌릴 수 없습니다"
+                recorded.targetLabel shouldBe "origin/main"
+                recorded.recordedAt shouldBe RECORDED_AT
                 stack.history() shouldContainExactly listOf(recorded)
             }
         }

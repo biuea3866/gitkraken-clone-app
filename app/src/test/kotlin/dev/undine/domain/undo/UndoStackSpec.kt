@@ -7,6 +7,7 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import java.time.Instant
 
 private val MAIN = RefName("main")
 
@@ -16,6 +17,8 @@ private fun entry(headSeed: Int) = OperationEntry(
     operation = GitOperationKind.COMMIT,
     strategy = UndoStrategy.SoftResetTo(commitId(headSeed - 1)),
     baseline = baseline(headSeed),
+    targetLabel = "커밋 $headSeed",
+    recordedAt = Instant.ofEpochSecond(headSeed.toLong()),
 )
 
 /**
@@ -42,6 +45,30 @@ class UndoStackSpec : FunSpec({
         stack.pop() shouldBe null
         stack.size shouldBe 0
         stack.history().shouldBeEmpty()
+    }
+
+    test("기대한 항목이 최상단일 때만 꺼낸다") {
+        val stack = UndoStack()
+        stack.record(entry(1))
+        stack.record(entry(2))
+
+        stack.popIf(entry(2)) shouldBe true
+        stack.peek() shouldBe entry(1)
+    }
+
+    test("기대한 항목이 최상단이 아니면 꺼내지 않고 스택을 그대로 둔다") {
+        val stack = UndoStack()
+        stack.record(entry(1))
+        // 미리 본 뒤 다른 연산이 새 기록을 남긴 상황이다.
+        stack.record(entry(2))
+
+        stack.popIf(entry(1)) shouldBe false
+        stack.size shouldBe 2
+        stack.history() shouldContainExactly listOf(entry(2), entry(1))
+    }
+
+    test("빈 스택에서는 어떤 항목도 꺼내지 않는다") {
+        UndoStack().popIf(entry(1)) shouldBe false
     }
 
     test("상한을 넘으면 가장 오래된 항목부터 제거한다") {
