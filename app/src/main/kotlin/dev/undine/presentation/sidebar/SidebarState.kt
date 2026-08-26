@@ -13,8 +13,32 @@ import dev.undine.domain.Branch
 import dev.undine.domain.DeleteBranchResult
 import dev.undine.domain.RefName
 import dev.undine.domain.UndineException
+import dev.undine.domain.submodule.Submodule
+import dev.undine.domain.worktree.Worktree
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+
+/**
+ * 서브모듈·worktree 하위 섹션이 그릴 목록의 공급자.
+ *
+ * 사이드바가 직접 조회하지 않고 **이미 그 목록을 읽은 패널 상태**에서 받아 온다 — 두 곳이 따로
+ * 조회하면 같은 화면에서 두 목록이 어긋난다.
+ */
+class SidebarSectionSource(
+    val submodules: () -> List<Submodule>,
+    val worktrees: () -> List<Worktree>,
+) {
+    companion object {
+        /**
+         * 아직 패널을 배선하지 않은 호출부용 공급자.
+         *
+         * 이 값을 쓰면 두 하위 섹션은 머리행만 남고 항목이 0개다. `App.kt`·`di/` 는 UND-51 소관이라
+         * 이 티켓이 고치지 않으므로, 그 배선이 실제 패널 상태를 넘겨줄 때까지의 자리다.
+         */
+        val NOT_WIRED: SidebarSectionSource =
+            SidebarSectionSource(submodules = { emptyList() }, worktrees = { emptyList() })
+    }
+}
 
 /**
  * 사이드바 화면 상태 홀더.
@@ -27,6 +51,9 @@ import kotlinx.coroutines.launch
  * 취소(`CancellationException`)는 그대로 전파된다 (규칙 5).
  *
  * @param scope 화면 수명에 묶인 스코프. 홀더가 스코프를 만들지 않아 화면이 사라지면 작업도 취소된다.
+ * @param sections 서브모듈·worktree 하위 섹션 목록의 공급자. 실제 패널 상태를 넘기는 배선은
+ *   `App.kt`·`di/` 를 소유한 UND-51 이 하므로, 그때까지의 기본값은
+ *   [SidebarSectionSource.NOT_WIRED] 다 — 이름으로 "아직 안 채워졌다" 를 드러낸다.
  */
 @Stable
 @Suppress("TooManyFunctions") // 트리 조작·메뉴·삭제 2단계 확인·이름 변경이 한 화면의 상태 전이다.
@@ -36,6 +63,7 @@ class SidebarState(
     private val renameBranch: RenameBranchUseCase,
     private val deleteBranch: DeleteBranchUseCase,
     private val scope: CoroutineScope,
+    private val sections: SidebarSectionSource = SidebarSectionSource.NOT_WIRED,
 ) {
     var status: SidebarStatus by mutableStateOf(SidebarStatus.Idle)
         private set
@@ -82,7 +110,13 @@ class SidebarState(
     /** 필터·접힘을 적용한 트리 행. 의존 값이 바뀔 때만 다시 계산된다 (compose-ui 규칙 4). */
     private val flattenedNodes = derivedStateOf {
         when (val current = status) {
-            is SidebarStatus.Ready -> buildSidebarNodes(current.refs, expandedGroups, filter)
+            is SidebarStatus.Ready -> buildSidebarNodes(
+                current.refs,
+                expandedGroups,
+                filter,
+                sections.submodules(),
+                sections.worktrees(),
+            )
             else -> emptyList()
         }
     }

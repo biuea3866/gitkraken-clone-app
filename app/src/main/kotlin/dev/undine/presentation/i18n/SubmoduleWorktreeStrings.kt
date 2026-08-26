@@ -28,6 +28,9 @@ object SubmoduleWorktreeKeys {
     val commitToParent = StringKey("$SUBMODULE_WORKTREE_NAMESPACE.action.commitToParent")
     val remove = StringKey("$SUBMODULE_WORKTREE_NAMESPACE.action.remove")
     val prune = StringKey("$SUBMODULE_WORKTREE_NAMESPACE.action.prune")
+    val add = StringKey("$SUBMODULE_WORKTREE_NAMESPACE.action.add")
+    val addPathLabel = StringKey("$SUBMODULE_WORKTREE_NAMESPACE.field.addPath")
+    val addBranchLabel = StringKey("$SUBMODULE_WORKTREE_NAMESPACE.field.addBranch")
     val initialized = StringKey("$SUBMODULE_WORKTREE_NAMESPACE.status.initialized")
     val locallyModified = StringKey("$SUBMODULE_WORKTREE_NAMESPACE.status.locallyModified")
     val diverged = StringKey("$SUBMODULE_WORKTREE_NAMESPACE.status.diverged")
@@ -51,6 +54,9 @@ value class SubmoduleWorktreeStrings internal constructor(private val strings: S
     val commitToParent: String get() = strings.text(SubmoduleWorktreeKeys.commitToParent)
     val remove: String get() = strings.text(SubmoduleWorktreeKeys.remove)
     val prune: String get() = strings.text(SubmoduleWorktreeKeys.prune)
+    val add: String get() = strings.text(SubmoduleWorktreeKeys.add)
+    val addPathLabel: String get() = strings.text(SubmoduleWorktreeKeys.addPathLabel)
+    val addBranchLabel: String get() = strings.text(SubmoduleWorktreeKeys.addBranchLabel)
     val initialized: String get() = strings.text(SubmoduleWorktreeKeys.initialized)
     val locallyModified: String get() = strings.text(SubmoduleWorktreeKeys.locallyModified)
     val diverged: String get() = strings.text(SubmoduleWorktreeKeys.diverged)
@@ -76,6 +82,9 @@ internal val submoduleWorktreeTranslations: Map<Locale, Map<StringKey, String>> 
         SubmoduleWorktreeKeys.commitToParent to "현재 상태를 부모에 커밋",
         SubmoduleWorktreeKeys.remove to "제거",
         SubmoduleWorktreeKeys.prune to "Prune",
+        SubmoduleWorktreeKeys.add to "worktree 추가",
+        SubmoduleWorktreeKeys.addPathLabel to "새 worktree 디렉터리 경로",
+        SubmoduleWorktreeKeys.addBranchLabel to "체크아웃할 브랜치",
         SubmoduleWorktreeKeys.initialized to "최신",
         SubmoduleWorktreeKeys.locallyModified to "수정됨",
         SubmoduleWorktreeKeys.diverged to "부모 기록과 어긋남",
@@ -96,6 +105,9 @@ internal val submoduleWorktreeTranslations: Map<Locale, Map<StringKey, String>> 
         SubmoduleWorktreeKeys.commitToParent to "Commit current state to parent",
         SubmoduleWorktreeKeys.remove to "Remove",
         SubmoduleWorktreeKeys.prune to "Prune",
+        SubmoduleWorktreeKeys.add to "Add worktree",
+        SubmoduleWorktreeKeys.addPathLabel to "New worktree directory path",
+        SubmoduleWorktreeKeys.addBranchLabel to "Branch to check out",
         SubmoduleWorktreeKeys.initialized to "Up to date",
         SubmoduleWorktreeKeys.locallyModified to "Modified",
         SubmoduleWorktreeKeys.diverged to "Diverged from parent",

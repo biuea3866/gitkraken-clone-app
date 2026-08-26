@@ -1,6 +1,7 @@
 package dev.undine.presentation.submodule
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,14 +10,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import dev.undine.presentation.design.UndineTokens
 import dev.undine.presentation.design.component.UndineEmptyState
 import dev.undine.presentation.design.component.UndineListRow
@@ -72,7 +77,9 @@ private fun SubmoduleSection(state: SubmodulePanelState) {
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(UndineTokens.spacing.extraSmall)) {
                             if (SubmoduleAction.INITIALIZE in row.actions) {
-                                KeyboardActionButton(texts.initialize) { state.initialize(row) }
+                                KeyboardActionButton(texts.initialize, enabled = !state.busy) {
+                                    state.initialize(row)
+                                }
                             }
                             if (SubmoduleAction.OPEN in row.actions) {
                                 KeyboardActionButton(texts.open) { state.requestOpen(row) }
@@ -81,7 +88,9 @@ private fun SubmoduleSection(state: SubmodulePanelState) {
                                 KeyboardActionButton(texts.commitToParent) { state.requestCommitToParent(row) }
                             }
                             if (SubmoduleAction.UPDATE_FROM_PARENT in row.actions) {
-                                KeyboardActionButton(texts.updateFromParent) { state.updateFromParent(row) }
+                                KeyboardActionButton(texts.updateFromParent, enabled = !state.busy) {
+                                    state.updateFromParent(row)
+                                }
                             }
                         }
                     }
@@ -99,6 +108,7 @@ private fun WorktreeSection(state: WorktreePanelState) {
         texts.worktreesTitle,
         style = UndineTokens.typography.title.copy(color = UndineTokens.color.foregroundPrimary),
     )
+    WorktreeAddForm(state, texts)
     if (state.isEmpty) {
         UndineEmptyState(texts.worktreesEmpty)
     } else {
@@ -117,6 +127,76 @@ private fun WorktreeSection(state: WorktreePanelState) {
         )
     }
     PanelFailure(state.failure?.message)
+}
+
+/**
+ * worktree 추가 입력.
+ *
+ * 두 칸 모두 Enter 로 제출할 수 있어 마우스 없이도 추가할 수 있다 (공통 규약 4). 입력값·제출 규칙은
+ * [WorktreePanelState] 가 갖고, 여기서는 그리기와 키 경로만 맡는다.
+ */
+@Composable
+private fun WorktreeAddForm(
+    state: WorktreePanelState,
+    texts: dev.undine.presentation.i18n.SubmoduleWorktreeStrings,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(UndineTokens.spacing.extraSmall),
+    ) {
+        WorktreeDraftField(
+            value = state.draftPath,
+            label = texts.addPathLabel,
+            testTag = SubmoduleWorktreeTags.ADD_PATH,
+            enabled = !state.busy,
+            onValueChange = state::updateDraftPath,
+            onSubmit = state::submitAdd,
+        )
+        WorktreeDraftField(
+            value = state.draftBranch,
+            label = texts.addBranchLabel,
+            testTag = SubmoduleWorktreeTags.ADD_BRANCH,
+            enabled = !state.busy,
+            onValueChange = state::updateDraftBranch,
+            onSubmit = state::submitAdd,
+        )
+        KeyboardActionButton(texts.add, enabled = state.canSubmitAdd) { state.submitAdd() }
+    }
+}
+
+@Composable
+@Suppress("LongParameterList") // Compose 입력 필드의 값·접근성·키보드 콜백을 한 곳에서 받는다.
+private fun WorktreeDraftField(
+    value: String,
+    label: String,
+    testTag: String,
+    enabled: Boolean,
+    onValueChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+) {
+    val colors = UndineTokens.color
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        enabled = enabled,
+        modifier = Modifier
+            .background(colors.surface)
+            .border(UndineTokens.shape.borderThin, colors.border)
+            .padding(UndineTokens.spacing.extraSmall)
+            .semantics { contentDescription = label }
+            .testTag(testTag)
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyUp && event.key == Key.Enter) {
+                    onSubmit()
+                    true
+                } else {
+                    false
+                }
+            },
+        textStyle = UndineTokens.typography.body.copy(color = colors.foregroundPrimary),
+        cursorBrush = SolidColor(colors.foregroundPrimary),
+        singleLine = true,
+    )
 }
 
 @Composable
@@ -160,10 +240,10 @@ private fun WorktreeRow(
                     KeyboardActionButton(texts.open) { state.requestOpen(row) }
                 }
                 if (WorktreeAction.REMOVE in row.actions) {
-                    KeyboardActionButton(texts.remove) { state.remove(row) }
+                    KeyboardActionButton(texts.remove, enabled = !state.busy) { state.remove(row) }
                 }
                 if (WorktreeAction.PRUNE in row.actions) {
-                    KeyboardActionButton(texts.prune) { state.prune(row) }
+                    KeyboardActionButton(texts.prune, enabled = !state.busy) { state.prune(row) }
                 }
             }
         }
@@ -180,20 +260,23 @@ private fun PanelFailure(detail: String?) {
     }
 }
 
+/**
+ * 마우스와 키보드가 같은 동작에 닿는 버튼 (공통 규약 4).
+ *
+ * [enabled] 는 클릭과 키 경로를 **함께** 잠근다 — 한쪽만 잠그면 진행 중인 변경에 키보드로
+ * 두 번째 요청을 낼 수 있다.
+ */
 @Composable
-private fun KeyboardActionButton(label: String, action: () -> Unit) {
+private fun KeyboardActionButton(label: String, enabled: Boolean = true, action: () -> Unit) {
     UndineToolbarButton(
         label = label,
         onClick = action,
+        enabled = enabled,
         modifier = Modifier.onKeyEvent { event ->
-            if (event.type == KeyEventType.KeyUp &&
-                (event.key == Key.Enter || event.key == Key.Spacebar)
-            ) {
-                action()
-                true
-            } else {
-                false
-            }
+            if (!enabled || event.type != KeyEventType.KeyUp) return@onKeyEvent false
+            if (event.key != Key.Enter && event.key != Key.Spacebar) return@onKeyEvent false
+            action()
+            true
         },
     )
 }
@@ -213,4 +296,6 @@ private fun submoduleStatus(
 object SubmoduleWorktreeTags {
     const val SUBMODULE_LIST = "submodule-worktree-submodule-list"
     const val WORKTREE_LIST = "submodule-worktree-worktree-list"
+    const val ADD_PATH = "submodule-worktree-add-path"
+    const val ADD_BRANCH = "submodule-worktree-add-branch"
 }

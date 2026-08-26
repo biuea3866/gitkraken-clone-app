@@ -76,13 +76,16 @@ val List<SidebarNode>.visibleBranchCount: Int
  * [filter] 는 **브랜치에만** 적용된다 — 필터 입력의 목적이 수백 개 브랜치를 좁히는 것이고,
  * 태그·스태시까지 함께 사라지면 필터를 지우기 전까지 그 그룹이 비어 보인다.
  * 접힌 그룹은 머리행만 남기고 항목을 내보내지 않아 `LazyColumn` 이 그리지 않는다.
+ *
+ * [submodules]·[worktrees] 에 기본값을 두지 않는다 — 기본값이 빈 목록이면 호출부가 전달을 잊어도
+ * 컴파일되고, 하위 섹션은 조용히 항상 0개가 된다.
  */
 fun buildSidebarNodes(
     refs: SidebarRefs,
     expandedGroups: Set<SidebarGroup>,
     filter: String,
-    submodules: List<Submodule> = emptyList(),
-    worktrees: List<Worktree> = emptyList(),
+    submodules: List<Submodule>,
+    worktrees: List<Worktree>,
 ): List<SidebarNode> {
     val matching = refs.branches.filter { it.name.value.contains(filter, ignoreCase = true) }
     val nodes = mutableListOf<SidebarNode>()

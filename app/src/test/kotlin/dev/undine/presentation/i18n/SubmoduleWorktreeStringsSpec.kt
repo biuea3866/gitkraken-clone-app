@@ -25,6 +25,9 @@ class SubmoduleWorktreeStringsSpec : FunSpec({
                 texts.commitToParent,
                 texts.remove,
                 texts.prune,
+                texts.add,
+                texts.addPathLabel,
+                texts.addBranchLabel,
                 texts.dirtyRemovalWarning(2),
             ).forEach { text ->
                 text.shouldNotBeBlank()
