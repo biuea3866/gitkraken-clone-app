@@ -11,7 +11,7 @@ Undine 코드를 **작성·리뷰할 때** 따르는 규칙 모음. `paths` fron
 | jgit-usage | `**/infrastructure/**/*.kt` |
 | compose-ui | `**/presentation/**/*.kt` |
 | credential-handling | `**/*.kt` |
-| exception-handling | `**/*Exception.kt` · `**/*ErrorHandler.kt` |
+| exception-handling | `**/*Exception.kt` · `**/*ErrorHandler.kt` · `**/application/**/*.kt` |
 | testing | `**/src/test/**/*.kt` |
 
 ## 목록
