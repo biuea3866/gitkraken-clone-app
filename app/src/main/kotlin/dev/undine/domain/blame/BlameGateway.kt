@@ -8,13 +8,17 @@ import dev.undine.domain.UndineException
 /**
  * blame 한 줄 — 그 줄을 마지막으로 고친 커밋.
  *
+ * **커밋은 id 가 아니라 [Commit] 전체를 담는다.** 화면은 줄마다 상대 시각을 그리고, 커밋 상세로
+ * 이동하고, 첫 부모 기준으로 재귀 blame 을 한다 — id 만 주면 그 값들을 다른 조회(파일 이력 등)에서
+ * 찾아야 하고, 그 조회가 제한(limit)에 걸리거나 실패하면 세 기능이 조용히 사라진다.
+ *
  * @param line 1부터 세는 줄 번호. 화면이 코드와 나란히 놓는 기준이다.
  * @param originLine 그 커밋에서의 줄 번호. 줄이 옮겨졌으면 [line] 과 다르다.
  */
 data class BlameLine(
     val line: Int,
     val originLine: Int,
-    val commit: CommitId,
+    val commit: Commit,
     val author: Person,
     val content: String,
 )

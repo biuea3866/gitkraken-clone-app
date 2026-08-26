@@ -63,7 +63,7 @@ class BlameGatewayImpl(private val gitAccess: GitAccess) : BlameGateway {
             .setFollowFileRenames(true)
             .call()
             ?: return@gitOperation BlameResult.Lines(emptyList())
-        BlameResult.Lines(blamed.linesIn(range))
+        BlameResult.Lines(git.repository.linesIn(blamed, range))
     }
 
     /**
@@ -115,20 +115,27 @@ class BlameGatewayImpl(private val gitAccess: GitAccess) : BlameGateway {
 private fun comparatorFor(ignoreWhitespace: Boolean): RawTextComparator =
     if (ignoreWhitespace) RawTextComparator.WS_IGNORE_ALL else RawTextComparator.DEFAULT
 
-/** 요청 구간만 잘라 [BlameLine] 으로 옮긴다. 파일 길이를 넘는 요청은 있는 만큼만 준다. */
-private fun JGitBlameResult.linesIn(range: LineRange): List<BlameLine> {
-    val contents = resultContents ?: return emptyList()
+/**
+ * 요청 구간만 잘라 [BlameLine] 으로 옮긴다. 파일 길이를 넘는 요청은 있는 만큼만 준다.
+ *
+ * 줄마다 소스 커밋을 **여기서 직접 파싱해 담는다** — 화면이 상대 시각·부모를 다른 조회에서 찾지 않게
+ * 하기 위해서다. `RevWalk` 는 파싱한 객체를 재사용하므로 같은 커밋이 여러 줄에 걸쳐도 한 번만 읽는다.
+ */
+private fun Repository.linesIn(blamed: JGitBlameResult, range: LineRange): List<BlameLine> {
+    val contents = blamed.resultContents ?: return emptyList()
     // 요청이 파일 끝을 넘으면 빈 범위가 되어 비어 있는 목록이 나온다 — 따로 분기하지 않는다.
     val last = if (range.isWhole) contents.size() else minOf(range.end, contents.size())
-    return (range.start..last).map { line ->
-        val index = line - 1
-        BlameLine(
-            line = line,
-            originLine = getSourceLine(index) + 1,
-            commit = CommitId.of(getSourceCommit(index).name),
-            author = getSourceAuthor(index).toPerson(),
-            content = contents.getString(index),
-        )
+    return RevWalk(this).use { walk ->
+        (range.start..last).map { line ->
+            val index = line - 1
+            BlameLine(
+                line = line,
+                originLine = blamed.getSourceLine(index) + 1,
+                commit = walk.parseCommit(blamed.getSourceCommit(index)).toCommit(),
+                author = blamed.getSourceAuthor(index).toPerson(),
+                content = contents.getString(index),
+            )
+        }
     }
 }
 

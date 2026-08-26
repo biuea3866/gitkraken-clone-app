@@ -9,11 +9,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
@@ -47,15 +50,13 @@ fun BlameHistoryView(
 ) {
     val scope = rememberCoroutineScope()
     val blameStrings = strings.blame
-    val commits = (state.history as? FileHistoryUiState.Loaded)
-        ?.entries
-        ?.associate { entry -> entry.commit.id to entry.commit }
-        .orEmpty()
+    val listState = rememberLazyListState()
 
     LaunchedEffect(target) {
         state.loadBlame(target.path, target.initialRange)
         state.loadHistory(target.path)
     }
+    LaunchedEffect(state, listState) { state.loadWhenScrolledToBottom(listState) }
 
     Column(
         modifier = modifier
@@ -89,10 +90,11 @@ fun BlameHistoryView(
                 uiState.failure.message,
             )
             is BlameUiState.Loaded -> BlameLines(
-                model = BlameLinesModel(uiState.lines, commits, now),
+                model = BlameLinesModel(uiState.lines, now),
+                listState = listState,
                 onCommitSelected = onCommitSelected,
                 onRecurse = { commit -> scope.launch { state.recurseBefore(commit) } },
-                onExpand = { range -> scope.launch { state.expandVisibleRange(range) } },
+                onExpand = { scope.launch { state.loadNextLineRange() } },
             )
         }
         FileHistoryPane(
@@ -108,43 +110,48 @@ fun BlameHistoryView(
 /** 상위가 선택한 파일과 처음 화면에 보이는 줄 범위. */
 data class BlameTarget(val path: String, val initialRange: LineRange)
 
-private data class BlameLinesModel(
-    val lines: List<dev.undine.domain.blame.BlameLine>,
-    val commits: Map<dev.undine.domain.CommitId, Commit>,
-    val now: Instant,
-)
+/**
+ * 목록 하단에 도달하면 다음 줄 범위를 이어 읽는다 — blame 은 비싸서 보이는 구간만 먼저 읽기 때문이다.
+ *
+ * 마지막으로 보이는 인덱스와 **쌓인 행 수**를 함께 관찰한다. 이어 읽은 범위가 뷰포트를 채우지 못하면
+ * 인덱스가 그대로여도 다시 판정해야 한다. 같은 범위를 두 번 부르지 않게 막는 것은
+ * [BlameHistoryState.loadNextLineRange] 안의 진행 중·파일 끝 가드다.
+ */
+private suspend fun BlameHistoryState.loadWhenScrolledToBottom(listState: LazyListState) {
+    snapshotFlow {
+        listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index to listState.layoutInfo.totalItemsCount
+    }.collect { (lastVisibleIndex, loadedCount) ->
+        if (lastVisibleIndex != null && loadedCount > 0 && lastVisibleIndex >= loadedCount - 1) {
+            loadNextLineRange()
+        }
+    }
+}
+
+private data class BlameLinesModel(val lines: List<dev.undine.domain.blame.BlameLine>, val now: Instant)
 
 @Composable
 private fun BlameLines(
     model: BlameLinesModel,
+    listState: LazyListState,
     onCommitSelected: (Commit) -> Unit,
     onRecurse: (Commit) -> Unit,
-    onExpand: (LineRange) -> Unit,
+    onExpand: () -> Unit,
 ) {
     val rows = blameRowsOf(model.lines)
     if (rows.isEmpty()) {
         UndineEmptyState(strings.blame.noLines, Modifier.fillMaxSize())
         return
     }
-    LazyColumn(modifier = Modifier.fillMaxWidth()) {
+    LazyColumn(state = listState, modifier = Modifier.fillMaxWidth()) {
         // 라인 번호는 파일 안에서 안정적이므로 스크롤 확장 때도 행 정체성이 유지된다.
         items(rows, key = { row -> row.line }) { row ->
-            BlameLineRow(
-                row,
-                model.commits[row.blameLine.commit],
-                model.now,
-                onCommitSelected,
-                onRecurse,
-            )
+            BlameLineRow(row, model.now, onCommitSelected, onRecurse)
         }
-        item(key = "expand-${rows.last().line}") {
+        // 스크롤과 같은 일을 하는 키보드 경로다 — 스크롤이 확장의 유일한 수단이 되지 않게 남긴다.
+        item(key = EXPAND_ITEM_KEY) {
             UndineToolbarButton(
                 label = strings.blame.loadMore,
-                onClick = {
-                    onExpand(
-                        LineRange.of(rows.last().line + 1, rows.last().line + DEFAULT_EXPANSION_LINES),
-                    )
-                },
+                onClick = onExpand,
                 modifier = Modifier.padding(UndineTokens.spacing.small),
             )
         }
@@ -154,7 +161,6 @@ private fun BlameLines(
 @Composable
 private fun BlameLineRow(
     row: BlameRow,
-    commit: Commit?,
     now: Instant,
     onCommitSelected: (Commit) -> Unit,
     onRecurse: (Commit) -> Unit,
@@ -166,22 +172,22 @@ private fun BlameLineRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (row.showCommitGutter) {
-            val metadata = "${row.blameLine.commit.value.take(SHORT_HASH_LENGTH)} ${row.blameLine.author.name}"
+            // 커밋은 blame 결과가 직접 들고 있다 — 파일 이력 조회 결과와 무관하게 항상 있다.
+            val commit = row.blameLine.commit
+            val metadata = "${commit.id.value.take(SHORT_HASH_LENGTH)} ${row.blameLine.author.name}"
             BasicText(
                 text = metadata,
                 modifier = Modifier
-                    .clickable(enabled = commit != null) { commit?.let(onCommitSelected) }
+                    .clickable { onCommitSelected(commit) }
                     .padding(end = spacing.small),
                 style = UndineTokens.typography.caption.copy(color = colors.foregroundSecondary),
             )
-            if (commit != null) {
-                BasicText(
-                    text = strings.time.relative(commit.committedAt, now),
-                    modifier = Modifier.padding(end = spacing.small),
-                    style = UndineTokens.typography.caption.copy(color = colors.foregroundTertiary),
-                )
-                UndineToolbarButton(strings.blame.recurseBefore, onClick = { onRecurse(commit) })
-            }
+            BasicText(
+                text = strings.time.relative(commit.committedAt, now),
+                modifier = Modifier.padding(end = spacing.small),
+                style = UndineTokens.typography.caption.copy(color = colors.foregroundTertiary),
+            )
+            UndineToolbarButton(strings.blame.recurseBefore, onClick = { onRecurse(commit) })
         }
         BasicText(
             text = "${row.line}  ${row.blameLine.content}",
@@ -245,4 +251,6 @@ private fun dev.undine.domain.DiffResult.hunksOrZero(): Int = when (this) {
 }
 
 private const val SHORT_HASH_LENGTH = 8
-private const val DEFAULT_EXPANSION_LINES = 200
+
+/** 확장 버튼 행의 고정 key — 줄 번호 key 와 섞이지 않아야 스크롤 관찰이 흔들리지 않는다. */
+private const val EXPAND_ITEM_KEY = "blame-expand"

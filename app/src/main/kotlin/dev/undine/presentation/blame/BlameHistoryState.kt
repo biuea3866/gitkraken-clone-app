@@ -54,8 +54,8 @@ data class BlameRow(val blameLine: BlameLine, val showCommitGutter: Boolean) {
 internal fun blameRowsOf(lines: List<BlameLine>): List<BlameRow> {
     var previousCommit: CommitId? = null
     return lines.map { line ->
-        BlameRow(blameLine = line, showCommitGutter = line.commit != previousCommit).also {
-            previousCommit = line.commit
+        BlameRow(blameLine = line, showCommitGutter = line.commit.id != previousCommit).also {
+            previousCommit = line.commit.id
         }
     }
 }
@@ -66,7 +66,13 @@ private data class BlameRequest(
     val range: LineRange,
     val ignoreWhitespace: Boolean,
     val at: CommitId?,
-)
+) {
+    /**
+     * 이 요청이 기대하는 줄 수. 응답이 이보다 적으면 파일 끝에 닿은 것이다.
+     * 전체 범위는 상한이 `Int.MAX_VALUE` 라 곱셈 없이 Long 으로 센다.
+     */
+    val requestedLineCount: Long get() = range.end.toLong() - range.start + 1
+}
 
 /**
  * Blame·파일 이력 화면의 비즈니스 상태. Gateway 를 직접 알지 않고 UseCase 로만 조회하며,
@@ -95,6 +101,9 @@ class BlameHistoryState(
     private var historyLoading = false
     private var comparisonLoading = false
 
+    /** 요청한 만큼 못 받으면 파일 끝이다 — 그 뒤로는 스크롤이 아무리 닿아도 다시 부르지 않는다. */
+    private var reachedEnd = false
+
     suspend fun loadBlame(
         path: String,
         range: LineRange,
@@ -106,10 +115,20 @@ class BlameHistoryState(
         load(BlameRequest(path, range, ignoreWhitespace, at), append = false)
     }
 
-    /** 새로 보인 구간만 더 읽는다. 같은 줄은 최신 응답으로 덮어 중복 행이 생기지 않게 한다. */
-    suspend fun expandVisibleRange(range: LineRange) {
-        val request = currentRequest ?: return
-        load(request.copy(range = range), append = true)
+    /**
+     * 읽어 둔 구간 다음 [EXPANSION_LINES] 줄을 이어 읽는다. 같은 줄은 최신 응답으로 덮어 중복 행이
+     * 생기지 않게 한다.
+     *
+     * 스크롤이 하단에 닿을 때마다 불리므로 **진행 중 요청과 파일 끝 도달을 여기서 막는다** — 막지
+     * 않으면 같은 구간을 스크롤 프레임마다 다시 요청한다.
+     */
+    suspend fun loadNextLineRange() {
+        if (blameLoading || reachedEnd) return
+        val request = currentRequest
+        val loadedEnd = cachedLines.keys.maxOrNull()
+        if (request != null && loadedEnd != null) {
+            load(request.copy(range = LineRange.of(loadedEnd + 1, loadedEnd + EXPANSION_LINES)), append = true)
+        }
     }
 
     /** 공백 무시는 마지막 요청의 같은 기준·범위를 즉시 다시 읽는다. */
@@ -185,7 +204,11 @@ class BlameHistoryState(
     private suspend fun load(request: BlameRequest, append: Boolean) {
         if (blameLoading) return
         blameLoading = true
-        blame = BlameUiState.Loading
+        // 이어 읽을 때는 이미 보여 준 줄을 지우지 않는다 — 목록이 사라지면 스크롤 위치도 함께 잃는다.
+        if (!append) {
+            reachedEnd = false
+            blame = BlameUiState.Loading
+        }
         try {
             when (val result = loadBlame.execute(request.path, request.range, request.ignoreWhitespace, request.at)) {
                 BlameResult.Unsupported -> blame = BlameUiState.Unsupported
@@ -196,6 +219,7 @@ class BlameHistoryState(
                         result.lines.associateBy { it.line }
                     }
                     currentRequest = request
+                    reachedEnd = result.lines.size < request.requestedLineCount
                     blame = BlameUiState.Loaded(cachedLines.toSortedMap().values.toList())
                 }
             }
@@ -208,6 +232,9 @@ class BlameHistoryState(
 
     private companion object {
         const val DEFAULT_HISTORY_LIMIT = 100
+
+        /** 스크롤 확장 한 번에 이어 읽는 줄 수. blame 은 비싸므로 화면 몇 개 분량만 앞서 읽는다. */
+        const val EXPANSION_LINES = 200
     }
 }
 
