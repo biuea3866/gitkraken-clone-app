@@ -66,23 +66,29 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    subgraph graph["presentation/graph"]
+    subgraph pres["presentation/graph"]
         View[CommitGraphView]
-        DnD[DragDropController]
-        Preview[결과 미리보기]
-        Confirm[확인 대화상자]
-        Alt[키보드 대체 경로]
+        State[GraphDragDropState]
+        Overlay[GraphDragDropOverlay]
+        Modifier[graphDropTarget]
     end
-    subgraph app
-        UC[Merge/Rebase/CherryPick UseCase]
-        Undo[OperationRecorder]
+    subgraph dom["domain/graphops"]
+        Model[드래그 소스 · 드롭 대상]
+        Propose[proposeGraphDrop]
     end
-    View --> DnD
-    DnD --> Preview
-    DnD --> Confirm
-    View --> Alt
-    Confirm --> UC
-    UC --> Undo
+    subgraph app["application/graphops"]
+        UC[ExecuteGraphOperationUseCase]
+    end
+    subgraph contract["UND-71 · UND-72 계약"]
+        Gw[WorktreeOpsGateway · RefGateway]
+    end
+    View --> State
+    View --> Modifier
+    View --> Overlay
+    State --> Propose
+    Propose --> Model
+    State --> UC
+    UC --> Gw
 ```
 
 ## 테스트 케이스

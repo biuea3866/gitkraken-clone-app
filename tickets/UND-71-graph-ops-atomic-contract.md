@@ -57,6 +57,8 @@ Undo 기록 실패는 **저장소 변경 실패로 취급하지 않는다** — 
 되돌리기 실행은 1·2 의 계약을 그대로 쓴다.
 
 **범위 밖**: 드래그&드롭 UI · 드롭 판정 · 확인 다이얼로그 · 팔레트 등가 경로 (전부 UND-42).
+UND-42 의 소유는 `presentation/graph/` · `domain/graphops/` · `application/graphops/` 이며,
+화면 상태 · 순수 드롭 판정 · 계약 소비 UseCase 를 포함한다. Gateway 계약과 그 구현은 이 티켓 소유다.
 
 `domain/undo/UndoStrategy.kt` 와 `application/undo/UndoService.kt` 는 이 티켓이 확장한다 —
 새 이동 변이를 실행할 분기가 UndoService 에 있어야 하고, 두 파일의 앞선 소유 티켓(UND-42 · UND-43)은
