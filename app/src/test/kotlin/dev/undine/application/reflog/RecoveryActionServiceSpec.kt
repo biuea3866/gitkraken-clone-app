@@ -101,7 +101,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
 
                 actions.recover(target, RecoveryTarget.NewBranch(branch)).value shouldBe branch
 
-                coVerify { recorder.record(GitOperationKind.REFLOG_RESTORE, UndoStrategy.DeleteBranch(branch)) }
+                coVerify { recorder.record(GitOperationKind.REFLOG_RESTORE, UndoStrategy.DeleteBranch(branch), any()) }
             }
         }
 
@@ -138,7 +138,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
 
                 actions.markBisect(BisectVerdict.GOOD).value shouldBe BisectResult.FirstBad(commitId(9))
 
-                coVerify { recorder.recordIrreversible(GitOperationKind.BISECT_SESSION, any()) }
+                coVerify { recorder.recordIrreversible(GitOperationKind.BISECT_SESSION, any(), any()) }
             }
         }
 
@@ -152,7 +152,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
 
                 actions.startBisect(commitId(1), commitId(8)).value shouldBe started
 
-                coVerify { recorder.recordIrreversible(GitOperationKind.BISECT_SESSION, any()) }
+                coVerify { recorder.recordIrreversible(GitOperationKind.BISECT_SESSION, any(), any()) }
             }
         }
 
@@ -165,7 +165,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
 
                 actions.resetBisect()
 
-                coVerify { recorder.recordIrreversible(GitOperationKind.BISECT_SESSION, any()) }
+                coVerify { recorder.recordIrreversible(GitOperationKind.BISECT_SESSION, any(), any()) }
             }
         }
     }
@@ -178,7 +178,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
                 val reflog = mockk<ReflogGateway>()
                 val recorder = mockk<OperationRecorder>()
                 coEvery { reflog.recover(target, RecoveryTarget.NewBranch(branch)) } returns branch
-                coEvery { recorder.record(any(), any()) } throws
+                coEvery { recorder.record(any(), any(), any()) } throws
                     UndineException.GitOperationFailed("undo.record")
                 val actions = service(reflog, mockk(), mockk(), recorder)
 
@@ -201,7 +201,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
                     RefMoveConfirmation.ofDisplacedCommit(commitId(4)),
                 )
                 coEvery { reflog.recover(target, move) } returns move.name
-                coEvery { recorder.recordIrreversible(any(), any()) } throws
+                coEvery { recorder.recordIrreversible(any(), any(), any()) } throws
                     UndineException.GitOperationFailed("undo.record")
                 val actions = service(reflog, mockk(), mockk(), recorder)
 
@@ -218,7 +218,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
                 val service = mockk<BisectService>()
                 val marked = BisectResult.Testing(commitId(5), 2, 1)
                 coEvery { service.mark(BisectVerdict.BAD) } returns marked
-                coEvery { recorder.recordIrreversible(any(), any()) } throws
+                coEvery { recorder.recordIrreversible(any(), any(), any()) } throws
                     UndineException.GitOperationFailed("undo.record")
                 val actions = bisectActions(service, recorder)
 
@@ -235,7 +235,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
                 val service = mockk<BisectService>()
                 coEvery { service.start(commitId(1), commitId(8)) } returns BisectResult.Testing(commitId(4), 3, 2)
                 coEvery { service.reset() } returns Unit
-                coEvery { recorder.recordIrreversible(any(), any()) } throws
+                coEvery { recorder.recordIrreversible(any(), any(), any()) } throws
                     UndineException.GitOperationFailed("undo.record")
                 val actions = bisectActions(service, recorder)
 
@@ -265,7 +265,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
                 val reflog = mockk<ReflogGateway>()
                 val recorder = mockk<OperationRecorder>()
                 coEvery { reflog.recover(target, RecoveryTarget.NewBranch(branch)) } returns branch
-                coEvery { recorder.record(any(), any()) } throws CancellationException("기록 취소")
+                coEvery { recorder.record(any(), any(), any()) } throws CancellationException("기록 취소")
                 val actions = service(reflog, mockk(), mockk(), recorder)
 
                 shouldThrow<CancellationException> {
@@ -284,7 +284,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
                     RefMoveConfirmation.ofDisplacedCommit(commitId(4)),
                 )
                 coEvery { reflog.recover(target, move) } returns move.name
-                coEvery { recorder.recordIrreversible(any(), any()) } throws CancellationException("기록 취소")
+                coEvery { recorder.recordIrreversible(any(), any(), any()) } throws CancellationException("기록 취소")
                 val actions = service(reflog, mockk(), mockk(), recorder)
 
                 shouldThrow<CancellationException> { actions.recover(target, move) }
@@ -296,7 +296,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
                 val recorder = mockk<OperationRecorder>()
                 val service = mockk<BisectService>()
                 coEvery { service.mark(BisectVerdict.BAD) } returns BisectResult.Testing(commitId(5), 2, 1)
-                coEvery { recorder.recordIrreversible(any(), any()) } throws CancellationException("기록 취소")
+                coEvery { recorder.recordIrreversible(any(), any(), any()) } throws CancellationException("기록 취소")
                 val actions = bisectActions(service, recorder)
 
                 shouldThrow<CancellationException> { actions.markBisect(BisectVerdict.BAD) }
