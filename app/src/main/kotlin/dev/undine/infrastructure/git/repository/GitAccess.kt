@@ -58,13 +58,33 @@ class GitAccess(
      *
      * @throws UndineException.StateViolation 저장소가 열려 있지 않을 때
      */
-    suspend fun <T> withRepository(block: (Repository) -> T): T = onGitThread {
-        val repository = holder.current() ?: throw UndineException.StateViolation(REPOSITORY_NOT_OPEN)
-        block(repository)
-    }
+    suspend fun <T> withRepository(block: (Repository) -> T): T = onGitThread { block(heldRepository()) }
+
+    /**
+     * **여러 Git 조작으로 이루어진 시퀀스 하나 전체**를 이 클래스의 임계구역 안에서 수행한다.
+     *
+     * [withRepository] 를 조작마다 부르면 호출 사이에 다른 접근이 끼어든다 — 체크아웃과 그 위의
+     * 병합 사이에 다른 체크아웃이 들어오면 의도하지 않은 브랜치에서 병합이 실행된다. 시퀀스를
+     * 여는 지점을 여기에 두는 이유는 [withSessions] 와 같다: **직렬화는 자원을 소유한 쪽이 한다**
+     * (결정 A-N1·A-L3·G4). 각 Gateway 구현이 자기 잠금을 덧대면 이미 쥔 락을 다시 잡는다.
+     *
+     * [block] 은 이미 락을 쥔 핸들을 받으므로 그 안에서 [withRepository] 를 다시 부르지 않는다 —
+     * 각 Gateway 는 **이 구역용 내부 경로**를 따로 노출한다.
+     *
+     * 취소는 **시퀀스가 시작되기 전에만** 관측된다. [block] 은 정지 함수가 아니므로 한 번 시작하면
+     * 중간에 끊기지 않고, 취소가 그 뒤에 떨어지면 호출자에게는 결과 대신 `CancellationException`
+     * 이 도착한다. 그래서 **변경과 그 결과의 소비(Undo 기록 등)를 한 단위로 묶는 것은 호출자의
+     * 몫**이다 — 그 계약은 각 Gateway 의 변경 연산이 명시한다 (결정 A-L2·G4).
+     *
+     * @throws UndineException.StateViolation 저장소가 열려 있지 않을 때
+     */
+    suspend fun <T> withSequence(block: (Repository) -> T): T = onGitThread { block(heldRepository()) }
 
     /** 열려 있는 모든 핸들을 닫는다. 열려 있지 않으면 아무 일도 하지 않는다. */
     suspend fun close(): Unit = onGitThread { holder.close() }
+
+    private fun heldRepository(): Repository =
+        holder.current() ?: throw UndineException.StateViolation(REPOSITORY_NOT_OPEN)
 
     private suspend fun <T> onGitThread(block: () -> T): T =
         withContext(Dispatchers.IO) { serialAccess.withLock { block() } }

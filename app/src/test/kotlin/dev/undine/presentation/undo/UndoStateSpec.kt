@@ -67,7 +67,7 @@ private fun irreversibleEntry() = OperationEntry(
 /** 워킹트리를 덮어쓰는 되돌리기 — 미커밋 변경이 있으면 거부된다. */
 private fun hardResetEntry() = OperationEntry(
     operation = GitOperationKind.MERGE,
-    strategy = UndoStrategy.HardResetTo(PARENT),
+    strategy = UndoStrategy.HardResetTo(MAIN, previous = PARENT, expected = HEAD),
     baseline = RepositoryBaseline(branch = MAIN, head = HEAD),
     targetLabel = "feature 병합",
     recordedAt = Instant.parse("2026-08-25T01:02:05Z"),
@@ -125,12 +125,14 @@ private class UndoStateFixture {
         coEvery { repositoryGateway.status() } coAnswers { status }
         coEvery { worktreeOpsGateway.reset(any(), any()) } just Runs
         coEvery { worktreeOpsGateway.hardReset(any()) } just Runs
+        coEvery { worktreeOpsGateway.hardResetBranch(any(), any(), any()) } just Runs
     }
 
     /** 저장소를 바꾸는 호출이 하나도 없었는지 본다. */
     fun verifyNoGitChange() {
         coVerify(exactly = 0) { worktreeOpsGateway.reset(any(), any()) }
         coVerify(exactly = 0) { worktreeOpsGateway.hardReset(any()) }
+        coVerify(exactly = 0) { worktreeOpsGateway.hardResetBranch(any(), any(), any()) }
     }
 
     private val service = UndoService(stack, refGateway, repositoryGateway, worktreeOpsGateway)

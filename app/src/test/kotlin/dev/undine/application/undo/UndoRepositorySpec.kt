@@ -161,23 +161,30 @@ class UndoRepositorySpec : FunSpec({
 
     test("병합을 되돌리면 기록된 ORIG_HEAD 로 복구된다") {
         val directory = tempdir()
-        val beforeMerge = initRepository(directory).use { git ->
+        val (beforeMerge, afterMerge) = initRepository(directory).use { git ->
             git.commitFile(FILE_NAME, "base\n", "base")
             git.branchCreate().setName(FEATURE_BRANCH).call()
             git.checkout().setName(FEATURE_BRANCH).call()
             git.commitFile(OTHER_FILE_NAME, "feature\n", "feature 작업")
             git.checkout().setName(MAIN_BRANCH).call()
             val head = git.commitFile(FILE_NAME, "main\n", "main 작업")
-            git.merge()
+            val merged = git.merge()
                 .include(git.repository.exactRef("refs/heads/$FEATURE_BRANCH"))
                 .setFastForward(MergeCommand.FastForwardMode.NO_FF)
                 .setMessage("병합")
                 .call()
-            head
+            head to merged.newHead.name
         }
 
         val outcome = UndoHarness(directory).use {
-            recorder.record(GitOperationKind.MERGE, UndoStrategy.HardResetTo(CommitId.of(beforeMerge)))
+            recorder.record(
+                GitOperationKind.MERGE,
+                UndoStrategy.HardResetTo(
+                    branch = RefName(MAIN_BRANCH),
+                    previous = CommitId.of(beforeMerge),
+                    expected = CommitId.of(afterMerge),
+                ),
+            )
             undoTop()
         }
 

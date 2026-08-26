@@ -26,4 +26,30 @@ interface RefGateway {
     suspend fun deleteBranch(name: RefName, force: Boolean): DeleteBranchResult
 
     suspend fun checkout(ref: RefName, force: Boolean)
+
+    /**
+     * [branch] 가 **[expected] 를 가리키고 있을 때만** [to] 로 옮긴다 (조건부 갱신).
+     *
+     * 화면이 본 스냅샷과 실제 ref 가 어긋난 사이 다른 경로가 그 브랜치를 옮겼다면 덮어쓰지 않는다 —
+     * 강제로 옮기면 그 ref 로만 도달하던 커밋을 잃고 되돌릴 방법이 없다. 검사와 갱신은 ref-update
+     * 잠금 안에서 한 번에 일어난다.
+     *
+     * **현재 체크아웃된 브랜치는 거부한다.** 포인터만 옮기면 워킹트리가 HEAD 와 어긋난 채 남는다 —
+     * 그 경우는 [WorktreeOpsGateway.hardResetBranch] 가 워킹트리 동기화까지 맡는다.
+     *
+     * @throws UndineException.StateViolation 실제 target 이 [expected] 와 다를 때 · 현재 브랜치일 때
+     * @throws UndineException.NotFound 브랜치나 [to] 커밋이 없을 때
+     */
+    suspend fun moveBranch(branch: RefName, to: CommitId, expected: CommitId)
+
+    /**
+     * [tag] 를 [moveBranch] 와 같은 조건부 규칙으로 [to] 로 옮긴다.
+     *
+     * **annotated 태그는 거부한다.** 태그 ref 를 커밋으로 다시 겨누면 태그 객체에 담긴 메시지와
+     * tagger 가 사라지고 되돌릴 수 없다 — 이 앱이 태그 rename 을 제공하지 않는 것과 같은 이유다.
+     *
+     * @throws UndineException.StateViolation 실제 target 이 [expected] 와 다를 때 · annotated 태그일 때
+     * @throws UndineException.NotFound 태그나 [to] 커밋이 없을 때
+     */
+    suspend fun moveTag(tag: RefName, to: CommitId, expected: CommitId)
 }

@@ -90,7 +90,8 @@ class UndoPlanSpec : FunSpec({
     }
 
     test("ORIG_HEAD 복구는 워킹트리가 더러우면 거부한다 — undo 가 미커밋 작업을 삼키면 안 된다") {
-        val refused = entryOf(UndoStrategy.HardResetTo(HEAD_BEFORE), GitOperationKind.MERGE)
+        val hardReset = UndoStrategy.HardResetTo(MAIN, previous = HEAD_BEFORE, expected = HEAD_AFTER)
+        val refused = entryOf(hardReset, GitOperationKind.MERGE)
             .planUndo(RECORDED, dirtyPaths = listOf("a.txt", "b.txt"))
             .shouldBeInstanceOf<UndoPlan.Refuse>()
             .outcome
@@ -101,7 +102,7 @@ class UndoPlanSpec : FunSpec({
     }
 
     test("워킹트리가 깨끗하면 ORIG_HEAD 로 hard reset 한다") {
-        val strategy = UndoStrategy.HardResetTo(HEAD_BEFORE)
+        val strategy = UndoStrategy.HardResetTo(MAIN, previous = HEAD_BEFORE, expected = HEAD_AFTER)
 
         entryOf(strategy, GitOperationKind.MERGE).planUndo(RECORDED, dirtyPaths = emptyList()) shouldBe
             UndoPlan.Execute(strategy)

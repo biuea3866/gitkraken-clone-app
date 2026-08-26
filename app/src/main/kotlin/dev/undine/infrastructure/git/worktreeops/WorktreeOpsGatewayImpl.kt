@@ -1,6 +1,10 @@
 package dev.undine.infrastructure.git.worktreeops
 
+import dev.undine.domain.BranchOperation
+import dev.undine.domain.BranchOperationResult
+import dev.undine.domain.BranchTarget
 import dev.undine.domain.CommitId
+import dev.undine.domain.RefName
 import dev.undine.domain.ResetMode
 import dev.undine.domain.RevertResult
 import dev.undine.domain.StashEntry
@@ -25,6 +29,8 @@ private const val OPERATION_STASH_DROP = "worktreeops.stashDrop"
 private const val OPERATION_REVERT = "worktreeops.revert"
 private const val OPERATION_RESET = "worktreeops.reset"
 private const val OPERATION_HARD_RESET = "worktreeops.hardReset"
+private const val OPERATION_RUN_ON_BRANCH = "worktreeops.runOnBranch"
+private const val OPERATION_RESET_BRANCH = "worktreeops.hardResetBranch"
 
 /** 새로 만든 stash 는 항상 `stash@{0}` 이다. */
 private const val NEWEST_STASH_INDEX = 0
@@ -49,7 +55,7 @@ class WorktreeOpsGatewayImpl(private val gitAccess: GitAccess) : WorktreeOpsGate
      * @throws UndineException.StateViolation stash 로 저장할 변경이 없을 때.
      */
     override suspend fun stashPush(includeUntracked: Boolean): StashEntry =
-        gitOperation(OPERATION_STASH_PUSH) { git ->
+        gitAccess.gitOperation(OPERATION_STASH_PUSH) { git ->
             val created = git.stashCreate().setIncludeUntracked(includeUntracked).call()
                 ?: throw UndineException.StateViolation("stash 로 저장할 변경이 없습니다")
             RevWalk(git.repository).use { walk ->
@@ -59,7 +65,7 @@ class WorktreeOpsGatewayImpl(private val gitAccess: GitAccess) : WorktreeOpsGate
 
     /** 최신 stash 가 [StashEntry.index] 0 이다. */
     override suspend fun stashList(): List<StashEntry> =
-        gitOperation(OPERATION_STASH_LIST) { git ->
+        gitAccess.gitOperation(OPERATION_STASH_LIST) { git ->
             git.stashList().call().mapIndexed { index, commit -> commit.toStashEntry(index) }
         }
 
@@ -69,7 +75,7 @@ class WorktreeOpsGatewayImpl(private val gitAccess: GitAccess) : WorktreeOpsGate
      * @throws UndineException.NotFound stash 가 0건일 때 — 이름은 대상이 특정되지 않았음을 뜻하는 빈 문자열이다.
      */
     override suspend fun stashPop() {
-        gitOperation(OPERATION_STASH_POP) { git ->
+        gitAccess.gitOperation(OPERATION_STASH_POP) { git ->
             if (git.stashList().call().isEmpty()) {
                 throw UndineException.NotFound(UndineException.NotFound.Kind.STASH, "")
             }
@@ -85,7 +91,7 @@ class WorktreeOpsGatewayImpl(private val gitAccess: GitAccess) : WorktreeOpsGate
      * [StashEntry.target] 커밋으로 대상을 다시 찾는다.
      */
     override suspend fun stashApply(entry: StashEntry) {
-        gitOperation(OPERATION_STASH_APPLY) { git ->
+        gitAccess.gitOperation(OPERATION_STASH_APPLY) { git ->
             requireStashIndexOf(git, entry)
             git.stashApply().setStashRef(entry.target.value).call()
         }
@@ -96,7 +102,7 @@ class WorktreeOpsGatewayImpl(private val gitAccess: GitAccess) : WorktreeOpsGate
      * 확인 절차는 호출 화면 소유이고, 이 Gateway 는 요청받으면 수행한다.
      */
     override suspend fun stashDrop(entry: StashEntry) {
-        gitOperation(OPERATION_STASH_DROP) { git ->
+        gitAccess.gitOperation(OPERATION_STASH_DROP) { git ->
             git.stashDrop().setStashRef(requireStashIndexOf(git, entry)).call()
         }
     }
@@ -110,7 +116,7 @@ class WorktreeOpsGatewayImpl(private val gitAccess: GitAccess) : WorktreeOpsGate
      * @throws UndineException.DirtyWorkingTree 커밋되지 않은 변경 때문에 revert 를 적용조차 못 했을 때.
      */
     override suspend fun revert(commit: CommitId): RevertResult =
-        gitOperation(OPERATION_REVERT) { git ->
+        gitAccess.gitOperation(OPERATION_REVERT) { git ->
             val command = git.revert().include(git.repository.resolveCommit(commit))
             val newHead = command.call()
             when {
@@ -124,7 +130,7 @@ class WorktreeOpsGatewayImpl(private val gitAccess: GitAccess) : WorktreeOpsGate
 
     /** 워킹트리를 보존하는 reset 만 받는다 — hard 는 [ResetMode] 에 없고 [hardReset] 이 따로 있다. */
     override suspend fun reset(commit: CommitId, mode: ResetMode) {
-        gitOperation(OPERATION_RESET) { git ->
+        gitAccess.gitOperation(OPERATION_RESET) { git ->
             git.reset()
                 .setMode(mode.toResetType())
                 .setRef(git.repository.resolveCommit(commit).name)
@@ -137,7 +143,7 @@ class WorktreeOpsGatewayImpl(private val gitAccess: GitAccess) : WorktreeOpsGate
      * 호출 전 사용자 확인이 필요하다.** 플래그로 실수로 켜지지 않도록 별도 메서드로 둔다.
      */
     override suspend fun hardReset(commit: CommitId) {
-        gitOperation(OPERATION_HARD_RESET) { git ->
+        gitAccess.gitOperation(OPERATION_HARD_RESET) { git ->
             git.reset()
                 .setMode(ResetCommand.ResetType.HARD)
                 .setRef(git.repository.resolveCommit(commit).name)
@@ -146,24 +152,52 @@ class WorktreeOpsGatewayImpl(private val gitAccess: GitAccess) : WorktreeOpsGate
     }
 
     /**
-     * 공유 핸들 경계([GitAccess.withRepository]) 안에서 [block] 을 돌리고, 예상하지 못한 JGit 실패만
-     * [UndineException.GitOperationFailed] 로 번역한다.
-     * `CancellationException` 은 애초에 잡지 않으므로 취소가 그대로 전파된다.
+     * 체크아웃과 조작을 **한 임계 구역**([GitAccess.withSequence])에서 끝낸다 — 조작마다 잠금을
+     * 잡았다 놓으면 그 사이에 낀 다른 체크아웃이 조작을 엉뚱한 브랜치에서 돌린다 (결정 G4).
      */
-    private suspend fun <T> gitOperation(operation: String, block: (Git) -> T): T =
-        try {
-            gitAccess.withRepository { repository ->
-                // Git.wrap 은 공유 Repository 를 닫지 않는다 — 닫는 것은 Git 자신의 자원뿐이다.
-                Git.wrap(repository).use(block)
-            }
-        } catch (failure: GitAPIException) {
-            throw UndineException.GitOperationFailed(operation, failure)
-        } catch (failure: JGitInternalException) {
-            throw UndineException.GitOperationFailed(operation, failure)
-        } catch (failure: IOException) {
-            throw UndineException.GitOperationFailed(operation, failure)
+    override suspend fun runOnBranch(on: BranchTarget, operation: BranchOperation): BranchOperationResult =
+        gitAccess.sequenceOperation(OPERATION_RUN_ON_BRANCH) { git -> git.runOnBranchHeld(on, operation) }
+
+    /**
+     * 기대 위치 확인과 ref 갱신, 그리고 (대상이 실제 HEAD 일 때의) 워킹트리 동기화가 한 구역이다 —
+     * 나뉘면 확인한 값과 옮기는 값이 달라질 수 있다 (결정 A-L3).
+     */
+    override suspend fun hardResetBranch(branch: RefName, to: CommitId, expected: CommitId) {
+        gitAccess.sequenceOperation(OPERATION_RESET_BRANCH) { git ->
+            git.hardResetBranchHeld(branch, to, expected)
         }
+    }
 }
+
+/** 조작 하나를 공유 핸들 경계([GitAccess.withRepository]) 안에서 돌린다. */
+private suspend fun <T> GitAccess.gitOperation(operation: String, block: (Git) -> T): T =
+    translatingGitFailure(operation) {
+        withRepository { repository ->
+            // Git.wrap 은 공유 Repository 를 닫지 않는다 — 닫는 것은 Git 자신의 자원뿐이다.
+            Git.wrap(repository).use(block)
+        }
+    }
+
+/** 여러 조작으로 이루어진 시퀀스 하나를 [GitAccess.withSequence] 의 한 임계 구역에서 돌린다. */
+private suspend fun <T> GitAccess.sequenceOperation(operation: String, block: (Git) -> T): T =
+    translatingGitFailure(operation) {
+        withSequence { repository -> Git.wrap(repository).use(block) }
+    }
+
+/**
+ * 예상하지 못한 JGit 실패만 [UndineException.GitOperationFailed] 로 번역한다. 도메인 예외는
+ * 그대로 통과한다. `CancellationException` 은 애초에 잡지 않으므로 취소가 그대로 전파된다.
+ */
+private suspend fun <T> translatingGitFailure(operation: String, block: suspend () -> T): T =
+    try {
+        block()
+    } catch (failure: GitAPIException) {
+        throw UndineException.GitOperationFailed(operation, failure)
+    } catch (failure: JGitInternalException) {
+        throw UndineException.GitOperationFailed(operation, failure)
+    } catch (failure: IOException) {
+        throw UndineException.GitOperationFailed(operation, failure)
+    }
 
 private fun RevCommit.toStashEntry(index: Int): StashEntry = StashEntry(
     index = index,

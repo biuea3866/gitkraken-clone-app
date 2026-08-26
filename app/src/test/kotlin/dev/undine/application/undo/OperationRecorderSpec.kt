@@ -114,7 +114,7 @@ class OperationRecorderSpec : BehaviorSpec({
             val stack = UndoStack()
             OperationRecorder(refGateway, stack).record(
                 operation = GitOperationKind.CHERRY_PICK,
-                strategy = UndoStrategy.HardResetTo(PARENT),
+                strategy = UndoStrategy.HardResetTo(MAIN, previous = PARENT, expected = HEAD),
             )
 
             Then("브랜치 없음을 그대로 기록한다 — 되돌리기 단계에서 거부할 근거가 된다") {
