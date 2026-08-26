@@ -68,7 +68,7 @@ internal fun Git.runOnBranchHeld(on: BranchTarget, operation: BranchOperation): 
         rejectIfDirty()
     }
 
-    return runCatching { executeHeld(operation, branch) }
+    return runCatching { executeHeld(operation, branch, CommitId.of(branchTargetBefore.name)) }
         .onFailure { restoreHeld(originalHead, branchTargetBefore) }
         .getOrThrow()
 }
@@ -101,15 +101,23 @@ private fun Repository.currentBranchName(): RefName? =
         ?.takeIf { it.startsWith(LOCAL_BRANCH_PREFIX) }
         ?.let { RefName(Repository.shortenRefName(it)) }
 
-private fun Git.executeHeld(operation: BranchOperation, performedOn: RefName): BranchOperationResult =
+/**
+ * [previousTarget] 은 [runOnBranchHeld] 가 임계 구역 안에서 조작 전에 읽은 대상 브랜치 위치다 —
+ * 결과에 그대로 실어 호출자가 그 값을 임계 구역 밖에서 다시 읽지 않게 한다.
+ */
+private fun Git.executeHeld(
+    operation: BranchOperation,
+    performedOn: RefName,
+    previousTarget: CommitId,
+): BranchOperationResult =
     when (operation) {
         is BranchOperation.Merge ->
-            mergeHeld(operation.source, operation.allowFastForward).toResult(performedOn)
+            mergeHeld(operation.source, operation.allowFastForward).toResult(performedOn, previousTarget)
 
-        is BranchOperation.Rebase -> rebaseHeld(operation.upstream).toResult(performedOn)
+        is BranchOperation.Rebase -> rebaseHeld(operation.upstream).toResult(performedOn, previousTarget)
 
         is BranchOperation.CherryPick ->
-            applyHeld(operation.commit, operation.recordOrigin).toResult(performedOn)
+            applyHeld(operation.commit, operation.recordOrigin).toResult(performedOn, previousTarget)
     }
 
 /**
@@ -136,20 +144,23 @@ private fun Git.mutatedHeld(branchTargetBefore: ObjectId): Boolean =
         repository.toOpenedRepository().state in IN_PROGRESS_STATES ||
         status().call().uncommittedChanges.isNotEmpty()
 
-private fun MergeResult.toResult(performedOn: RefName): BranchOperationResult = when (this) {
-    is MergeResult.Succeeded -> BranchOperationResult.Succeeded(performedOn, head)
-    is MergeResult.Conflicted -> BranchOperationResult.Conflicted(performedOn, paths)
-    MergeResult.AlreadyUpToDate -> BranchOperationResult.NoChange(performedOn)
-}
+private fun MergeResult.toResult(performedOn: RefName, previousTarget: CommitId): BranchOperationResult =
+    when (this) {
+        is MergeResult.Succeeded -> BranchOperationResult.Succeeded(performedOn, previousTarget, head)
+        is MergeResult.Conflicted -> BranchOperationResult.Conflicted(performedOn, previousTarget, paths)
+        MergeResult.AlreadyUpToDate -> BranchOperationResult.NoChange(performedOn, previousTarget)
+    }
 
-private fun RebaseResult.toResult(performedOn: RefName): BranchOperationResult = when (this) {
-    is RebaseResult.Succeeded -> BranchOperationResult.Succeeded(performedOn, head)
-    is RebaseResult.Conflicted -> BranchOperationResult.Conflicted(performedOn, paths)
-    RebaseResult.AlreadyUpToDate -> BranchOperationResult.NoChange(performedOn)
-}
+private fun RebaseResult.toResult(performedOn: RefName, previousTarget: CommitId): BranchOperationResult =
+    when (this) {
+        is RebaseResult.Succeeded -> BranchOperationResult.Succeeded(performedOn, previousTarget, head)
+        is RebaseResult.Conflicted -> BranchOperationResult.Conflicted(performedOn, previousTarget, paths)
+        RebaseResult.AlreadyUpToDate -> BranchOperationResult.NoChange(performedOn, previousTarget)
+    }
 
-private fun CherryPickStep.toResult(performedOn: RefName): BranchOperationResult = when (this) {
-    is CherryPickStep.Created -> BranchOperationResult.Succeeded(performedOn, commit)
-    is CherryPickStep.Conflicted -> BranchOperationResult.Conflicted(performedOn, paths)
-    CherryPickStep.Empty -> BranchOperationResult.NoChange(performedOn)
-}
+private fun CherryPickStep.toResult(performedOn: RefName, previousTarget: CommitId): BranchOperationResult =
+    when (this) {
+        is CherryPickStep.Created -> BranchOperationResult.Succeeded(performedOn, previousTarget, commit)
+        is CherryPickStep.Conflicted -> BranchOperationResult.Conflicted(performedOn, previousTarget, paths)
+        CherryPickStep.Empty -> BranchOperationResult.NoChange(performedOn, previousTarget)
+    }

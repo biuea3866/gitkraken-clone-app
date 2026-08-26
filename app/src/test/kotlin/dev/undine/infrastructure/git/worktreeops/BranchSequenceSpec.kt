@@ -93,6 +93,18 @@ private class BranchSequenceFixture(val git: Git) {
     fun editWithoutCommit(name: String, content: String) {
         File(git.repository.workTree, name).writeText(content)
     }
+
+    /**
+     * [branch] 에서 [BASE_FILE] 을 [content] 로 고쳐 커밋하고, HEAD 를 원래 자리로 돌려놓는다.
+     * 두 브랜치에 각각 부르면 같은 파일을 서로 다르게 고쳐 병합이 충돌하는 저장소가 된다.
+     */
+    fun divergeOn(branch: RefName, content: String): CommitId {
+        val before = git.repository.fullBranch
+        git.checkout().setName(branch.value).call()
+        val commit = CommitId.of(git.commitFile(BASE_FILE, content, "diverge ${branch.value}").name)
+        git.checkout().setName(before).call()
+        return commit
+    }
 }
 
 /**
@@ -312,6 +324,88 @@ class BranchSequenceSpec : FunSpec({
 
         result.performedOn shouldBe MAIN
         fixture.currentRef() shouldBe MAIN_REF
+    }
+
+    test("병합이 성공하면 previousTarget 이 조작 직전 대상 브랜치 위치와 같다") {
+        val fixture = fixture()
+
+        val result = fixture.gateway.runOnBranch(
+            BranchTarget.Named(FEATURE),
+            BranchOperation.Merge(source = MAIN, allowFastForward = true),
+        )
+
+        result.previousTarget shouldBe fixture.featureHead
+        result.shouldBeInstanceOf<BranchOperationResult.Succeeded>()
+        result.head shouldNotBe fixture.featureHead
+    }
+
+    test("리베이스가 성공해도 previousTarget 은 조작 전 대상 브랜치 위치다") {
+        val fixture = fixture()
+
+        val result = fixture.gateway.runOnBranch(
+            BranchTarget.Named(FEATURE),
+            BranchOperation.Rebase(upstream = MAIN),
+        )
+
+        result.previousTarget shouldBe fixture.featureHead
+        result.shouldBeInstanceOf<BranchOperationResult.Succeeded>()
+        result.head shouldNotBe fixture.featureHead
+    }
+
+    test("cherry-pick 이 성공해도 previousTarget 은 조작 전 대상 브랜치 위치다") {
+        val fixture = fixture()
+
+        val result = fixture.gateway.runOnBranch(
+            BranchTarget.Named(FEATURE),
+            BranchOperation.CherryPick(commit = fixture.mainHead, recordOrigin = false),
+        )
+
+        result.previousTarget shouldBe fixture.featureHead
+        result.shouldBeInstanceOf<BranchOperationResult.Succeeded>()
+    }
+
+    test("적용할 변경이 없어 NoChange 일 때도 previousTarget 이 담긴다") {
+        val fixture = fixture()
+
+        val result = fixture.gateway.runOnBranch(
+            BranchTarget.Named(FEATURE),
+            // 자기 자신을 병합하면 적용할 변경이 없다.
+            BranchOperation.Merge(source = FEATURE, allowFastForward = true),
+        )
+
+        result.shouldBeInstanceOf<BranchOperationResult.NoChange>()
+        result.previousTarget shouldBe fixture.featureHead
+        fixture.targetOf(FEATURE_REF) shouldBe fixture.featureHead.value
+    }
+
+    test("충돌로 멈춘 Conflicted 결과에도 previousTarget 이 담긴다") {
+        val fixture = fixture()
+        val featureConflict = fixture.divergeOn(FEATURE, "feature 쪽 편집\n")
+        fixture.divergeOn(MAIN, "main 쪽 편집\n")
+
+        val result = fixture.gateway.runOnBranch(
+            BranchTarget.Named(FEATURE),
+            BranchOperation.Merge(source = MAIN, allowFastForward = true),
+        )
+
+        result.shouldBeInstanceOf<BranchOperationResult.Conflicted>()
+        result.paths shouldBe listOf(BASE_FILE)
+        result.previousTarget shouldBe featureConflict
+    }
+
+    test("previousTarget 으로 구성한 되돌리기가 조작 전 위치를 정확히 복원한다") {
+        val fixture = fixture()
+
+        val result = fixture.gateway.runOnBranch(
+            BranchTarget.Named(FEATURE),
+            BranchOperation.Merge(source = MAIN, allowFastForward = true),
+        )
+        result.shouldBeInstanceOf<BranchOperationResult.Succeeded>()
+        fixture.gateway.hardResetBranch(FEATURE, to = result.previousTarget, expected = result.head)
+
+        fixture.targetOf(FEATURE_REF) shouldBe fixture.featureHead.value
+        fixture.exists(FEATURE_FILE) shouldBe true
+        fixture.exists(MAIN_FILE) shouldBe false
     }
 
     test("reset 대상이 실행 시점의 실제 현재 브랜치면 워킹트리를 동기화한다") {
