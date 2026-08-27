@@ -14,9 +14,11 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.undine.application.externaltool.ExternalToolUseCases
+import dev.undine.application.externaltool.CheckToolAvailabilityUseCase
 import dev.undine.application.externaltool.OpenDiffToolUseCase
 import dev.undine.application.externaltool.OpenMergeToolUseCase
 import dev.undine.application.identity.ApplyProfileUseCase
+import dev.undine.application.identity.AssignedProfileNameUseCase
 import dev.undine.application.identity.ClearLocalIdentityUseCase
 import dev.undine.application.identity.DeleteProfileUseCase
 import dev.undine.application.identity.IdentityUseCases
@@ -64,10 +66,12 @@ private fun tabDependencies(): PreferencesTabDependencies {
             deleteProfile = DeleteProfileUseCase(identityService),
             applyProfile = ApplyProfileUseCase(identityService),
             clearLocalIdentity = ClearLocalIdentityUseCase(identityService),
+            assignedProfileName = AssignedProfileNameUseCase(mockk()),
         ),
         externalTools = ExternalToolUseCases(
             openDiff = OpenDiffToolUseCase(externalToolGateway),
             openMerge = OpenMergeToolUseCase(externalToolGateway),
+            checkAvailability = CheckToolAvailabilityUseCase(externalToolGateway),
         ),
         commands = CommandRegistry(),
     )
