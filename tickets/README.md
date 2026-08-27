@@ -12,7 +12,7 @@ Undine 구현을 **60개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2
 | 범위 | wave | 티켓 | 내용 |
 |---|---|---|---|
 | **1차 — 일상 사용** | 1~6 | 29건 | 저장소·그래프·diff·스테이징·브랜치·원격·병합·충돌·리베이스·검색 |
-| **2차 — 완성도** | 2, 7~10 | 35건 | cherry-pick·blame·reflog·patch·submodule·LFS·worktree·bisect·서명·undo·설정 화면·드래그&드롭·탭·접근성·자동 업데이트 |
+| **2차 — 완성도** | 2, 7~10 | 39건 | cherry-pick·blame·reflog·patch·submodule·LFS·worktree·bisect·서명·undo·설정 화면·드래그&드롭·탭·접근성·자동 업데이트 |
 
 **1차만 끝나도 매일 쓸 수 있다.** 2차는 "GitKraken 과 비슷해지는" 구간이며,
 필요 없다고 판단되는 티켓은 지워도 1차 결과물이 깨지지 않도록 의존을 설계했다.
@@ -83,6 +83,10 @@ Undine 구현을 **60개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2
 | [UND-46](UND-46-reflog-bisect-screen.md) | Reflog · Bisect 화면 | M | 8 | UND-10 · UND-30 · UND-35 · UND-63 | `presentation/recovery/` · `application/reflog/` |
 | [UND-47](UND-47-patch-screen.md) | Patch 화면 | M | 8 | UND-10 · UND-60 · UND-63 | `presentation/patch/` |
 | [UND-48](UND-48-auto-update.md) | 자동 업데이트 | M | 8 | UND-25 · UND-63 · UND-64 | `domain/update/` · `application/update/` · `infrastructure/update/` · `build.gradle.kts` |
+| [UND-75](UND-75-git-config-effective-values.md) | 저장소 git 설정의 실효값 조회 | M | 9 | UND-66 | `domain/gitconfig/` · `application/gitconfig/` · `infrastructure/git/config/` |
+| [UND-76](UND-76-identity-usage-and-validation.md) | Identity — 사용 저장소 집계 · 이메일 검증 | M | 9 | UND-37 · UND-67 | `domain/identity/` · `application/identity/` · `infrastructure/identity/` |
+| [UND-77](UND-77-monospace-font-enumeration.md) | 고정폭 서체 열거 | S | 9 | UND-68 | `domain/typography/` · `infrastructure/typography/` |
+| [UND-78](UND-78-log-directory-reveal.md) | 로그 디렉터리 노출 · 열기 | S | 9 | UND-70 | `domain/diagnostics/` · `infrastructure/diagnostics/` |
 | [UND-50](UND-50-accessibility-audit.md) | 접근성 감사 · 보강 | M | 10 | UND-40 · UND-65 · UND-66 · UND-67 · UND-68 · UND-69 · UND-70 · UND-41 · UND-42 · UND-43 · UND-44 · UND-45 · UND-46 · UND-47 · UND-51 | `presentation/**` (감사 결과 보강) |
 | [UND-51](UND-51-wiring-phase2.md) | 2차 통합 와이어업 | M | 9 | UND-22 · UND-26 · UND-38 · UND-40 · UND-65 · UND-66 · UND-67 · UND-68 · UND-69 · UND-70 · UND-41 · UND-42 · UND-43 · UND-44 · UND-45 · UND-46 · UND-47 · UND-48 | `presentation/App.kt` · `di/` · `presentation/palette/` (등록) |
 | [UND-62](UND-62-submodule-remove-safety.md) | 서브모듈 제거 안전성 (파괴적 정리 재설계) | M | 8 | UND-32 | `domain/submodule/SubmoduleGateway.kt` · `infrastructure/git/submodule/` (제거 경로) |
@@ -195,7 +199,7 @@ flowchart LR
 | 8b | UND-40, UND-41, UND-42, UND-43, UND-44, UND-45, UND-46, UND-47, UND-48 | 9 |
 | 8b2 | UND-74 | 1 |
 | 8c | UND-65, UND-66, UND-67, UND-68, UND-69, UND-70 | 6 |
-| 9 | UND-51 | 1 |
+| 9 | UND-51, UND-75, UND-76, UND-77, UND-78 | 5 |
 | 10 | UND-50, UND-52 | 2 |
 
 - **너비 분포**: [1, 11, 11, 5, 3, 1, 8, 5, 3, 1, 9, 6, 1, 2]
