@@ -5,6 +5,7 @@ import dev.undine.domain.CommitId
 import dev.undine.domain.DeleteBranchResult
 import dev.undine.domain.RefGateway
 import dev.undine.domain.RefName
+import dev.undine.domain.RepositoryBaseline
 import dev.undine.domain.Tag
 import dev.undine.domain.UndineException
 import dev.undine.infrastructure.git.repository.GitAccess
@@ -180,19 +181,24 @@ class RefGatewayImpl(private val gitAccess: GitAccess) : RefGateway {
      * 조건부 갱신이라 **읽기와 쓰기가 한 임계 구역 안**에 있어야 한다 — 기대 위치를 밖에서 읽어
      * 넘기면 그 사이의 이동을 놓친다. 검사와 갱신은 [moveBranchHeld] 가 한 번에 한다.
      */
-    override suspend fun moveBranch(branch: RefName, to: CommitId, expected: CommitId) {
+    override suspend fun moveBranch(branch: RefName, to: CommitId, expected: CommitId): RepositoryBaseline =
         gitAccess.withRepository { repository ->
             translatingGitFailure("ref.moveBranch") {
                 Git.wrap(repository).use { git -> git.moveBranchHeld(branch, to, expected) }
+                // 갱신과 **같은** 임계 구역에서 읽는다 — 블록을 나간 뒤 읽으면 그 사이의 다른 조작이 섞인다.
+                repository.baselineHeld()
             }
         }
-    }
 
-    override suspend fun moveTag(tag: RefName, to: CommitId, expected: CommitId) {
+    /**
+     * [moveBranch] 와 같이 갱신 직후의 기준 상태를 같은 구역에서 캡처해 돌려준다 — 태그 이동을
+     * 기록하는 호출자(`ExecuteGraphOperationUseCase`)가 그 값을 따로 읽지 않게 하려는 것이다.
+     */
+    override suspend fun moveTag(tag: RefName, to: CommitId, expected: CommitId): RepositoryBaseline =
         gitAccess.withRepository { repository ->
             translatingGitFailure("ref.moveTag") {
                 Git.wrap(repository).use { git -> git.moveTagHeld(tag, to, expected) }
+                repository.baselineHeld()
             }
         }
-    }
 }

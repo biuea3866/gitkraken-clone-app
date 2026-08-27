@@ -1,6 +1,7 @@
 package dev.undine.domain.undo
 
 import dev.undine.domain.RefName
+import dev.undine.domain.RepositoryBaseline
 import dev.undine.testsupport.commitId
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec

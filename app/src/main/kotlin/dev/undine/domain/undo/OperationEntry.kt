@@ -1,5 +1,6 @@
 package dev.undine.domain.undo
 
+import dev.undine.domain.RepositoryBaseline
 import java.time.Instant
 
 /**

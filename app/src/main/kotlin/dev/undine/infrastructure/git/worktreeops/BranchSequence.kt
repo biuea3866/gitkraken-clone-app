@@ -5,6 +5,7 @@ import dev.undine.domain.BranchOperationResult
 import dev.undine.domain.BranchTarget
 import dev.undine.domain.CommitId
 import dev.undine.domain.RefName
+import dev.undine.domain.RepositoryBaseline
 import dev.undine.domain.RepositoryState
 import dev.undine.domain.UndineException
 import dev.undine.domain.cherrypick.CherryPickStep
@@ -14,6 +15,7 @@ import dev.undine.infrastructure.git.cherrypick.applyHeld
 import dev.undine.infrastructure.git.merge.mergeHeld
 import dev.undine.infrastructure.git.merge.rebaseHeld
 import dev.undine.infrastructure.git.ref.LOCAL_BRANCH_PREFIX
+import dev.undine.infrastructure.git.ref.baselineHeld
 import dev.undine.infrastructure.git.ref.checkoutHeld
 import dev.undine.infrastructure.git.ref.rejectIfDirty
 import dev.undine.infrastructure.git.ref.requireCommitObject
@@ -78,7 +80,7 @@ internal fun Git.runOnBranchHeld(on: BranchTarget, operation: BranchOperation): 
  * 워킹트리·인덱스까지 맞춘다. ref 갱신을 먼저 해 두면 HEAD 는 심볼릭 참조를 따라 함께 움직이므로,
  * 뒤따르는 `reset --hard` 는 워킹트리를 새 HEAD 로 동기화하는 일만 한다.
  */
-internal fun Git.hardResetBranchHeld(branch: RefName, to: CommitId, expected: CommitId) {
+internal fun Git.hardResetBranchHeld(branch: RefName, to: CommitId, expected: CommitId): RepositoryBaseline {
     val fullRef = validatedBranchRef(branch)
     val current = repository.requireRefTarget(fullRef, branch)
     requireExpectedTarget(branch, CommitId.of(current.name), expected)
@@ -87,6 +89,8 @@ internal fun Git.hardResetBranchHeld(branch: RefName, to: CommitId, expected: Co
     if (onTargetBranch) {
         reset().setMode(ResetCommand.ResetType.HARD).setRef(Constants.HEAD).call()
     }
+    // 변경이 끝난 **이 구역 안에서** 읽는다 — 호출자가 밖에서 읽으면 그 사이의 다른 조작이 섞인다.
+    return repository.baselineHeld()
 }
 
 private fun Git.resolveBranchTarget(on: BranchTarget): RefName = when (on) {
@@ -104,6 +108,9 @@ private fun Repository.currentBranchName(): RefName? =
 /**
  * [previousTarget] 은 [runOnBranchHeld] 가 임계 구역 안에서 조작 전에 읽은 대상 브랜치 위치다 —
  * 결과에 그대로 실어 호출자가 그 값을 임계 구역 밖에서 다시 읽지 않게 한다.
+ *
+ * 성공 결과의 기준 상태도 같은 이유로 **여기서**, 조작이 끝난 직후 읽는다 (UND-73). 결과 변환에
+ * 값이 아니라 공급자를 넘겨, 기록을 남기는 `Succeeded` 일 때만 ref 를 한 번 더 읽는다.
  */
 private fun Git.executeHeld(
     operation: BranchOperation,
@@ -111,13 +118,14 @@ private fun Git.executeHeld(
     previousTarget: CommitId,
 ): BranchOperationResult =
     when (operation) {
-        is BranchOperation.Merge ->
-            mergeHeld(operation.source, operation.allowFastForward).toResult(performedOn, previousTarget)
+        is BranchOperation.Merge -> mergeHeld(operation.source, operation.allowFastForward)
+            .toResult(performedOn, previousTarget) { repository.baselineHeld() }
 
-        is BranchOperation.Rebase -> rebaseHeld(operation.upstream).toResult(performedOn, previousTarget)
+        is BranchOperation.Rebase -> rebaseHeld(operation.upstream)
+            .toResult(performedOn, previousTarget) { repository.baselineHeld() }
 
-        is BranchOperation.CherryPick ->
-            applyHeld(operation.commit, operation.recordOrigin).toResult(performedOn, previousTarget)
+        is BranchOperation.CherryPick -> applyHeld(operation.commit, operation.recordOrigin)
+            .toResult(performedOn, previousTarget) { repository.baselineHeld() }
     }
 
 /**
@@ -144,23 +152,41 @@ private fun Git.mutatedHeld(branchTargetBefore: ObjectId): Boolean =
         repository.toOpenedRepository().state in IN_PROGRESS_STATES ||
         status().call().uncommittedChanges.isNotEmpty()
 
-private fun MergeResult.toResult(performedOn: RefName, previousTarget: CommitId): BranchOperationResult =
+private fun MergeResult.toResult(
+    performedOn: RefName,
+    previousTarget: CommitId,
+    baseline: () -> RepositoryBaseline,
+): BranchOperationResult =
     when (this) {
-        is MergeResult.Succeeded -> BranchOperationResult.Succeeded(performedOn, previousTarget, head)
+        is MergeResult.Succeeded ->
+            BranchOperationResult.Succeeded(performedOn, previousTarget, head, baseline())
+
         is MergeResult.Conflicted -> BranchOperationResult.Conflicted(performedOn, previousTarget, paths)
         MergeResult.AlreadyUpToDate -> BranchOperationResult.NoChange(performedOn, previousTarget)
     }
 
-private fun RebaseResult.toResult(performedOn: RefName, previousTarget: CommitId): BranchOperationResult =
+private fun RebaseResult.toResult(
+    performedOn: RefName,
+    previousTarget: CommitId,
+    baseline: () -> RepositoryBaseline,
+): BranchOperationResult =
     when (this) {
-        is RebaseResult.Succeeded -> BranchOperationResult.Succeeded(performedOn, previousTarget, head)
+        is RebaseResult.Succeeded ->
+            BranchOperationResult.Succeeded(performedOn, previousTarget, head, baseline())
+
         is RebaseResult.Conflicted -> BranchOperationResult.Conflicted(performedOn, previousTarget, paths)
         RebaseResult.AlreadyUpToDate -> BranchOperationResult.NoChange(performedOn, previousTarget)
     }
 
-private fun CherryPickStep.toResult(performedOn: RefName, previousTarget: CommitId): BranchOperationResult =
+private fun CherryPickStep.toResult(
+    performedOn: RefName,
+    previousTarget: CommitId,
+    baseline: () -> RepositoryBaseline,
+): BranchOperationResult =
     when (this) {
-        is CherryPickStep.Created -> BranchOperationResult.Succeeded(performedOn, previousTarget, commit)
+        is CherryPickStep.Created ->
+            BranchOperationResult.Succeeded(performedOn, previousTarget, commit, baseline())
+
         is CherryPickStep.Conflicted -> BranchOperationResult.Conflicted(performedOn, previousTarget, paths)
         CherryPickStep.Empty -> BranchOperationResult.NoChange(performedOn, previousTarget)
     }

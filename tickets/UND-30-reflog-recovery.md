@@ -36,6 +36,7 @@ sequenceDiagram
         GW-->>UC: List<ReflogEntry>
     end
     UC->>GW: recover(entry, asNewBranch=true)
+    GW-->>UC: RecoveredRef(ref, baseline)
     GW->>Repo: 새 브랜치 생성 (기본)
     GW-->>UC: 생성된 ref
 ```

@@ -19,7 +19,8 @@ UND-42 검증이 이것을 p0 로 잡았다 (`GraphOperationUseCases.kt:128`) �
 **자기 임계 구역 안에서**, 조작을 시작하기 전에 읽는다. `NoChange` 도 포함한다 — 호출자가 결과 종류로
 분기하지 않고 되돌리기 전략을 만들 수 있어야 한다.
 
-`hardResetBranch` 는 이미 `expected` 를 받으므로 호출자가 이전 위치를 안다 — 변경 대상이 아니다.
+`hardResetBranch` 는 이미 `expected` 를 받으므로 이전 위치는 호출자가 안다 — 이 티켓의 변경 대상이
+아니다. (UND-73 이 뒤이어 `hardResetBranch` 가 **변경 직후 baseline** 을 반환하게 넓혔다.)
 
 **범위 밖**: `UndoStrategy` 변이 (UND-71 이 이미 previous+expected 를 갖게 만들었다) ·
 그래프 UI 와 UseCase (UND-42). 이 티켓은 계약 한 곳만 넓힌다.

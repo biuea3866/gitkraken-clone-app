@@ -5,6 +5,7 @@ import dev.undine.domain.BranchOperationResult
 import dev.undine.domain.BranchTarget
 import dev.undine.domain.CommitId
 import dev.undine.domain.RefName
+import dev.undine.domain.RepositoryBaseline
 import dev.undine.domain.RepositoryPath
 import dev.undine.domain.UndineException
 import dev.undine.infrastructure.git.ref.RefGatewayImpl
@@ -170,6 +171,46 @@ class BranchSequenceSpec : FunSpec({
         fixture.currentRef() shouldBe FEATURE_REF
         fixture.exists(MAIN_FILE) shouldBe true
         fixture.exists(FEATURE_FILE) shouldBe true
+    }
+
+    test("직렬로 이어진 두 조작에서 첫 결과의 기준 상태는 두 번째 조작을 포함하지 않는다") {
+        val fixture = fixture()
+
+        // 두 조작을 결정적으로 직렬 배치한다 — 두 번째는 수행 브랜치도 HEAD 도 바꾼다.
+        val first = fixture.gateway.runOnBranch(
+            BranchTarget.Named(MAIN),
+            BranchOperation.Merge(source = FEATURE, allowFastForward = true),
+        )
+        val second = fixture.gateway.runOnBranch(
+            BranchTarget.Named(FEATURE),
+            BranchOperation.Merge(source = MAIN, allowFastForward = true),
+        )
+
+        val firstSucceeded = first.shouldBeInstanceOf<BranchOperationResult.Succeeded>()
+        val secondSucceeded = second.shouldBeInstanceOf<BranchOperationResult.Succeeded>()
+        // 첫 결과는 자기 임계 구역 안에서 캡처됐으므로 두 번째 조작의 체크아웃을 알지 못한다 (UND-73).
+        firstSucceeded.baseline shouldBe RepositoryBaseline(branch = MAIN, head = firstSucceeded.head)
+        secondSucceeded.baseline shouldBe RepositoryBaseline(branch = FEATURE, head = secondSucceeded.head)
+        fixture.currentRef() shouldBe FEATURE_REF
+    }
+
+    test("현재 브랜치를 조건부 reset 하면 결과 기준 상태가 옮겨진 자리를 가리킨다") {
+        val fixture = fixture()
+
+        val baseline = fixture.gateway.hardResetBranch(MAIN, to = fixture.base, expected = fixture.mainHead)
+
+        baseline shouldBe RepositoryBaseline(branch = MAIN, head = fixture.base)
+        fixture.targetOf(MAIN_REF) shouldBe fixture.base.value
+    }
+
+    test("체크아웃되지 않은 브랜치를 reset 해도 기준 상태는 실제 HEAD 를 가리킨다") {
+        val fixture = fixture()
+
+        val baseline = fixture.gateway.hardResetBranch(FEATURE, to = fixture.base, expected = fixture.featureHead)
+
+        // HEAD 는 main 그대로다 — 되돌리기 비교의 기준은 옮긴 브랜치가 아니라 체크아웃된 브랜치다.
+        baseline shouldBe RepositoryBaseline(branch = MAIN, head = fixture.mainHead)
+        fixture.targetOf(FEATURE_REF) shouldBe fixture.base.value
     }
 
     test("대상 브랜치에서 cherry-pick 하면 그 브랜치에 새 커밋이 생긴다") {

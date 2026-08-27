@@ -12,7 +12,7 @@ Undine 구현을 **60개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2
 | 범위 | wave | 티켓 | 내용 |
 |---|---|---|---|
 | **1차 — 일상 사용** | 1~6 | 29건 | 저장소·그래프·diff·스테이징·브랜치·원격·병합·충돌·리베이스·검색 |
-| **2차 — 완성도** | 2, 7~10 | 33건 | cherry-pick·blame·reflog·patch·submodule·LFS·worktree·bisect·서명·undo·설정 화면·드래그&드롭·탭·접근성·자동 업데이트 |
+| **2차 — 완성도** | 2, 7~10 | 34건 | cherry-pick·blame·reflog·patch·submodule·LFS·worktree·bisect·서명·undo·설정 화면·드래그&드롭·탭·접근성·자동 업데이트 |
 
 **1차만 끝나도 매일 쓸 수 있다.** 2차는 "GitKraken 과 비슷해지는" 구간이며,
 필요 없다고 판단되는 티켓은 지워도 1차 결과물이 깨지지 않도록 의존을 설계했다.
@@ -75,6 +75,7 @@ Undine 구현을 **60개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2
 | [UND-41](UND-41-blame-history-view.md) | Blame 뷰 · 파일 이력 화면 | M | 8 | UND-10 · UND-29 · UND-63 | `presentation/blame/` · `application/blame/`(확장) |
 | [UND-71](UND-71-graph-ops-atomic-contract.md) | 그래프 조작 계약 — 원자 실행 · 조건부 ref 갱신 · Undo 전략 | M | 8 | UND-21 · UND-28 · UND-38 · UND-63 | `application/undo/` · `domain/RefGateway.kt` · `domain/WorktreeOpsGateway.kt` · `domain/undo/UndoStrategy.kt` · `infrastructure/git/cherrypick/` · `infrastructure/git/merge/` · `infrastructure/git/ref/` · `infrastructure/git/repository/` · `infrastructure/git/worktreeops/` |
 | [UND-72](UND-72-atomic-result-previous-target.md) | 원자 조작 결과에 이전 target 을 담는다 | S | 8 | UND-71 | `domain/WorktreeOpsGateway.kt` · `infrastructure/git/worktreeops/` |
+| [UND-73](UND-73-undo-baseline-capture.md) | Undo 기록의 기준 상태를 변경과 같은 순간에 확정한다 | M | 8 | UND-38 · UND-71 · UND-72 | `application/undo/` · `application/graphops/` · `application/reflog/` · `domain/RepositoryBaseline.kt` · `domain/undo/OperationEntry.kt` · `domain/RefGateway.kt` · `domain/WorktreeOpsGateway.kt` · `domain/reflog/` · `infrastructure/git/{ref,reflog,worktreeops}/` |
 | [UND-42](UND-42-graph-drag-drop.md) | 그래프 드래그&드롭 조작 | M | 8 | UND-14 · UND-38 · UND-63 · UND-71 · UND-72 | `presentation/graph/` (dnd 확장) · `domain/graphops/` · `application/graphops/` |
 | [UND-43](UND-43-undo-history-panel.md) | Undo 버튼 · 실행 이력 패널 | M | 8 | UND-10 · UND-38 · UND-63 | `presentation/undo/` · `application/undo/`(확장) |
 | [UND-44](UND-44-multi-repo-tabs.md) | 다중 저장소 탭 | L | 8 | UND-02 · UND-12 · UND-63 | `presentation/tabs/` · `presentation/shell/` · `application/session/` · `infrastructure/git/repository/` (다중 세션 확장) |
@@ -189,6 +190,7 @@ flowchart LR
 | 8a | UND-62, UND-63, UND-64 | 3 |
 | 8a2 | UND-71 | 1 |
 | 8a3 | UND-72 | 1 |
+| 8a4 | UND-73 | 1 |
 | 8b | UND-40, UND-41, UND-42, UND-43, UND-44, UND-45, UND-46, UND-47, UND-48 | 9 |
 | 8c | UND-65, UND-66, UND-67, UND-68, UND-69, UND-70 | 6 |
 | 9 | UND-51 | 1 |

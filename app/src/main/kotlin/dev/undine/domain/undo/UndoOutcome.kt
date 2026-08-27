@@ -1,6 +1,7 @@
 package dev.undine.domain.undo
 
 import dev.undine.domain.RefName
+import dev.undine.domain.RepositoryBaseline
 
 /**
  * 되돌리기 요청의 결과.

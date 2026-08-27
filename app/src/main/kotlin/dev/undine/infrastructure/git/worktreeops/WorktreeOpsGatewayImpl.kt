@@ -5,6 +5,7 @@ import dev.undine.domain.BranchOperationResult
 import dev.undine.domain.BranchTarget
 import dev.undine.domain.CommitId
 import dev.undine.domain.RefName
+import dev.undine.domain.RepositoryBaseline
 import dev.undine.domain.ResetMode
 import dev.undine.domain.RevertResult
 import dev.undine.domain.StashEntry
@@ -162,11 +163,14 @@ class WorktreeOpsGatewayImpl(private val gitAccess: GitAccess) : WorktreeOpsGate
      * 기대 위치 확인과 ref 갱신, 그리고 (대상이 실제 HEAD 일 때의) 워킹트리 동기화가 한 구역이다 —
      * 나뉘면 확인한 값과 옮기는 값이 달라질 수 있다 (결정 A-L3).
      */
-    override suspend fun hardResetBranch(branch: RefName, to: CommitId, expected: CommitId) {
+    override suspend fun hardResetBranch(
+        branch: RefName,
+        to: CommitId,
+        expected: CommitId,
+    ): RepositoryBaseline =
         gitAccess.sequenceOperation(OPERATION_RESET_BRANCH) { git ->
             git.hardResetBranchHeld(branch, to, expected)
         }
-    }
 }
 
 /** 조작 하나를 공유 핸들 경계([GitAccess.withRepository]) 안에서 돌린다. */

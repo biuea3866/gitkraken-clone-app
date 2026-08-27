@@ -4,6 +4,7 @@ import dev.undine.domain.Commit
 import dev.undine.domain.CommitId
 import dev.undine.domain.Person
 import dev.undine.domain.RefName
+import dev.undine.domain.RepositoryBaseline
 import dev.undine.domain.UndineException
 import java.time.Instant
 
@@ -87,6 +88,15 @@ class RefMoveConfirmation private constructor(val displacedCommit: CommitId) {
 }
 
 /**
+ * 복구가 만들거나 옮긴 참조와, **그 복구와 같은 임계 구역에서 캡처한 변경 직후 기준 상태**.
+ *
+ * [baseline] 을 결과에 실어 주는 이유는 [ReflogGateway.recover] 를 부른 뒤 되돌리기를 기록하는
+ * 호출자가 그 값을 따로 읽지 않게 하려는 것이다 — 따로 읽으면 그 사이에 앱 내부의 다른 Git 조작이
+ * 끼어들어 "내 복구 직후" 가 아닌 상태가 기록된다 (UND-73).
+ */
+data class RecoveredRef(val ref: RefName, val baseline: RepositoryBaseline)
+
+/**
  * 도달 불가 커밋 탐색 결과.
  *
  * 빈 목록으로 "없음" 과 "이 저장소에서는 탐색할 수 없음" 을 뭉개지 않는다 — 잃어버린 커밋을 찾으러
@@ -143,5 +153,5 @@ interface ReflogGateway {
      * @throws UndineException.StateViolation 새 브랜치 이름이 이미 있거나, 옮길 ref 가 없거나,
      *   확인한 커밋과 지금 밀려날 커밋이 다를 때
      */
-    suspend fun recover(at: CommitId, target: RecoveryTarget): RefName
+    suspend fun recover(at: CommitId, target: RecoveryTarget): RecoveredRef
 }

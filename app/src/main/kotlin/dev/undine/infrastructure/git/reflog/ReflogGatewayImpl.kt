@@ -4,11 +4,13 @@ import dev.undine.domain.CommitId
 import dev.undine.domain.Person
 import dev.undine.domain.RefName
 import dev.undine.domain.UndineException
+import dev.undine.domain.reflog.RecoveredRef
 import dev.undine.domain.reflog.RecoveryTarget
 import dev.undine.domain.reflog.ReflogEntry
 import dev.undine.domain.reflog.ReflogGateway
 import dev.undine.domain.reflog.ReflogPage
 import dev.undine.domain.reflog.UnreachableCommitScan
+import dev.undine.infrastructure.git.ref.baselineHeld
 import dev.undine.infrastructure.git.repository.GitAccess
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.errors.GitAPIException
@@ -53,9 +55,15 @@ class ReflogGatewayImpl(private val gitAccess: GitAccess) : ReflogGateway {
     override suspend fun unreachableCommits(limit: Int): UnreachableCommitScan =
         gitOperation(OPERATION_UNREACHABLE) { git -> git.repository.scanUnreachableCommits(limit) }
 
-    override suspend fun recover(at: CommitId, target: RecoveryTarget): RefName =
+    /**
+     * 복구 직후의 기준 상태를 **복구와 같은 임계 구역 안에서** 캡처해 결과에 함께 담는다. 되돌리기를
+     * 기록하는 호출자(`RecoveryActionService`)가 그 값을 밖에서 따로 읽으면 그 사이에 낀 앱 내부의
+     * 다른 조작까지 반영된 상태가 기록된다 (UND-73).
+     */
+    override suspend fun recover(at: CommitId, target: RecoveryTarget): RecoveredRef =
         gitOperation(OPERATION_RECOVER) { git ->
-            git.recoverAt(git.repository.requireCommit(at), target)
+            val recovered = git.recoverAt(git.repository.requireCommit(at), target)
+            RecoveredRef(recovered, git.repository.baselineHeld())
         }
 
     private suspend fun <T> gitOperation(operation: String, block: (Git) -> T): T =

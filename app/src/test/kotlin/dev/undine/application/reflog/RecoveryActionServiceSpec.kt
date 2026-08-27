@@ -11,10 +11,12 @@ import dev.undine.domain.DiffGateway
 import dev.undine.domain.FileChange
 import dev.undine.domain.HistoryGateway
 import dev.undine.domain.RefName
+import dev.undine.domain.RepositoryBaseline
 import dev.undine.domain.UndineException
 import dev.undine.domain.bisect.BisectResult
 import dev.undine.domain.bisect.BisectService
 import dev.undine.domain.bisect.BisectVerdict
+import dev.undine.domain.reflog.RecoveredRef
 import dev.undine.domain.reflog.RecoveryTarget
 import dev.undine.domain.reflog.RefMoveConfirmation
 import dev.undine.domain.reflog.ReflogEntry
@@ -38,6 +40,9 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.CancellationException
+
+/** 복구가 자기 임계 구역에서 캡처해 결과로 준 **복구 직후** 기준 상태 (UND-73). */
+private val RECOVERED_BASELINE = RepositoryBaseline(branch = RefName("main"), head = commitId(3))
 
 class RecoveryActionServiceSpec : BehaviorSpec({
     given("reflog 복구 화면의 application 경로") {
@@ -97,11 +102,20 @@ class RecoveryActionServiceSpec : BehaviorSpec({
                 val recorder = mockk<OperationRecorder>(relaxed = true)
                 val actions = service(reflog, mockk(), mockk(), recorder)
                 val branch = RefName("refs/heads/recovered")
-                coEvery { reflog.recover(target, RecoveryTarget.NewBranch(branch)) } returns branch
+                coEvery { reflog.recover(target, RecoveryTarget.NewBranch(branch)) } returns
+                    RecoveredRef(branch, RECOVERED_BASELINE)
 
                 actions.recover(target, RecoveryTarget.NewBranch(branch)).value shouldBe branch
 
-                coVerify { recorder.record(GitOperationKind.REFLOG_RESTORE, UndoStrategy.DeleteBranch(branch), any()) }
+                // 복구 결과가 준 기준 상태를 그대로 넘긴다 — 기록이 사후에 다시 읽지 않는다 (UND-73).
+                coVerify {
+                    recorder.record(
+                        GitOperationKind.REFLOG_RESTORE,
+                        UndoStrategy.DeleteBranch(branch),
+                        RECOVERED_BASELINE,
+                        any(),
+                    )
+                }
             }
         }
 
@@ -116,7 +130,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
                     RefName("refs/heads/main"),
                     RefMoveConfirmation.ofDisplacedCommit(displaced),
                 )
-                coEvery { reflog.recover(target, move) } returns move.name
+                coEvery { reflog.recover(target, move) } returns RecoveredRef(move.name, RECOVERED_BASELINE)
 
                 actions.recover(target, move)
 
@@ -177,8 +191,9 @@ class RecoveryActionServiceSpec : BehaviorSpec({
                 val branch = RefName("refs/heads/recovered")
                 val reflog = mockk<ReflogGateway>()
                 val recorder = mockk<OperationRecorder>()
-                coEvery { reflog.recover(target, RecoveryTarget.NewBranch(branch)) } returns branch
-                coEvery { recorder.record(any(), any(), any()) } throws
+                coEvery { reflog.recover(target, RecoveryTarget.NewBranch(branch)) } returns
+                    RecoveredRef(branch, RECOVERED_BASELINE)
+                coEvery { recorder.record(any(), any(), any(), any()) } throws
                     UndineException.GitOperationFailed("undo.record")
                 val actions = service(reflog, mockk(), mockk(), recorder)
 
@@ -200,7 +215,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
                     RefName("refs/heads/main"),
                     RefMoveConfirmation.ofDisplacedCommit(commitId(4)),
                 )
-                coEvery { reflog.recover(target, move) } returns move.name
+                coEvery { reflog.recover(target, move) } returns RecoveredRef(move.name, RECOVERED_BASELINE)
                 coEvery { recorder.recordIrreversible(any(), any(), any()) } throws
                     UndineException.GitOperationFailed("undo.record")
                 val actions = service(reflog, mockk(), mockk(), recorder)
@@ -250,7 +265,8 @@ class RecoveryActionServiceSpec : BehaviorSpec({
                 val branch = RefName("refs/heads/recovered")
                 val reflog = mockk<ReflogGateway>()
                 val actions = service(reflog, mockk(), mockk())
-                coEvery { reflog.recover(target, RecoveryTarget.NewBranch(branch)) } returns branch
+                coEvery { reflog.recover(target, RecoveryTarget.NewBranch(branch)) } returns
+                    RecoveredRef(branch, RECOVERED_BASELINE)
 
                 actions.recover(target, RecoveryTarget.NewBranch(branch)).undoRecordFailure.shouldBeNull()
             }
@@ -264,8 +280,9 @@ class RecoveryActionServiceSpec : BehaviorSpec({
                 val branch = RefName("refs/heads/recovered")
                 val reflog = mockk<ReflogGateway>()
                 val recorder = mockk<OperationRecorder>()
-                coEvery { reflog.recover(target, RecoveryTarget.NewBranch(branch)) } returns branch
-                coEvery { recorder.record(any(), any(), any()) } throws CancellationException("기록 취소")
+                coEvery { reflog.recover(target, RecoveryTarget.NewBranch(branch)) } returns
+                    RecoveredRef(branch, RECOVERED_BASELINE)
+                coEvery { recorder.record(any(), any(), any(), any()) } throws CancellationException("기록 취소")
                 val actions = service(reflog, mockk(), mockk(), recorder)
 
                 shouldThrow<CancellationException> {
@@ -283,7 +300,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
                     RefName("refs/heads/main"),
                     RefMoveConfirmation.ofDisplacedCommit(commitId(4)),
                 )
-                coEvery { reflog.recover(target, move) } returns move.name
+                coEvery { reflog.recover(target, move) } returns RecoveredRef(move.name, RECOVERED_BASELINE)
                 coEvery { recorder.recordIrreversible(any(), any(), any()) } throws CancellationException("기록 취소")
                 val actions = service(reflog, mockk(), mockk(), recorder)
 

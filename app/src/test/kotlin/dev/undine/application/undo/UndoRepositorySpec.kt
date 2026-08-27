@@ -6,6 +6,7 @@ import dev.undine.domain.RepositoryPath
 import dev.undine.domain.StashEntry
 import dev.undine.domain.UndineException
 import dev.undine.domain.undo.GitOperationKind
+import dev.undine.domain.undo.OperationEntry
 import dev.undine.domain.undo.UndoOutcome
 import dev.undine.domain.undo.UndoStack
 import dev.undine.domain.undo.UndoStrategy
@@ -90,6 +91,13 @@ private class UndoHarness(private val directory: File) {
     val service = UndoService(stack, refGateway, repositoryGateway, worktreeOpsGateway)
 
     /**
+     * 변경 Gateway 가 결과로 주는 **변경 직후 기준 상태**를 흉내 낸다 (UND-73) — 이 스펙은 변경을
+     * JGit 으로 직접 만들어 두므로, 기록 직전의 실제 저장소 상태를 캡처해 넘긴다.
+     */
+    suspend fun record(operation: GitOperationKind, strategy: UndoStrategy.Reversible): OperationEntry =
+        recorder.record(operation, strategy, refGateway.currentBaseline())
+
+    /**
      * 화면과 같은 순서로 되돌린다 — 미리 본 최상단을 **그대로 대상으로 지목**해 넘긴다.
      * 인자 없는 "마지막 것 되돌리기" 는 더 이상 없다 (wave 8 결정 G4).
      */
@@ -128,7 +136,7 @@ class UndoRepositorySpec : FunSpec({
         }
 
         val outcome = UndoHarness(directory).use {
-            recorder.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(CommitId.of(parent)))
+            record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(CommitId.of(parent)))
             undoTop()
         }
 
@@ -149,7 +157,7 @@ class UndoRepositorySpec : FunSpec({
         }
 
         val outcome = UndoHarness(directory).use {
-            recorder.record(GitOperationKind.BRANCH_CREATE, UndoStrategy.DeleteBranch(RefName(FEATURE_BRANCH)))
+            record(GitOperationKind.BRANCH_CREATE, UndoStrategy.DeleteBranch(RefName(FEATURE_BRANCH)))
             undoTop()
         }
 
@@ -177,7 +185,7 @@ class UndoRepositorySpec : FunSpec({
         }
 
         val outcome = UndoHarness(directory).use {
-            recorder.record(
+            record(
                 GitOperationKind.MERGE,
                 UndoStrategy.HardResetTo(
                     branch = RefName(MAIN_BRANCH),
@@ -205,7 +213,7 @@ class UndoRepositorySpec : FunSpec({
         File(directory, FILE_NAME).readText() shouldBe "committed\n"
 
         val outcome = UndoHarness(directory).use {
-            recorder.record(GitOperationKind.STASH_PUSH, UndoStrategy.PopStash(stashEntryOf(stashed)))
+            record(GitOperationKind.STASH_PUSH, UndoStrategy.PopStash(stashEntryOf(stashed)))
             undoTop()
         }
 
@@ -225,7 +233,7 @@ class UndoRepositorySpec : FunSpec({
 
         val harness = UndoHarness(directory)
         harness.use {
-            recorder.record(GitOperationKind.STASH_PUSH, UndoStrategy.PopStash(stashEntryOf(recordedStash)))
+            record(GitOperationKind.STASH_PUSH, UndoStrategy.PopStash(stashEntryOf(recordedStash)))
         }
         // 밖에서 stash 를 하나 더 쌓는다. stash 는 브랜치도 HEAD 도 옮기지 않아
         // 기준 상태 비교로는 이 변화를 잡지 못한다 — 그래서 대상을 기록해 둬야 한다.
@@ -256,7 +264,7 @@ class UndoRepositorySpec : FunSpec({
 
         val harness = UndoHarness(directory)
         harness.use {
-            recorder.record(GitOperationKind.STASH_PUSH, UndoStrategy.PopStash(stashEntryOf(recordedStash)))
+            record(GitOperationKind.STASH_PUSH, UndoStrategy.PopStash(stashEntryOf(recordedStash)))
         }
         // 밖에서 기록한 stash 를 지우고 다른 stash 를 남겨 둔다.
         val survivor = inRepository(directory) { git ->
@@ -312,7 +320,7 @@ class UndoRepositorySpec : FunSpec({
 
         val harness = UndoHarness(directory)
         harness.use {
-            recorder.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(CommitId.of(parent)))
+            record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(CommitId.of(parent)))
         }
         // 앱 밖에서 커밋을 하나 더 쌓는다 — 터미널에서 작업한 상황이다.
         val externalHead = inRepository(directory) { git ->
@@ -335,7 +343,7 @@ class UndoRepositorySpec : FunSpec({
         }
 
         val outcome = UndoHarness(directory).use {
-            recorder.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(CommitId.of(parent)))
+            record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(CommitId.of(parent)))
             undoTop()
         }
 
@@ -352,7 +360,7 @@ class UndoRepositorySpec : FunSpec({
         val refsBefore = inRepository(directory) { git -> git.repository.refNames() }
 
         UndoHarness(directory).use {
-            recorder.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(CommitId.of(parent)))
+            record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(CommitId.of(parent)))
             recorder.recordIrreversible(GitOperationKind.PUSH, "원격에 올라간 커밋은 앱이 되돌릴 수 없습니다")
             undoTop()
             undoTop()
@@ -374,7 +382,7 @@ class UndoRepositorySpec : FunSpec({
         }
 
         val previousEntry = UndoHarness(directory).use {
-            recorder.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(CommitId.of(parent))).also {
+            record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(CommitId.of(parent))).also {
                 stack.peek() shouldNotBe null
             }
         }
