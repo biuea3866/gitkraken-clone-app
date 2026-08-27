@@ -22,6 +22,10 @@ package dev.undine.domain
  * 조용히 버리지 않는다(UND-44 요구).
  * @property activeTabIndex [openTabs] 안의 활성 탭 위치. 범위를 벗어난 값은 읽는 쪽이 0 으로 클램프한다.
  * @property updateCheck 자동 업데이트 확인 주기와 on/off.
+ * @property shortcutOverrides **커맨드 id → 사용자가 바꾼 단축키**. 오버라이드가 없는 커맨드는 항목을
+ * 만들지 않는다 — 없다는 것이 곧 "기본 단축키를 쓴다" 는 뜻이라, 기본값을 적어 두면 나중에 기본값이
+ * 바뀌어도 옛 값이 남는다. 지금 등록돼 있지 않은 커맨드의 항목도 이 자리에서는 지우지 않는다
+ * (그 정리 규칙은 단축키 탭이 정한다).
  */
 data class Settings(
     val recentRepositories: List<RepositoryPath>,
@@ -35,7 +39,29 @@ data class Settings(
     val openTabs: List<RepositoryPath> = emptyList(),
     val activeTabIndex: Int = 0,
     val updateCheck: UpdateCheckSettings = UpdateCheckSettings.DEFAULT,
-)
+    val shortcutOverrides: Map<String, ShortcutBinding> = emptyMap(),
+) {
+
+    companion object {
+
+        /** 테마 기본값 — OS 설정을 따른다. 항목별 기본값 복원과 최초 실행이 같은 값을 쓴다. */
+        val DEFAULT_THEME: ThemeMode = ThemeMode.SYSTEM
+
+        /** 창 크기 기본값. 저장된 창 상태가 없을 때 이 값으로 연다. */
+        val DEFAULT_WINDOW: WindowBounds = WindowBounds(width = 1280, height = 800, maximized = false)
+
+        /**
+         * 저장된 설정이 없거나 읽을 수 없을 때 시작하는 값.
+         *
+         * infrastructure 의 기본값도 이 값을 쓴다 — 두 곳에 적으면 "기본값" 이 무엇인지가 갈린다.
+         */
+        val DEFAULTS: Settings = Settings(
+            recentRepositories = emptyList(),
+            theme = DEFAULT_THEME,
+            window = DEFAULT_WINDOW,
+        )
+    }
+}
 
 /**
  * 자동 업데이트 확인 주기 설정.

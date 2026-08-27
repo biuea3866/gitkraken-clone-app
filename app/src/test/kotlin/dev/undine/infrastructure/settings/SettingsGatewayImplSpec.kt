@@ -329,6 +329,7 @@ class SettingsGatewayImplSpec : FunSpec({
             "openTabs",
             "activeTabIndex",
             "updateCheck",
+            "shortcutOverrides",
         )
         (root["updateCheck"] as Map<*, *>).keys.toList() shouldBe listOf("enabled", "intervalHours")
         (root["window"] as Map<*, *>).keys.toList() shouldBe listOf("width", "height", "maximized")

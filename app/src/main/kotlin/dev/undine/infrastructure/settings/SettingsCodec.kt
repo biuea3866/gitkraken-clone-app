@@ -6,7 +6,7 @@ import dev.undine.domain.ThemeMode
 import dev.undine.domain.WindowBounds
 
 /** 이 앱이 쓰는 설정 스키마 버전. 필드를 추가·변경하면 올린다. */
-internal const val CURRENT_SCHEMA_VERSION = 3
+internal const val CURRENT_SCHEMA_VERSION = 4
 
 /**
  * `schemaVersion` 키 자체가 없던 최초 형식. 그 파일은 이후 버전이 더한 어떤 필드도 담지 못한다.
@@ -22,11 +22,11 @@ internal const val IDENTITY_AND_TOOLS_SCHEMA_VERSION = 2
 /** 언어·시작 동작·확인 대화상자·탭 세션·업데이트 확인이 들어온 버전(UND-63). */
 internal const val PREFERENCE_SCHEMA_VERSION = 3
 
+/** 단축키 오버라이드 매핑이 들어온 버전(UND-40). 이보다 낮은 파일은 그 매핑을 담지 못한다. */
+internal const val SHORTCUT_OVERRIDES_SCHEMA_VERSION = 4
+
 /** 최근 저장소 보관 상한. 초과분은 `save` 시점에 목록 뒤(= 오래된 쪽)에서 잘린다. */
 internal const val MAX_RECENT_REPOSITORIES = 20
-
-private const val DEFAULT_WINDOW_WIDTH = 1280
-private const val DEFAULT_WINDOW_HEIGHT = 800
 
 private const val KEY_SCHEMA_VERSION = "schemaVersion"
 private const val KEY_RECENT_REPOSITORIES = "recentRepositories"
@@ -38,16 +38,8 @@ private const val KEY_MAXIMIZED = "maximized"
 private const val KEY_IDENTITY_PROFILES = "identityProfiles"
 private const val KEY_EXTERNAL_TOOLS = "externalTools"
 
-/** 파일이 없거나 읽을 수 없을 때 시작하는 설정. */
-internal val DEFAULT_SETTINGS = Settings(
-    recentRepositories = emptyList(),
-    theme = ThemeMode.SYSTEM,
-    window = WindowBounds(
-        width = DEFAULT_WINDOW_WIDTH,
-        height = DEFAULT_WINDOW_HEIGHT,
-        maximized = false,
-    ),
-)
+/** 파일이 없거나 읽을 수 없을 때 시작하는 설정. 기본값의 정의는 domain 이 소유한다. */
+internal val DEFAULT_SETTINGS: Settings = Settings.DEFAULTS
 
 /**
  * 설정 파일 해독 결과.
@@ -105,7 +97,8 @@ internal fun encodeSettings(settings: Settings): String {
           "$KEY_CONFIRM_DESTRUCTIVE_ACTIONS": ${settings.confirmDestructiveActions},
           "$KEY_OPEN_TABS": [${encodeOpenTabs(settings.openTabs)}],
           "$KEY_ACTIVE_TAB_INDEX": ${settings.activeTabIndex},
-          "$KEY_UPDATE_CHECK": ${encodeUpdateCheck(settings.updateCheck)}
+          "$KEY_UPDATE_CHECK": ${encodeUpdateCheck(settings.updateCheck)},
+          "$KEY_SHORTCUT_OVERRIDES": ${encodeShortcutOverrides(settings.shortcutOverrides)}
         }
     """.trimIndent() + "\n"
 }
@@ -174,6 +167,7 @@ private fun readSettings(fields: Map<*, *>): Settings {
         openTabs = openTabs,
         activeTabIndex = readActiveTabIndex(fields[KEY_ACTIVE_TAB_INDEX], openTabs),
         updateCheck = readUpdateCheck(fields[KEY_UPDATE_CHECK]),
+        shortcutOverrides = readShortcutOverrides(fields[KEY_SHORTCUT_OVERRIDES]),
     )
 }
 
