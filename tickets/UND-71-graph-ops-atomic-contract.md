@@ -42,8 +42,14 @@ HEAD** 로 판정한다.
 호출 전 HEAD 와 대상 브랜치 위치의 복구는 **예상하지 못한 실패에만** 적용한다.
 
 **변경과 그 결과의 소비(Undo 기록)는 호출자가 한 `NonCancellable` 구간으로 묶는다.**
-임계 구역 안의 조작은 중간에 끊기지 않지만, 완료 뒤 취소가 떨어지면 호출자는 결과 대신
-`CancellationException` 을 받는다 — 그때 저장소는 바뀐 채 Undo 항목만 없어진다 (결정 A-L2).
+임계 구역 안의 조작은 중간에 끊기지 않지만, 그 구간으로 묶지 않으면 완료 뒤 취소가 떨어졌을 때
+호출자가 결과 대신 `CancellationException` 을 받아 저장소는 바뀐 채 Undo 항목만 없어진다
+(결정 A-L2). 계약대로 묶은 호출자에게는 **취소가 Undo 기록을 건너뛰지 않는다** — UND-42 의
+`ExecuteGraphOperationUseCase` 가 그 형태이고, reset 성공 직후 취소에도 기록이 정확히 1건임을
+회귀 테스트가 고정한다.
+
+Undo 기록 실패는 **저장소 변경 실패로 취급하지 않는다** — 호출 결과로 전달해 화면이 복구 불가
+사실과 reflog 경로를 안내한다.
 
 ### 3. Undo 전략 3종을 추가한다
 
@@ -51,6 +57,8 @@ HEAD** 로 판정한다.
 되돌리기 실행은 1·2 의 계약을 그대로 쓴다.
 
 **범위 밖**: 드래그&드롭 UI · 드롭 판정 · 확인 다이얼로그 · 팔레트 등가 경로 (전부 UND-42).
+UND-42 의 소유는 `presentation/graph/` · `domain/graphops/` · `application/graphops/` 이며,
+화면 상태 · 순수 드롭 판정 · 계약 소비 UseCase 를 포함한다. Gateway 계약과 그 구현은 이 티켓 소유다.
 
 `domain/undo/UndoStrategy.kt` 와 `application/undo/UndoService.kt` 는 이 티켓이 확장한다 —
 새 이동 변이를 실행할 분기가 UndoService 에 있어야 하고, 두 파일의 앞선 소유 티켓(UND-42 · UND-43)은

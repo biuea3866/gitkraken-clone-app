@@ -1,6 +1,6 @@
 # [UND-42] 그래프 드래그&드롭 조작
 
-> wave 8 · 사이즈 M · 의존 UND-14 · UND-38 · UND-63 · UND-71 · 소유 `presentation/graph/` (dnd 확장) · `domain/graphops/` · `application/graphops/`
+> wave 8 · 사이즈 M · 의존 UND-14 · UND-38 · UND-63 · UND-71 · UND-72 · 소유 `presentation/graph/` (dnd 확장) · `domain/graphops/` · `application/graphops/`
 
 ## 작업 내용 (설계 의도)
 **GitKraken 의 시그니처 기능**이다. 그래프에서 브랜치를 다른 브랜치 위로 끌어다 놓아 병합·리베이스하고,
@@ -13,7 +13,7 @@
 | 브랜치 | 다른 브랜치 | 병합 또는 리베이스 (드롭 시 선택) |
 | 커밋 | 브랜치 | cherry-pick |
 | 브랜치 | 커밋 | 브랜치를 그 커밋으로 reset (위험 — 확인 필수) |
-| 태그 | 커밋 | 태그 이동 |
+| 태그(lightweight) | 커밋 | 태그 이동. **annotated 태그는 드롭 불가** — 커밋으로 다시 겨누면 메시지·tagger 가 사라져 되돌릴 수 없다 |
 
 **세 가지를 반드시 지킨다.**
 
@@ -39,6 +39,9 @@ UI 티켓 안에서 고치려 했고, 같은 p0 가 4라운드 동안 형태만 
 
 **롤백**: 모든 동작은 UND-38 Undo 스택에 기록되며, 충돌 시 UND-21 의 abort 로 복구한다.
 
+저장소 변경이 성공한 뒤 **Undo 기록에 실패**하면 그 변경은 Undo 목록에 없다 — 변경을 실패로
+되돌리지 않는 대신 화면이 그 사실과 **reflog 에서 이전 지점을 찾는 경로**를 안내한다.
+
 ## 다이어그램
 
 ### 처리 흐름
@@ -63,23 +66,29 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    subgraph graph["presentation/graph"]
+    subgraph pres["presentation/graph"]
         View[CommitGraphView]
-        DnD[DragDropController]
-        Preview[결과 미리보기]
-        Confirm[확인 대화상자]
-        Alt[키보드 대체 경로]
+        State[GraphDragDropState]
+        Overlay[GraphDragDropOverlay]
+        Modifier[graphDropTarget]
     end
-    subgraph app
-        UC[Merge/Rebase/CherryPick UseCase]
-        Undo[OperationRecorder]
+    subgraph dom["domain/graphops"]
+        Model[드래그 소스 · 드롭 대상]
+        Propose[proposeGraphDrop]
     end
-    View --> DnD
-    DnD --> Preview
-    DnD --> Confirm
-    View --> Alt
-    Confirm --> UC
-    UC --> Undo
+    subgraph app["application/graphops"]
+        UC[ExecuteGraphOperationUseCase]
+    end
+    subgraph contract["UND-71 · UND-72 계약"]
+        Gw[WorktreeOpsGateway · RefGateway]
+    end
+    View --> State
+    View --> Modifier
+    View --> Overlay
+    State --> Propose
+    Propose --> Model
+    State --> UC
+    UC --> Gw
 ```
 
 ## 테스트 케이스

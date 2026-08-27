@@ -16,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import dev.undine.presentation.design.UndineTokens
+import dev.undine.domain.graphops.GraphDragSource
+import dev.undine.domain.graphops.GraphDropTarget
 
 /**
  * 커밋 목록의 한 행 — 레인 그림 + 참조 칩 + 요약 · 작성자 · 상대 시각 · 짧은 해시.
@@ -29,6 +31,7 @@ internal fun CommitRow(
     laneCount: Int,
     selected: Boolean,
     onClick: () -> Unit,
+    dragDropState: GraphDragDropState? = null,
 ) {
     val colors = UndineTokens.color
     val spacing = UndineTokens.spacing
@@ -39,6 +42,8 @@ internal fun CommitRow(
             .fillMaxWidth()
             .height(GraphLaneGeometry.ROW_HEIGHT)
             .background(if (selected) colors.surface else colors.background)
+            .graphDragSource(dragDropState) { GraphDragSource.Commit(display.item.commit.id) }
+            .graphDropTarget(dragDropState) { GraphDropTarget.Commit(display.item.commit.id) }
             .clickable(onClick = onClick)
             .testTag(GraphTags.row(display.item.commit.id)),
         verticalAlignment = Alignment.CenterVertically,
@@ -56,7 +61,7 @@ internal fun CommitRow(
             horizontalArrangement = Arrangement.spacedBy(spacing.small),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            display.chips.forEach { RefChip(chip = it) }
+            display.chips.forEach { RefChip(chip = it, dragDropState = dragDropState) }
             BasicText(
                 text = display.item.summary,
                 modifier = Modifier.weight(1f),

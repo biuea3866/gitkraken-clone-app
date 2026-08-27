@@ -11,6 +11,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import dev.undine.presentation.design.UndineTokens
+import dev.undine.domain.RefName
+import dev.undine.domain.graphops.GraphDragSource
+import dev.undine.domain.graphops.GraphDropTarget
 import dev.undine.presentation.i18n.graph
 import dev.undine.presentation.i18n.strings
 
@@ -30,6 +33,7 @@ private const val CHIP_FILL_ALPHA = 0.18f
 internal fun RefChip(
     chip: GraphRefChip,
     modifier: Modifier = Modifier,
+    dragDropState: GraphDragDropState? = null,
 ) {
     val spacing = UndineTokens.spacing
     val shape = UndineTokens.shape
@@ -38,6 +42,8 @@ internal fun RefChip(
     BasicText(
         text = chip.refName ?: strings.graph.head,
         modifier = modifier
+            .graphDragSource(dragDropState) { chip.dragSource() }
+            .graphDropTarget(dragDropState) { chip.dropTarget() }
             .clip(RoundedCornerShape(shape.cornerSmall))
             // 칩 색을 옅게 깐 배경 + 같은 색 경계. 외곽선만 두면 칩이 배경에 묻혀 참조가 눈에 안 띈다.
             .background(accent.copy(alpha = CHIP_FILL_ALPHA))
@@ -47,6 +53,19 @@ internal fun RefChip(
         overflow = TextOverflow.Ellipsis,
         style = UndineTokens.typography.caption.copy(color = accent),
     )
+}
+
+private fun GraphRefChip.dragSource(): GraphDragSource = when (kind) {
+    GraphRefKind.BRANCH -> GraphDragSource.Branch(RefName(requireNotNull(refName)), requireNotNull(target))
+    GraphRefKind.TAG -> GraphDragSource.Tag(RefName(requireNotNull(refName)), requireNotNull(target), isAnnotated)
+    GraphRefKind.HEAD -> GraphDragSource.Commit(requireNotNull(target))
+}
+
+private fun GraphRefChip.dropTarget(): GraphDropTarget = when (kind) {
+    GraphRefKind.BRANCH -> GraphDropTarget.Branch(RefName(requireNotNull(refName)), requireNotNull(target))
+    GraphRefKind.HEAD,
+    GraphRefKind.TAG,
+    -> GraphDropTarget.Commit(requireNotNull(target))
 }
 
 @Composable
