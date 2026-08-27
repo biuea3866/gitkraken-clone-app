@@ -7,6 +7,7 @@ import dev.undine.domain.DeleteBranchResult
 import dev.undine.domain.FileChange
 import dev.undine.domain.RefGateway
 import dev.undine.domain.RefName
+import dev.undine.domain.RepositoryBaseline
 import dev.undine.domain.RepositoryGateway
 import dev.undine.domain.ResetMode
 import dev.undine.domain.StashEntry
@@ -15,7 +16,6 @@ import dev.undine.domain.WorkingTreeStatus
 import dev.undine.domain.WorktreeOpsGateway
 import dev.undine.domain.undo.GitOperationKind
 import dev.undine.domain.undo.OperationEntry
-import dev.undine.domain.undo.RepositoryBaseline
 import dev.undine.domain.undo.UndoOutcome
 import dev.undine.domain.undo.UndoStack
 import dev.undine.domain.undo.UndoStrategy
@@ -37,6 +37,12 @@ private val MAIN = RefName("main")
 private val FEATURE = RefName("feature")
 private val HEAD = commitId(2)
 private val PARENT = commitId(1)
+
+/** 변경 Gateway 가 결과로 주는 "변경 직후 기준 상태" 자리. 되돌리기 경로는 이 값을 소비하지 않는다. */
+private val BASELINE = RepositoryBaseline(branch = MAIN, head = HEAD)
+
+/** 첫 변경 **뒤에** 앱 안의 두 번째 변경이 옮겨 놓은 자리. */
+private val AFTER_SECOND_CHANGE = commitId(7)
 
 /** 기록 시점의 stash. 되돌리기는 이 항목을 target 으로 지목해야 한다. */
 private val RECORDED_STASH = StashEntry(
@@ -105,14 +111,22 @@ private class UndoFixture(
         coEvery { refGateway.deleteBranch(any(), any()) } returns DeleteBranchResult.DELETED
         coEvery { worktreeOpsGateway.reset(any(), any()) } just Runs
         coEvery { worktreeOpsGateway.hardReset(any()) } just Runs
-        coEvery { worktreeOpsGateway.hardResetBranch(any(), any(), any()) } just Runs
-        coEvery { refGateway.moveBranch(any(), any(), any()) } just Runs
-        coEvery { refGateway.moveTag(any(), any(), any()) } just Runs
+        // 되돌리기용 이동·reset 도 변경 직후 기준 상태를 돌려준다 (UND-73) — 되돌리기는 그 값을 쓰지 않는다.
+        coEvery { worktreeOpsGateway.hardResetBranch(any(), any(), any()) } returns BASELINE
+        coEvery { refGateway.moveBranch(any(), any(), any()) } returns BASELINE
+        coEvery { refGateway.moveTag(any(), any(), any()) } returns BASELINE
         coEvery { worktreeOpsGateway.stashApply(any()) } just Runs
         coEvery { worktreeOpsGateway.stashDrop(any()) } just Runs
     }
 
     val recorder = OperationRecorder(refGateway, stack)
+
+    /**
+     * 변경 Gateway 가 결과로 주는 **변경 직후 기준 상태**를 흉내 낸다 (UND-73). 이 스펙의 Gateway 는
+     * 대역이라 결과 계약을 흉내 낼 곳이 없으므로, 기록 시점의 저장소 상태를 그대로 캡처해 넘긴다.
+     */
+    suspend fun record(operation: GitOperationKind, strategy: UndoStrategy.Reversible): OperationEntry =
+        recorder.record(operation, strategy, refGateway.currentBaseline())
 
     val service = UndoService(
         undoStack = stack,
@@ -163,7 +177,7 @@ class UndoServiceSpec : BehaviorSpec({
 
     Given("커밋을 기록한 세션") {
         val fixture = UndoFixture()
-        fixture.recorder.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(PARENT))
+        fixture.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(PARENT))
 
         When("되돌리기를 요청하면") {
             val outcome = fixture.undoTop()
@@ -178,7 +192,7 @@ class UndoServiceSpec : BehaviorSpec({
 
     Given("체크아웃을 기록한 세션") {
         val fixture = UndoFixture()
-        fixture.recorder.record(GitOperationKind.CHECKOUT, UndoStrategy.CheckoutRef(FEATURE))
+        fixture.record(GitOperationKind.CHECKOUT, UndoStrategy.CheckoutRef(FEATURE))
 
         When("되돌리기를 요청하면") {
             val outcome = fixture.undoTop()
@@ -192,7 +206,7 @@ class UndoServiceSpec : BehaviorSpec({
 
     Given("브랜치 생성을 기록한 세션") {
         val fixture = UndoFixture()
-        fixture.recorder.record(GitOperationKind.BRANCH_CREATE, UndoStrategy.DeleteBranch(FEATURE))
+        fixture.record(GitOperationKind.BRANCH_CREATE, UndoStrategy.DeleteBranch(FEATURE))
 
         When("되돌리기를 요청하면") {
             val outcome = fixture.undoTop()
@@ -207,7 +221,7 @@ class UndoServiceSpec : BehaviorSpec({
     Given("브랜치에 병합되지 않은 커밋이 쌓인 세션") {
         val fixture = UndoFixture()
         coEvery { fixture.refGateway.deleteBranch(any(), any()) } returns DeleteBranchResult.REFUSED_UNMERGED
-        fixture.recorder.record(GitOperationKind.BRANCH_CREATE, UndoStrategy.DeleteBranch(FEATURE))
+        fixture.record(GitOperationKind.BRANCH_CREATE, UndoStrategy.DeleteBranch(FEATURE))
 
         When("되돌리기를 요청하면") {
             val outcome = fixture.undoTop()
@@ -223,7 +237,7 @@ class UndoServiceSpec : BehaviorSpec({
 
     Given("병합을 기록한 세션") {
         val fixture = UndoFixture()
-        fixture.recorder.record(
+        fixture.record(
             GitOperationKind.MERGE,
             UndoStrategy.HardResetTo(MAIN, previous = PARENT, expected = HEAD),
         )
@@ -240,7 +254,7 @@ class UndoServiceSpec : BehaviorSpec({
 
     Given("stash 저장을 기록한 세션") {
         val fixture = UndoFixture()
-        fixture.recorder.record(GitOperationKind.STASH_PUSH, UndoStrategy.PopStash(RECORDED_STASH))
+        fixture.record(GitOperationKind.STASH_PUSH, UndoStrategy.PopStash(RECORDED_STASH))
 
         When("되돌리기를 요청하면") {
             val outcome = fixture.undoTop()
@@ -255,7 +269,7 @@ class UndoServiceSpec : BehaviorSpec({
 
     Given("stash 를 기록한 뒤 밖에서 stash 가 하나 더 쌓인 세션") {
         val fixture = UndoFixture()
-        fixture.recorder.record(GitOperationKind.STASH_PUSH, UndoStrategy.PopStash(RECORDED_STASH))
+        fixture.record(GitOperationKind.STASH_PUSH, UndoStrategy.PopStash(RECORDED_STASH))
         val newer = RECORDED_STASH.copy(index = 0, message = "밖에서 만든 stash", target = commitId(9))
 
         When("되돌리기를 요청하면") {
@@ -273,7 +287,7 @@ class UndoServiceSpec : BehaviorSpec({
         val fixture = UndoFixture()
         coEvery { fixture.worktreeOpsGateway.stashApply(any()) } throws
             UndineException.GitOperationFailed("worktreeops.stashApply", IllegalStateException("충돌"))
-        fixture.recorder.record(GitOperationKind.STASH_PUSH, UndoStrategy.PopStash(RECORDED_STASH))
+        fixture.record(GitOperationKind.STASH_PUSH, UndoStrategy.PopStash(RECORDED_STASH))
 
         When("되돌리기를 요청하면") {
             Then("적용에 실패한 stash 를 지우지 않는다") {
@@ -326,9 +340,41 @@ class UndoServiceSpec : BehaviorSpec({
         }
     }
 
+    Given("첫 변경과 그 기록 사이에 앱 안의 두 번째 변경이 끼어든 세션") {
+        // 기록 시점의 조회는 이미 두 번째 변경까지 반영돼 있다 — 기록이 여기서 읽으면 그 값이 남는다.
+        val fixture = UndoFixture(branches = listOf(branch(MAIN, AFTER_SECOND_CHANGE, isCurrent = true)))
+        // 첫 변경의 Gateway 결과가 준 "내 변경 직후" 기준 상태로 기록한다 (UND-73).
+        fixture.recorder.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(PARENT), BASELINE)
+
+        When("첫 항목의 되돌리기를 요청하면") {
+            val outcome = fixture.undoTop()
+
+            Then("두 번째 변경 위에서 실행하지 않고 외부 변경으로 거부한다") {
+                val refused = outcome.shouldBeInstanceOf<UndoOutcome.ExternalChange>()
+                refused.recorded shouldBe BASELINE
+                refused.current shouldBe RepositoryBaseline(branch = MAIN, head = AFTER_SECOND_CHANGE)
+                fixture.verifyNoGitChange()
+            }
+        }
+    }
+
+    Given("변경 직후 기준 상태로 기록한 뒤 아무도 끼어들지 않은 세션") {
+        val fixture = UndoFixture()
+        fixture.recorder.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(PARENT), BASELINE)
+
+        When("되돌리기를 요청하면") {
+            val outcome = fixture.undoTop()
+
+            Then("간섭이 없으므로 그대로 성공한다") {
+                outcome shouldBe UndoOutcome.Undone(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(PARENT))
+                coVerify(exactly = 1) { fixture.worktreeOpsGateway.reset(PARENT, ResetMode.SOFT) }
+            }
+        }
+    }
+
     Given("기록 뒤 앱 밖에서 HEAD 가 움직인 저장소") {
         val fixture = UndoFixture()
-        fixture.recorder.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(PARENT))
+        fixture.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(PARENT))
         coEvery { fixture.refGateway.listBranches() } returns listOf(branch(MAIN, commitId(9), isCurrent = true))
 
         When("되돌리기를 요청하면") {
@@ -343,7 +389,7 @@ class UndoServiceSpec : BehaviorSpec({
 
     Given("detached HEAD 상태의 저장소") {
         val fixture = UndoFixture(branches = listOf(branch(MAIN, HEAD, isCurrent = true)))
-        fixture.recorder.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(PARENT))
+        fixture.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(PARENT))
         coEvery { fixture.refGateway.listBranches() } returns listOf(branch(MAIN, HEAD, isCurrent = false))
 
         When("되돌리기를 요청하면") {
@@ -358,7 +404,7 @@ class UndoServiceSpec : BehaviorSpec({
 
     Given("커밋되지 않은 변경이 있는 저장소") {
         val fixture = UndoFixture(status = DIRTY)
-        fixture.recorder.record(
+        fixture.record(
             GitOperationKind.REBASE,
             UndoStrategy.HardResetTo(MAIN, previous = PARENT, expected = HEAD),
         )
@@ -394,8 +440,8 @@ class UndoServiceSpec : BehaviorSpec({
 
     Given("기록 뒤 앱 밖에서 HEAD 가 움직여 막힌 최상단") {
         val fixture = UndoFixture()
-        val olderEntry = fixture.recorder.record(GitOperationKind.BRANCH_CREATE, UndoStrategy.DeleteBranch(FEATURE))
-        val entry = fixture.recorder.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(PARENT))
+        val olderEntry = fixture.record(GitOperationKind.BRANCH_CREATE, UndoStrategy.DeleteBranch(FEATURE))
+        val entry = fixture.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(PARENT))
         coEvery { fixture.refGateway.listBranches() } returns listOf(branch(MAIN, commitId(9), isCurrent = true))
 
         When("그 기록을 지우려 하면") {
@@ -411,8 +457,8 @@ class UndoServiceSpec : BehaviorSpec({
 
     Given("detached HEAD 때문에 막힌 최상단") {
         val fixture = UndoFixture()
-        val olderEntry = fixture.recorder.record(GitOperationKind.BRANCH_CREATE, UndoStrategy.DeleteBranch(FEATURE))
-        val entry = fixture.recorder.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(PARENT))
+        val olderEntry = fixture.record(GitOperationKind.BRANCH_CREATE, UndoStrategy.DeleteBranch(FEATURE))
+        val entry = fixture.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(PARENT))
         coEvery { fixture.refGateway.listBranches() } returns listOf(branch(MAIN, HEAD, isCurrent = false))
 
         When("그 기록을 지우려 하면") {
@@ -428,8 +474,8 @@ class UndoServiceSpec : BehaviorSpec({
 
     Given("미커밋 변경 때문에 막힌 hard reset 최상단") {
         val fixture = UndoFixture(status = DIRTY)
-        val olderEntry = fixture.recorder.record(GitOperationKind.BRANCH_CREATE, UndoStrategy.DeleteBranch(FEATURE))
-        val entry = fixture.recorder.record(
+        val olderEntry = fixture.record(GitOperationKind.BRANCH_CREATE, UndoStrategy.DeleteBranch(FEATURE))
+        val entry = fixture.record(
             GitOperationKind.MERGE,
             UndoStrategy.HardResetTo(MAIN, previous = PARENT, expected = HEAD),
         )
@@ -447,8 +493,8 @@ class UndoServiceSpec : BehaviorSpec({
 
     Given("두 연산을 기록한 세션") {
         val fixture = UndoFixture()
-        fixture.recorder.record(GitOperationKind.BRANCH_CREATE, UndoStrategy.DeleteBranch(FEATURE))
-        fixture.recorder.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(PARENT))
+        fixture.record(GitOperationKind.BRANCH_CREATE, UndoStrategy.DeleteBranch(FEATURE))
+        fixture.record(GitOperationKind.COMMIT, UndoStrategy.SoftResetTo(PARENT))
 
         When("한 번 되돌리기를 요청하면") {
             fixture.undoTop()
@@ -463,7 +509,7 @@ class UndoServiceSpec : BehaviorSpec({
 
     Given("브랜치 이동을 기록한 세션") {
         val fixture = UndoFixture()
-        fixture.recorder.record(
+        fixture.record(
             GitOperationKind.BRANCH_MOVE,
             UndoStrategy.MoveBranchTo(FEATURE, previous = PARENT, expected = HEAD),
         )
@@ -480,7 +526,7 @@ class UndoServiceSpec : BehaviorSpec({
 
     Given("태그 이동을 기록한 세션") {
         val fixture = UndoFixture()
-        fixture.recorder.record(
+        fixture.record(
             GitOperationKind.TAG_MOVE,
             UndoStrategy.MoveTagTo(FEATURE, previous = PARENT, expected = HEAD),
         )
@@ -499,7 +545,7 @@ class UndoServiceSpec : BehaviorSpec({
         val fixture = UndoFixture()
         val mismatch = UndineException.StateViolation("기대한 위치와 달라 참조를 옮기지 않았습니다: feature")
         coEvery { fixture.refGateway.moveBranch(any(), any(), any()) } throws mismatch
-        fixture.recorder.record(
+        fixture.record(
             GitOperationKind.BRANCH_MOVE,
             UndoStrategy.MoveBranchTo(FEATURE, previous = PARENT, expected = HEAD),
         )

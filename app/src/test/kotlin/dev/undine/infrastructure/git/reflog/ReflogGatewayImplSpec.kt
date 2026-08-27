@@ -2,6 +2,7 @@ package dev.undine.infrastructure.git.reflog
 
 import dev.undine.domain.CommitId
 import dev.undine.domain.RefName
+import dev.undine.domain.RepositoryBaseline
 import dev.undine.domain.RepositoryPath
 import dev.undine.domain.UndineException
 import dev.undine.domain.reflog.RecoveryTarget
@@ -127,9 +128,11 @@ class ReflogGatewayImplSpec : FunSpec({
             gateway.recover(lost, RecoveryTarget.NewBranch(RefName("rescue")))
         }
 
-        created shouldBe RefName("rescue")
+        created.ref shouldBe RefName("rescue")
         resolve(work, "rescue") shouldBe lost
         resolve(work, MAIN) shouldBe mainBefore
+        // 복구와 같은 임계 구역에서 캡처한 기준 상태를 결과가 함께 준다 (UND-73).
+        created.baseline shouldBe RepositoryBaseline(branch = RefName(MAIN), head = mainBefore)
     }
 
     test("이미 있는 이름으로 복구하면 덮어쓰지 않고 거부한다") {
@@ -156,8 +159,10 @@ class ReflogGatewayImplSpec : FunSpec({
             )
         }
 
-        moved shouldBe RefName(SIDE)
+        moved.ref shouldBe RefName(SIDE)
         resolve(work, SIDE) shouldBe lost
+        // 이동은 HEAD 를 옮기지 않으므로 기준 상태는 체크아웃된 브랜치 그대로다.
+        moved.baseline shouldBe RepositoryBaseline(branch = RefName(MAIN), head = resolve(work, MAIN))
     }
 
     test("reflog 를 꺼 둔 저장소에서도 이동이 밀어낸 커밋을 기록으로 남긴다") {

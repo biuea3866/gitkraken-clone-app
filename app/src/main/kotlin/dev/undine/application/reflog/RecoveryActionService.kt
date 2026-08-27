@@ -102,13 +102,19 @@ class RecoveryActionService(
     override suspend fun scanUnreachable(limit: Int): UnreachableCommitScan =
         reflogGateway.unreachableCommits(limit)
 
+    /**
+     * 되돌리기의 기준 상태는 **복구 결과가 준 값**을 쓴다 (UND-73). 복구가 끝난 뒤 여기서 따로 읽으면
+     * 그 사이에 앱 내부의 다른 Git 조작이 끼어들어 "내 복구 직후" 가 아닌 상태가 기록되고, 되돌리기
+     * 직전의 외부 변경 비교가 오염된다.
+     */
     override suspend fun recover(commit: CommitId, target: RecoveryTarget): RecoveryOutcome<RefName> {
         val recovered = reflogGateway.recover(commit, target)
         val recordFailure = recordQuietly(GitOperationKind.REFLOG_RESTORE) {
             when (target) {
                 is RecoveryTarget.NewBranch -> operationRecorder.record(
                     GitOperationKind.REFLOG_RESTORE,
-                    UndoStrategy.DeleteBranch(recovered),
+                    UndoStrategy.DeleteBranch(recovered.ref),
+                    recovered.baseline,
                 )
 
                 is RecoveryTarget.MoveExisting -> operationRecorder.recordIrreversible(
@@ -118,7 +124,7 @@ class RecoveryActionService(
                 )
             }
         }
-        return RecoveryOutcome(recovered, recordFailure)
+        return RecoveryOutcome(recovered.ref, recordFailure)
     }
 
     override suspend fun restoreBisect(): BisectSession? = bisect.restore.execute()

@@ -2,6 +2,7 @@ package dev.undine.infrastructure.git.ref
 
 import dev.undine.domain.CommitId
 import dev.undine.domain.RefName
+import dev.undine.domain.RepositoryBaseline
 import dev.undine.domain.UndineException
 import org.eclipse.jgit.api.CreateBranchCommand
 import org.eclipse.jgit.api.Git
@@ -111,6 +112,28 @@ internal fun Git.requireCommitObject(commit: CommitId): ObjectId {
         throw UndineException.NotFound(UndineException.NotFound.Kind.COMMIT, commit.value)
     }
     return id
+}
+
+/**
+ * 지금의 기준 상태를 **락을 쥔 채** 읽는다. 변경 연산이 자기 임계 구역 안에서, 변경이 끝난 직후
+ * 불러 결과에 실어 준다 (UND-73) — 호출자가 변경 뒤에 따로 읽으면 그 사이의 다른 조작까지 반영된다.
+ *
+ * 체크아웃된 **로컬 브랜치**가 없으면(detached HEAD·커밋이 없는 저장소) 브랜치도 HEAD 도 없는
+ * 상태다. `RefGateway.listBranches()` 로 같은 값을 유도하는 `currentBaseline()` 과 결과가 같아야
+ * 비교가 성립하므로, 판정 기준(로컬 브랜치 prefix + 그 ref 의 target)을 그것과 맞춘다.
+ */
+internal fun Repository.baselineHeld(): RepositoryBaseline {
+    val fullRef = fullBranch?.takeIf { it.startsWith(LOCAL_BRANCH_PREFIX) }
+    // 커밋이 하나도 없는 저장소는 HEAD 가 아직 없는 브랜치를 가리킨다 — 그 브랜치는 목록에도 없다.
+    val target = fullRef?.let { exactRef(it)?.objectId }
+    return if (fullRef == null || target == null) {
+        RepositoryBaseline(branch = null, head = null)
+    } else {
+        RepositoryBaseline(
+            branch = RefName(Repository.shortenRefName(fullRef)),
+            head = CommitId.of(target.name),
+        )
+    }
 }
 
 internal fun Repository.requireRefTarget(fullRef: String, name: RefName): ObjectId =

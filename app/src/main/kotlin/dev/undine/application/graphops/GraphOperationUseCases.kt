@@ -7,6 +7,7 @@ import dev.undine.domain.BranchTarget
 import dev.undine.domain.CommitId
 import dev.undine.domain.RefGateway
 import dev.undine.domain.RefName
+import dev.undine.domain.RepositoryBaseline
 import dev.undine.domain.UndineException
 import dev.undine.domain.WorktreeOpsGateway
 import dev.undine.domain.graphops.GraphOperation
@@ -120,8 +121,16 @@ class ExecuteGraphOperationUseCase(
         currentCoroutineContext().ensureActive()
         return withContext(NonCancellable) {
             when (val result = worktreeOpsGateway.runOnBranch(on, branchOperation)) {
-                is BranchOperationResult.Succeeded ->
-                    completed(result.performedOn, result.previousTarget, result.head, kind, targetLabel)
+                is BranchOperationResult.Succeeded -> completed(
+                    strategy = UndoStrategy.HardResetTo(
+                        result.performedOn,
+                        previous = result.previousTarget,
+                        expected = result.head,
+                    ),
+                    baseline = result.baseline,
+                    kind = kind,
+                    targetLabel = targetLabel,
+                )
 
                 is BranchOperationResult.Conflicted ->
                     GraphOperationOutcome.Conflicted(result.performedOn, result.paths)
@@ -138,11 +147,15 @@ class ExecuteGraphOperationUseCase(
         // 취소는 **변경 전에만** 관측한다 — 이 뒤로는 변경과 Undo 기록이 한 단위라 끊기지 않는다.
         currentCoroutineContext().ensureActive()
         return withContext(NonCancellable) {
-            worktreeOpsGateway.hardResetBranch(operation.branch, to = operation.to, expected = expected)
+            val baseline =
+                worktreeOpsGateway.hardResetBranch(operation.branch, to = operation.to, expected = expected)
             completed(
-                ref = operation.branch,
-                previous = expected,
-                head = operation.to,
+                strategy = UndoStrategy.HardResetTo(
+                    operation.branch,
+                    previous = expected,
+                    expected = operation.to,
+                ),
+                baseline = baseline,
                 kind = GitOperationKind.BRANCH_MOVE,
                 targetLabel = operation.branch.value,
             )
@@ -156,11 +169,12 @@ class ExecuteGraphOperationUseCase(
         // 취소는 **변경 전에만** 관측한다 — 이 뒤로는 변경과 Undo 기록이 한 단위라 끊기지 않는다.
         currentCoroutineContext().ensureActive()
         return withContext(NonCancellable) {
-            refGateway.moveTag(operation.tag, to = operation.to, expected = expected)
+            val baseline = refGateway.moveTag(operation.tag, to = operation.to, expected = expected)
             val failure = recordQuietly(GitOperationKind.TAG_MOVE) {
                 operationRecorder.record(
                     GitOperationKind.TAG_MOVE,
                     UndoStrategy.MoveTagTo(operation.tag, previous = expected, expected = operation.to),
+                    baseline,
                     operation.tag.value,
                 )
             }
@@ -175,22 +189,21 @@ class ExecuteGraphOperationUseCase(
     /**
      * 되돌리기는 **이전 위치와 기대 위치를 둘 다** 갖는다 (결정 G2·G5) — 이전 값만 저장하면 기록 뒤
      * 다른 경로가 그 브랜치를 옮겼을 때 되돌리기가 그 이동을 조용히 덮어쓴다.
+     *
+     * 기준 상태 [baseline] 도 같은 이유로 **결과가 준 값**을 쓴다 (UND-73). 기록 시점에 여기서
+     * 다시 읽으면 그 읽기와 변경 사이에 앱 내부의 다른 조작이 끼어들어, 되돌리기 직전의 외부 변경
+     * 비교가 오염된다 — 거부해야 할 되돌리기가 통과한다.
      */
     private suspend fun completed(
-        ref: RefName,
-        previous: CommitId,
-        head: CommitId,
+        strategy: UndoStrategy.HardResetTo,
+        baseline: RepositoryBaseline,
         kind: GitOperationKind,
         targetLabel: String,
     ): GraphOperationOutcome.Completed {
         val failure = recordQuietly(kind) {
-            operationRecorder.record(
-                kind,
-                UndoStrategy.HardResetTo(ref, previous = previous, expected = head),
-                targetLabel,
-            )
+            operationRecorder.record(kind, strategy, baseline, targetLabel)
         }
-        return GraphOperationOutcome.Completed(ref, head, failure)
+        return GraphOperationOutcome.Completed(strategy.branch, strategy.expected, failure)
     }
 
     /**

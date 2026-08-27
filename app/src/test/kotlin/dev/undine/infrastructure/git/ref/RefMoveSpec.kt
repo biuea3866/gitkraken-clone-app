@@ -2,6 +2,7 @@ package dev.undine.infrastructure.git.ref
 
 import dev.undine.domain.CommitId
 import dev.undine.domain.RefName
+import dev.undine.domain.RepositoryBaseline
 import dev.undine.domain.RepositoryPath
 import dev.undine.domain.UndineException
 import dev.undine.infrastructure.git.repository.GitAccess
@@ -14,6 +15,7 @@ import io.kotest.engine.spec.tempdir
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import org.eclipse.jgit.api.Git
+import org.eclipse.jgit.api.ResetCommand
 import org.eclipse.jgit.lib.ObjectId
 
 private const val FILE_NAME = "a.txt"
@@ -108,6 +110,31 @@ class RefMoveSpec : FunSpec({
         fixture.gateway.moveTag(TAG, to = fixture.second, expected = fixture.first)
 
         fixture.git.targetOf(TAG_REF) shouldBe fixture.second.value
+    }
+
+    test("두 이동을 직렬로 하면 첫 결과의 기준 상태에 두 번째 이동이 섞이지 않는다") {
+        val fixture = fixture()
+        fixture.git.tagAt(fixture.first, annotated = false, message = null)
+
+        // 첫 이동은 HEAD 를 건드리지 않으므로 기준 상태는 체크아웃된 main 그대로다.
+        val afterTagMove = fixture.gateway.moveTag(TAG, to = fixture.second, expected = fixture.first)
+        // 이어서 앱 안의 두 번째 조작이 main 을 되감는다.
+        fixture.git.reset().setMode(ResetCommand.ResetType.HARD).setRef(fixture.first.value).call()
+        val afterReset = fixture.gateway.moveBranch(TOPIC, to = fixture.second, expected = fixture.first)
+
+        // 첫 결과는 자기 임계 구역에서 캡처된 값이라 뒤이은 되감기를 알지 못한다 (UND-73).
+        afterTagMove shouldBe RepositoryBaseline(branch = MAIN, head = fixture.second)
+        afterReset shouldBe RepositoryBaseline(branch = MAIN, head = fixture.first)
+    }
+
+    test("detached HEAD 에서 이동하면 기준 상태는 브랜치도 HEAD 도 없는 상태다") {
+        val fixture = fixture()
+        fixture.git.checkout().setName(fixture.second.value).call()
+
+        val baseline = fixture.gateway.moveBranch(TOPIC, to = fixture.second, expected = fixture.first)
+
+        // 되돌리기는 브랜치 위에서만 허용된다 — 이 값이 그 거부의 근거가 된다.
+        baseline shouldBe RepositoryBaseline(branch = null, head = null)
     }
 
     test("기대 위치와 다른 태그 이동은 거부되고 태그는 그대로 남는다") {

@@ -56,11 +56,21 @@ sealed interface BranchOperationResult {
      */
     val previousTarget: CommitId
 
-    /** 조작이 끝나 대상 브랜치가 [head] 다. */
+    /**
+     * 조작이 끝나 대상 브랜치가 [head] 다.
+     *
+     * [baseline] 은 **조작과 같은 임계 구역 안에서, 조작이 끝난 직후** 읽은 기준 상태다. 되돌리기를
+     * 기록하는 호출자가 그 값을 스스로 읽으면 그 읽기와 조작 사이에 앱 내부의 다른 조작이 끼어들어
+     * "내 변경 직후" 가 아닌 상태가 기록되고, 되돌리기가 남의 변경 위에서 실행된다 (UND-73).
+     *
+     * 되돌리기를 기록하는 결과 변이가 이것뿐이라 **여기에만** 담는다 — [Conflicted] 는 진행 중이고
+     * [NoChange] 는 바꾼 것이 없어 남길 기록 자체가 없다.
+     */
     data class Succeeded(
         override val performedOn: RefName,
         override val previousTarget: CommitId,
         val head: CommitId,
+        val baseline: RepositoryBaseline,
     ) : BranchOperationResult
 
     /** 충돌로 멈췄다. **실패가 아니다** — 저장소는 진행 중 상태로 남고 사용자가 이어서 해결한다. */
@@ -112,7 +122,8 @@ interface WorktreeOpsGateway {
      *
      * 결과의 [BranchOperationResult.previousTarget] 은 이 임계 구역 안에서, 체크아웃과 조작을
      * 시작하기 전에 읽은 대상 브랜치 위치다. 되돌리기를 구성하는 호출자가 그 값을 스스로 읽지
-     * 않게 하려는 것이다. 실패는 결과가 아니라 예외이므로 이 약속의 대상이 아니다.
+     * 않게 하려는 것이다. 같은 이유로 [BranchOperationResult.Succeeded.baseline] 은 **조작 직후**
+     * 같은 구역에서 읽은 기준 상태다. 실패는 결과가 아니라 예외이므로 이 약속의 대상이 아니다.
      *
      * 검사와 실행 사이의 **외부 프로세스** 변경은 방어 대상이 아니다 (결정 A-M1).
      *
@@ -141,8 +152,11 @@ interface WorktreeOpsGateway {
      * [runOnBranch] 와 같은 커밋 구간 규칙을 따른다 — 호출자가 이 호출과 기록 소비를 한
      * `NonCancellable` 단위로 묶는다.
      *
+     * 결과는 **이 구역 안에서 reset 이 끝난 직후** 읽은 [RepositoryBaseline] 이다
+     * ([BranchOperationResult.Succeeded.baseline] 과 같은 약속).
+     *
      * @throws UndineException.StateViolation 실제 target 이 [expected] 와 다를 때
      * @throws UndineException.NotFound 브랜치나 [to] 커밋이 없을 때
      */
-    suspend fun hardResetBranch(branch: RefName, to: CommitId, expected: CommitId)
+    suspend fun hardResetBranch(branch: RefName, to: CommitId, expected: CommitId): RepositoryBaseline
 }

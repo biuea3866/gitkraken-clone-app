@@ -13,6 +13,7 @@ import dev.undine.domain.CommitId
 import dev.undine.domain.FileChange
 import dev.undine.domain.RefGateway
 import dev.undine.domain.RefName
+import dev.undine.domain.RepositoryBaseline
 import dev.undine.domain.RepositoryGateway
 import dev.undine.domain.ResetMode
 import dev.undine.domain.UndineException
@@ -20,7 +21,6 @@ import dev.undine.domain.WorkingTreeStatus
 import dev.undine.domain.WorktreeOpsGateway
 import dev.undine.domain.undo.GitOperationKind
 import dev.undine.domain.undo.OperationEntry
-import dev.undine.domain.undo.RepositoryBaseline
 import dev.undine.domain.undo.UndoOutcome
 import dev.undine.domain.undo.UndoStack
 import dev.undine.domain.undo.UndoStrategy
@@ -125,7 +125,10 @@ private class UndoStateFixture {
         coEvery { repositoryGateway.status() } coAnswers { status }
         coEvery { worktreeOpsGateway.reset(any(), any()) } just Runs
         coEvery { worktreeOpsGateway.hardReset(any()) } just Runs
-        coEvery { worktreeOpsGateway.hardResetBranch(any(), any(), any()) } just Runs
+        coEvery { worktreeOpsGateway.hardResetBranch(any(), any(), any()) } coAnswers {
+            // 되돌리기용 reset 도 변경 직후 기준 상태를 돌려준다 (UND-73).
+            RepositoryBaseline(branch = MAIN, head = currentHead)
+        }
     }
 
     /** 저장소를 바꾸는 호출이 하나도 없었는지 본다. */

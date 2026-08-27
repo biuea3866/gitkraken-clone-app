@@ -37,10 +37,14 @@ interface RefGateway {
      * **현재 체크아웃된 브랜치는 거부한다.** 포인터만 옮기면 워킹트리가 HEAD 와 어긋난 채 남는다 —
      * 그 경우는 [WorktreeOpsGateway.hardResetBranch] 가 워킹트리 동기화까지 맡는다.
      *
+     * 결과는 **이 갱신과 같은 임계 구역에서 캡처한 변경 직후 [RepositoryBaseline]** 이다. 되돌리기를
+     * 기록하는 호출자가 그 값을 스스로 읽지 않게 하려는 것이다 (UND-73). 실패는 결과가 아니라
+     * 예외이므로 이 약속의 대상이 아니다.
+     *
      * @throws UndineException.StateViolation 실제 target 이 [expected] 와 다를 때 · 현재 브랜치일 때
      * @throws UndineException.NotFound 브랜치나 [to] 커밋이 없을 때
      */
-    suspend fun moveBranch(branch: RefName, to: CommitId, expected: CommitId)
+    suspend fun moveBranch(branch: RefName, to: CommitId, expected: CommitId): RepositoryBaseline
 
     /**
      * [tag] 를 [moveBranch] 와 같은 조건부 규칙으로 [to] 로 옮긴다.
@@ -48,8 +52,10 @@ interface RefGateway {
      * **annotated 태그는 거부한다.** 태그 ref 를 커밋으로 다시 겨누면 태그 객체에 담긴 메시지와
      * tagger 가 사라지고 되돌릴 수 없다 — 이 앱이 태그 rename 을 제공하지 않는 것과 같은 이유다.
      *
+     * [moveBranch] 와 같이 **변경 직후 [RepositoryBaseline]** 을 결과로 준다.
+     *
      * @throws UndineException.StateViolation 실제 target 이 [expected] 와 다를 때 · annotated 태그일 때
      * @throws UndineException.NotFound 태그나 [to] 커밋이 없을 때
      */
-    suspend fun moveTag(tag: RefName, to: CommitId, expected: CommitId)
+    suspend fun moveTag(tag: RefName, to: CommitId, expected: CommitId): RepositoryBaseline
 }

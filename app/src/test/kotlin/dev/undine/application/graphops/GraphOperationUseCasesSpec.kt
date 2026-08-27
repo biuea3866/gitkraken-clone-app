@@ -8,6 +8,7 @@ import dev.undine.domain.BranchTarget
 import dev.undine.domain.CommitId
 import dev.undine.domain.RefGateway
 import dev.undine.domain.RefName
+import dev.undine.domain.RepositoryBaseline
 import dev.undine.domain.Tag
 import dev.undine.domain.UndineException
 import dev.undine.domain.WorktreeOpsGateway
@@ -43,6 +44,12 @@ private val FEATURE_HEAD = CommitId.of("b".repeat(40))
 private val OLD_COMMIT = CommitId.of("c".repeat(40))
 private val NEW_HEAD = CommitId.of("d".repeat(40))
 
+/** 변경 Gateway 가 자기 임계 구역에서 캡처해 결과로 준 **변경 직후** 기준 상태 (UND-73). */
+private val BASELINE_AFTER = RepositoryBaseline(branch = MAIN, head = NEW_HEAD)
+
+/** 변경 뒤 앱 내부의 다른 조작이 브랜치를 옮긴 자리. 기록이 사후 조회를 하면 이 값이 남는다. */
+private val INTERLEAVED_HEAD = CommitId.of("e".repeat(40))
+
 private fun branch(name: RefName, target: CommitId, isCurrent: Boolean = false) =
     Branch(name, target, isCurrent = isCurrent, isRemote = false, upstream = null, ahead = 0, behind = 0)
 
@@ -55,6 +62,8 @@ private fun refGateway(
 ): RefGateway = mockk<RefGateway>(relaxUnitFun = true).also {
     coEvery { it.listBranches() } returns branches
     coEvery { it.listTags() } returns tags
+    coEvery { it.moveBranch(any(), any(), any()) } returns BASELINE_AFTER
+    coEvery { it.moveTag(any(), any(), any()) } returns BASELINE_AFTER
 }
 
 /** 조회에 **실제 중단점**을 넣은 RefGateway. 없으면 취소가 끼어들 자리가 없어 보호를 검증하지 못한다. */
@@ -67,20 +76,26 @@ private fun suspendingRefGateway(): RefGateway = mockk<RefGateway>(relaxUnitFun 
         yield()
         listOf(tag(OLD_COMMIT))
     }
+    coEvery { it.moveTag(any(), any(), any()) } returns BASELINE_AFTER
 }
 
 private fun succeedingOps(
-    result: BranchOperationResult = BranchOperationResult.Succeeded(MAIN, MAIN_HEAD, NEW_HEAD),
-): WorktreeOpsGateway = mockk<WorktreeOpsGateway>(relaxUnitFun = true).also {
+    result: BranchOperationResult = BranchOperationResult.Succeeded(MAIN, MAIN_HEAD, NEW_HEAD, BASELINE_AFTER),
+): WorktreeOpsGateway = resettingOps().also {
     coEvery { it.runOnBranch(any(), any()) } returns result
+}
+
+/** reset 이 성공하고 **변경 직후 기준 상태**를 결과로 주는 대역. */
+private fun resettingOps(): WorktreeOpsGateway = mockk<WorktreeOpsGateway>(relaxUnitFun = true).also {
+    coEvery { it.hardResetBranch(any(), any(), any()) } returns BASELINE_AFTER
 }
 
 private fun useCase(
     worktreeOps: WorktreeOpsGateway,
     refs: RefGateway,
     stack: UndoStack,
-): ExecuteGraphOperationUseCase =
-    ExecuteGraphOperationUseCase(worktreeOps, refs, OperationRecorder(refs, stack))
+    recorder: OperationRecorder = OperationRecorder(refs, stack),
+): ExecuteGraphOperationUseCase = ExecuteGraphOperationUseCase(worktreeOps, refs, recorder)
 
 /** [block] 을 실행하되 Git 변경이 성공하는 순간 호출자를 취소한다. 취소됐으면 true. */
 private suspend fun cancellingCallerOnChange(block: suspend (Job) -> Unit): Boolean {
@@ -108,20 +123,15 @@ private suspend fun afterCallerCancelled(block: suspend () -> Unit) {
 private fun strategiesIn(stack: UndoStack): List<UndoStrategy> = stack.history().map { it.strategy }
 
 /**
- * 조작 직전 조회는 성공하고 **기록 시점의 기준 상태 조회만** [failure] 로 실패하는 RefGateway.
- * 기록은 Git 변경이 이미 적용된 뒤에 일어나므로, 이 경계가 곧 "바뀌었는데 기록만 없는" 경우다.
- */
-/**
- * Undo 기록만 실패하게 만든다. `OperationRecorder` 가 기준 상태를 읽으려 `listBranches()` 를 부르므로
- * 그 호출을 실패시키면 **Git 변경은 성공한 뒤 기록만 실패한** 상태가 된다.
+ * Undo 기록만 [failure] 로 실패하게 만든다 — Git 변경은 이미 적용된 뒤이므로 이 경계가 곧
+ * "저장소는 바뀌었는데 되돌릴 항목만 없는" 경우다.
  *
- * 조작 자체는 `WorktreeOpsGateway` 가 수행하고 이전 위치는 결과의 `previousTarget` 으로 오므로,
- * UseCase 는 조작 경로에서 `RefGateway` 를 읽지 않는다 (UND-72).
+ * 기준 상태를 조회하지 못하게 만드는 방식은 더 이상 쓸 수 없다. 기록은 변경 결과가 준 값을 그대로
+ * 쓰고 `RefGateway` 를 읽지 않기 때문이다 (UND-73) — 기록 자체를 실패시켜야 이 경로에 닿는다.
  */
-private fun refGatewayFailingOnRead(failure: Throwable): RefGateway =
-    mockk<RefGateway>(relaxUnitFun = true).also {
-        coEvery { it.listBranches() } throws failure
-    }
+private fun recorderFailingWith(failure: Throwable): OperationRecorder = mockk<OperationRecorder>().also {
+    coEvery { it.record(any(), any(), any(), any()) } throws failure
+}
 
 class GraphOperationUseCasesSpec : BehaviorSpec({
 
@@ -161,7 +171,8 @@ class GraphOperationUseCasesSpec : BehaviorSpec({
     given("브랜치→브랜치 리베이스") {
         `when`("실행하면") {
             val stack = UndoStack()
-            val worktreeOps = succeedingOps(BranchOperationResult.Succeeded(FEATURE, FEATURE_HEAD, NEW_HEAD))
+            val worktreeOps =
+                succeedingOps(BranchOperationResult.Succeeded(FEATURE, FEATURE_HEAD, NEW_HEAD, BASELINE_AFTER))
             val refs = refGateway()
             useCase(worktreeOps, refs, stack)
                 .execute(GraphOperation.Rebase(branch = BranchTarget.Named(FEATURE), upstream = MAIN))
@@ -226,7 +237,7 @@ class GraphOperationUseCasesSpec : BehaviorSpec({
     given("브랜치→커밋 reset") {
         `when`("실행하면") {
             val stack = UndoStack()
-            val worktreeOps = mockk<WorktreeOpsGateway>(relaxUnitFun = true)
+            val worktreeOps = resettingOps()
             val refs = refGateway(branches = listOf(branch(MAIN, MAIN_HEAD, isCurrent = true)))
             val outcome = useCase(worktreeOps, refs, stack)
                 .execute(GraphOperation.ResetBranch(branch = MAIN, to = OLD_COMMIT))
@@ -250,7 +261,7 @@ class GraphOperationUseCasesSpec : BehaviorSpec({
 
         `when`("드래그를 시작한 뒤 그 브랜치가 다른 곳으로 옮겨졌으면") {
             val stack = UndoStack()
-            val worktreeOps = mockk<WorktreeOpsGateway>(relaxUnitFun = true)
+            val worktreeOps = resettingOps()
             val moved = CommitId.of("e".repeat(40))
             val refs = refGateway(branches = listOf(branch(MAIN, moved, isCurrent = true)))
             useCase(worktreeOps, refs, stack).execute(GraphOperation.ResetBranch(branch = MAIN, to = OLD_COMMIT))
@@ -277,7 +288,7 @@ class GraphOperationUseCasesSpec : BehaviorSpec({
 
         `when`("그 브랜치가 더 이상 없으면") {
             val stack = UndoStack()
-            val worktreeOps = mockk<WorktreeOpsGateway>(relaxUnitFun = true)
+            val worktreeOps = resettingOps()
 
             then("추측한 expected 로 실행하지 않고 없다고 알린다") {
                 shouldThrow<UndineException.NotFound> {
@@ -293,7 +304,7 @@ class GraphOperationUseCasesSpec : BehaviorSpec({
     given("태그→커밋 이동") {
         `when`("실행하면") {
             val stack = UndoStack()
-            val worktreeOps = mockk<WorktreeOpsGateway>(relaxUnitFun = true)
+            val worktreeOps = resettingOps()
             val refs = refGateway(tags = listOf(tag(OLD_COMMIT)))
             useCase(worktreeOps, refs, stack)
                 .execute(GraphOperation.MoveTag(tag = RELEASE_TAG, to = NEW_HEAD))
@@ -318,7 +329,7 @@ class GraphOperationUseCasesSpec : BehaviorSpec({
 
             then("성공으로 숨기지 않고 실패를 전달하며 기록도 남기지 않는다") {
                 shouldThrow<UndineException.StateViolation> {
-                    useCase(mockk<WorktreeOpsGateway>(relaxUnitFun = true), refs, stack)
+                    useCase(resettingOps(), refs, stack)
                         .execute(GraphOperation.MoveTag(tag = RELEASE_TAG, to = NEW_HEAD))
                 }
                 stack.history().shouldBeEmpty()
@@ -331,11 +342,48 @@ class GraphOperationUseCasesSpec : BehaviorSpec({
 
             then("추측한 expected 로 옮기지 않고 없다고 알린다") {
                 shouldThrow<UndineException.NotFound> {
-                    useCase(mockk<WorktreeOpsGateway>(relaxUnitFun = true), refs, stack)
+                    useCase(resettingOps(), refs, stack)
                         .execute(GraphOperation.MoveTag(tag = RELEASE_TAG, to = NEW_HEAD))
                 }
                 coVerify(exactly = 0) { refs.moveTag(any(), any(), any()) }
                 stack.history().shouldBeEmpty()
+            }
+        }
+    }
+
+    given("변경과 기록 사이에 앱 안의 다른 조작이 끼어든 경우") {
+        // 기록 시점의 조회는 이미 끼어든 조작까지 반영돼 있다 — 사후 조회로 기록하면 그 값이 남는다.
+        val interleaved = listOf(branch(MAIN, INTERLEAVED_HEAD, isCurrent = true))
+
+        `when`("병합을 실행하면") {
+            val stack = UndoStack()
+            useCase(succeedingOps(), refGateway(branches = interleaved), stack)
+                .execute(GraphOperation.Merge(source = FEATURE, into = BranchTarget.Named(MAIN)))
+
+            then("결과가 준 기준 상태를 기록한다 — 끼어든 변경이 섞이지 않는다") {
+                stack.peek()?.baseline shouldBe BASELINE_AFTER
+            }
+        }
+
+        `when`("reset 을 실행하면") {
+            val stack = UndoStack()
+            val refs = refGateway(branches = listOf(branch(MAIN, MAIN_HEAD, isCurrent = true)))
+            // 조작 직전 조회(expected)는 정상 값을, 기록 시점 조회는 끼어든 값을 보게 만든다.
+            coEvery { refs.listBranches() } returnsMany listOf(listOf(branch(MAIN, MAIN_HEAD, true)), interleaved)
+            useCase(resettingOps(), refs, stack).execute(GraphOperation.ResetBranch(branch = MAIN, to = OLD_COMMIT))
+
+            then("hardResetBranch 결과가 준 기준 상태를 기록한다") {
+                stack.peek()?.baseline shouldBe BASELINE_AFTER
+            }
+        }
+
+        `when`("태그를 옮기면") {
+            val stack = UndoStack()
+            useCase(resettingOps(), refGateway(branches = interleaved), stack)
+                .execute(GraphOperation.MoveTag(tag = RELEASE_TAG, to = NEW_HEAD))
+
+            then("moveTag 결과가 준 기준 상태를 기록한다") {
+                stack.peek()?.baseline shouldBe BASELINE_AFTER
             }
         }
     }
@@ -398,7 +446,7 @@ class GraphOperationUseCasesSpec : BehaviorSpec({
                 val cancelled = cancellingCallerOnChange { callerJob ->
                     coEvery { worktreeOps.runOnBranch(any(), any()) } coAnswers {
                         callerJob.cancel()
-                        BranchOperationResult.Succeeded(MAIN, MAIN_HEAD, NEW_HEAD)
+                        BranchOperationResult.Succeeded(MAIN, MAIN_HEAD, NEW_HEAD, BASELINE_AFTER)
                     }
                     useCase(worktreeOps, suspendingRefGateway(), stack)
                         .execute(GraphOperation.Merge(source = FEATURE, into = BranchTarget.Named(MAIN)))
@@ -412,12 +460,15 @@ class GraphOperationUseCasesSpec : BehaviorSpec({
         `when`("태그 이동이 성공한 순간 호출자가 취소되면") {
             val stack = UndoStack()
             val refs = suspendingRefGateway()
-            coEvery { refs.moveTag(any(), any(), any()) } coAnswers { }
+            coEvery { refs.moveTag(any(), any(), any()) } coAnswers { BASELINE_AFTER }
 
             then("이동 기록이 정확히 1건 남는다") {
                 val cancelled = cancellingCallerOnChange { callerJob ->
-                    coEvery { refs.moveTag(any(), any(), any()) } coAnswers { callerJob.cancel() }
-                    useCase(mockk<WorktreeOpsGateway>(relaxUnitFun = true), refs, stack)
+                    coEvery { refs.moveTag(any(), any(), any()) } coAnswers {
+                        callerJob.cancel()
+                        BASELINE_AFTER
+                    }
+                    useCase(resettingOps(), refs, stack)
                         .execute(GraphOperation.MoveTag(tag = RELEASE_TAG, to = NEW_HEAD))
                 }
 
@@ -428,12 +479,13 @@ class GraphOperationUseCasesSpec : BehaviorSpec({
 
         `when`("reset 이 성공한 순간 호출자가 취소되면") {
             val stack = UndoStack()
-            val worktreeOps = mockk<WorktreeOpsGateway>(relaxUnitFun = true)
+            val worktreeOps = resettingOps()
 
             then("이동 기록이 정확히 1건 남는다") {
                 val cancelled = cancellingCallerOnChange { callerJob ->
                     coEvery { worktreeOps.hardResetBranch(any(), any(), any()) } coAnswers {
                         callerJob.cancel()
+                        BASELINE_AFTER
                     }
                     useCase(worktreeOps, suspendingRefGateway(), stack)
                         .execute(GraphOperation.ResetBranch(branch = MAIN, to = OLD_COMMIT))
@@ -446,7 +498,7 @@ class GraphOperationUseCasesSpec : BehaviorSpec({
 
         `when`("expected 를 읽는 중에 취소되면") {
             val stack = UndoStack()
-            val untouched = mockk<WorktreeOpsGateway>(relaxUnitFun = true)
+            val untouched = resettingOps()
 
             then("아직 변경 전이므로 reset 을 실행하지 않는다") {
                 val cancelled = cancellingCallerOnChange { callerJob ->
@@ -486,7 +538,7 @@ class GraphOperationUseCasesSpec : BehaviorSpec({
 
         `when`("호출자가 이미 취소된 뒤에 실행하면") {
             val stack = UndoStack()
-            val untouched = mockk<WorktreeOpsGateway>(relaxUnitFun = true)
+            val untouched = resettingOps()
 
             then("아직 아무것도 바뀌지 않았으므로 조작을 시작하지 않는다") {
                 afterCallerCancelled {
@@ -503,9 +555,8 @@ class GraphOperationUseCasesSpec : BehaviorSpec({
     given("Git 변경 뒤 Undo 기록이 실패한 조작") {
         `when`("기록이 UndineException 으로 실패하면") {
             val stack = UndoStack()
-            val recordFailure = UndineException.StateViolation("baseline unreadable")
-            val refs = refGatewayFailingOnRead(recordFailure)
-            val outcome = useCase(succeedingOps(), refs, stack)
+            val recordFailure = UndineException.StateViolation("undo stack unavailable")
+            val outcome = useCase(succeedingOps(), refGateway(), stack, recorderFailingWith(recordFailure))
                 .execute(GraphOperation.Merge(source = FEATURE, into = BranchTarget.Named(MAIN)))
 
             then("변경 실패로 승격하지 않고 기록 실패 사유를 결과에 담아 올린다") {
@@ -517,11 +568,11 @@ class GraphOperationUseCasesSpec : BehaviorSpec({
 
         `when`("기록이 취소로 끝나면") {
             val stack = UndoStack()
-            val refs = refGatewayFailingOnRead(CancellationException("recording cancelled"))
+            val recorder = recorderFailingWith(CancellationException("recording cancelled"))
 
             then("취소를 삼키지 않고 그대로 올린다") {
                 shouldThrow<CancellationException> {
-                    useCase(succeedingOps(), refs, stack)
+                    useCase(succeedingOps(), refGateway(), stack, recorder)
                         .execute(GraphOperation.Merge(source = FEATURE, into = BranchTarget.Named(MAIN)))
                 }
                 stack.history().shouldBeEmpty()

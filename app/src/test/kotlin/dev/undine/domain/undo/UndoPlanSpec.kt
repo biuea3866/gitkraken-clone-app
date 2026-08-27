@@ -1,6 +1,8 @@
 package dev.undine.domain.undo
 
 import dev.undine.domain.RefName
+import dev.undine.domain.RepositoryBaseline
+import dev.undine.domain.StashEntry
 import dev.undine.testsupport.commitId
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
@@ -15,6 +17,25 @@ private val HEAD_BEFORE = commitId(1)
 
 private val RECORDED = RepositoryBaseline(branch = MAIN, head = HEAD_AFTER)
 private val RECORDED_AT = Instant.parse("2026-08-25T01:02:03Z")
+
+private val STASH = StashEntry(
+    index = 0,
+    message = "작업 중",
+    target = commitId(3),
+    createdAt = RECORDED_AT,
+    includedUntracked = false,
+)
+
+/**
+ * 되돌리기 자체가 조건부 갱신(CAS)을 갖지 않는 전략들. 이들에게는 **기준 상태 비교가 유일한
+ * 보호**라 기록된 값이 오염되면 곧바로 남의 변경 위에서 실행된다 (UND-73).
+ */
+private val WITHOUT_CAS = listOf(
+    UndoStrategy.SoftResetTo(HEAD_BEFORE),
+    UndoStrategy.CheckoutRef(FEATURE),
+    UndoStrategy.DeleteBranch(FEATURE),
+    UndoStrategy.PopStash(STASH),
+)
 
 private fun entryOf(strategy: UndoStrategy, operation: GitOperationKind = GitOperationKind.COMMIT) =
     OperationEntry(
@@ -87,6 +108,34 @@ class UndoPlanSpec : FunSpec({
             .shouldBeInstanceOf<UndoPlan.Refuse>()
             .outcome
             .shouldBeInstanceOf<UndoOutcome.ExternalChange>()
+    }
+
+    test("CAS 를 갖지 않는 전략은 기준 상태가 어긋나면 하나도 빠짐없이 거부된다") {
+        val moved = RepositoryBaseline(branch = MAIN, head = commitId(9))
+
+        WITHOUT_CAS.forEach { strategy ->
+            entryOf(strategy).planUndo(moved, dirtyPaths = emptyList())
+                .shouldBeInstanceOf<UndoPlan.Refuse>()
+                .outcome
+                .shouldBeInstanceOf<UndoOutcome.ExternalChange>()
+        }
+    }
+
+    test("CAS 를 갖지 않는 전략도 기준 상태가 같으면 그대로 실행한다") {
+        WITHOUT_CAS.forEach { strategy ->
+            entryOf(strategy).planUndo(RECORDED, dirtyPaths = emptyList()) shouldBe UndoPlan.Execute(strategy)
+        }
+    }
+
+    test("CAS 를 갖지 않는 전략은 detached HEAD 에서도 거부된다") {
+        val detached = RepositoryBaseline(branch = null, head = HEAD_AFTER)
+
+        WITHOUT_CAS.forEach { strategy ->
+            entryOf(strategy).planUndo(detached, dirtyPaths = emptyList())
+                .shouldBeInstanceOf<UndoPlan.Refuse>()
+                .outcome
+                .shouldBeInstanceOf<UndoOutcome.NoCurrentBranch>()
+        }
     }
 
     test("ORIG_HEAD 복구는 워킹트리가 더러우면 거부한다 — undo 가 미커밋 작업을 삼키면 안 된다") {

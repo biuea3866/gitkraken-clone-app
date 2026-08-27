@@ -4,10 +4,10 @@ import dev.undine.application.undo.UndoExecution
 import dev.undine.application.undo.UndoTarget
 import dev.undine.domain.CommitId
 import dev.undine.domain.RefName
+import dev.undine.domain.RepositoryBaseline
 import dev.undine.domain.UndineException
 import dev.undine.domain.undo.GitOperationKind
 import dev.undine.domain.undo.OperationEntry
-import dev.undine.domain.undo.RepositoryBaseline
 import dev.undine.domain.undo.UndoOutcome
 import dev.undine.domain.undo.UndoStrategy
 import dev.undine.presentation.i18n.DEFAULT_LOCALE

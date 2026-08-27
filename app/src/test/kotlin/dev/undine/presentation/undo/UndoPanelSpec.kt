@@ -18,6 +18,7 @@ import dev.undine.domain.Branch
 import dev.undine.domain.CommitId
 import dev.undine.domain.RefGateway
 import dev.undine.domain.RefName
+import dev.undine.domain.RepositoryBaseline
 import dev.undine.domain.RepositoryGateway
 import dev.undine.domain.ResetMode
 import dev.undine.domain.ThemeMode
@@ -25,7 +26,6 @@ import dev.undine.domain.WorkingTreeStatus
 import dev.undine.domain.WorktreeOpsGateway
 import dev.undine.domain.undo.GitOperationKind
 import dev.undine.domain.undo.OperationEntry
-import dev.undine.domain.undo.RepositoryBaseline
 import dev.undine.domain.undo.UndoStack
 import dev.undine.domain.undo.UndoStrategy
 import dev.undine.presentation.design.UndineTheme
