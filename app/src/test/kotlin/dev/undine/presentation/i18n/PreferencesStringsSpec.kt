@@ -51,6 +51,54 @@ private fun allPreferencesTexts(texts: PreferencesStrings): List<String> = listO
     texts.shortcutOverridden,
     texts.updateCheck,
     texts.updateCheckInterval,
+    texts.invalidValue,
+) + gitTabTexts(texts) + accountTabTexts(texts) + toolTabTexts(texts) +
+    shortcutTabTexts(texts) + advancedTabTexts(texts)
+
+/** Git 탭(UND-66) 항목 표의 문구. */
+private fun gitTabTexts(texts: PreferencesStrings): List<String> = listOf(
+    texts.defaultBranchName,
+    texts.pullStrategy,
+    texts.pullStrategyMerge,
+    texts.pullStrategyRebase,
+    texts.automaticFetch,
+    texts.automaticFetchInterval,
+)
+
+/** 계정 탭(UND-67) 항목 표의 문구 — 프로필 CRUD·삭제 확인·저장소 매핑·이메일 오류. */
+private fun accountTabTexts(texts: PreferencesStrings): List<String> = listOf(
+    texts.profileAdd,
+    texts.profileEdit,
+    texts.profileDelete,
+    texts.profileDeleteConfirm,
+    texts.repositoryMapping,
+    texts.repositoryMappingUnset,
+    texts.emailInvalid,
+)
+
+/** 도구 탭(UND-68) 항목 표의 문구 — 사용자 명령·실행 파일 오류·탭 폭·고정폭 서체. */
+private fun toolTabTexts(texts: PreferencesStrings): List<String> = listOf(
+    texts.customToolCommand,
+    texts.executableNotFound,
+    texts.tabWidth,
+    texts.monospaceFont,
+    texts.monospaceFontSystem,
+)
+
+/** 단축키 탭(UND-69) 항목 표의 문구 — 충돌·교체 확인·해제·적용 실패. */
+private fun shortcutTabTexts(texts: PreferencesStrings): List<String> = listOf(
+    texts.shortcutConflict,
+    texts.shortcutReplaceConfirm,
+    texts.shortcutClear,
+    texts.shortcutApplyFailed,
+)
+
+/** 고급 탭(UND-70) 항목 표의 문구 — 임계치·페이지 크기·로그 위치·폴더 열기. */
+private fun advancedTabTexts(texts: PreferencesStrings): List<String> = listOf(
+    texts.largeFileThreshold,
+    texts.commitPageSize,
+    texts.logLocation,
+    texts.openFolder,
 )
 
 class PreferencesStringsSpec : FunSpec({
@@ -95,6 +143,28 @@ class PreferencesStringsSpec : FunSpec({
         val texts = builtInStringCatalog().stringsFor(Locale.KOREAN, devBuild = false).preferences
 
         allPreferencesTexts(texts).forEach(String::shouldNotBeBlank)
+    }
+
+    test("다섯 탭이 요구한 항목 문구가 두 로케일에 모두 있다") {
+        val catalog = StringCatalog(preferencesTranslations, DEFAULT_LOCALE)
+
+        catalog.supportedLocales.forEach { locale ->
+            val texts = catalog.stringsFor(locale, devBuild = true).preferences
+            val tabTexts = gitTabTexts(texts) + accountTabTexts(texts) + toolTabTexts(texts) +
+                shortcutTabTexts(texts) + advancedTabTexts(texts)
+
+            tabTexts.forEach { text ->
+                text.shouldNotBeBlank()
+                text.startsWith(MISSING_KEY_MARKER) shouldBe false
+            }
+        }
+    }
+
+    test("저장 실패와 값 거부는 서로 다른 문구로 알린다 — 사용자가 무엇을 고쳐야 하는지 갈린다") {
+        val texts = StringCatalog(preferencesTranslations, DEFAULT_LOCALE)
+            .stringsFor(DEFAULT_LOCALE, devBuild = false).preferences
+
+        texts.invalidValue shouldNotBe texts.saveFailed
     }
 
     test("탭 스텁 문구에는 티켓 번호가 드러나지 않는다") {

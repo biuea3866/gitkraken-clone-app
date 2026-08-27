@@ -1,6 +1,6 @@
 # [UND-67] 설정 — 계정 탭 (identity 프로필)
 
-> wave 8 · 사이즈 M · 의존 UND-40 · UND-37 · 소유 `presentation/preferences/AccountPreferences.kt` · `presentation/preferences/AccountPreferencesState.kt`
+> wave 8 · 사이즈 M · 의존 UND-40 · UND-74 · UND-37 · 소유 `presentation/preferences/AccountPreferences.kt` · `presentation/preferences/AccountPreferencesState.kt`
 
 ## 작업 내용 (설계 의도)
 

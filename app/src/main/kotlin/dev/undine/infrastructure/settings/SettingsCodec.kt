@@ -6,7 +6,7 @@ import dev.undine.domain.ThemeMode
 import dev.undine.domain.WindowBounds
 
 /** 이 앱이 쓰는 설정 스키마 버전. 필드를 추가·변경하면 올린다. */
-internal const val CURRENT_SCHEMA_VERSION = 4
+internal const val CURRENT_SCHEMA_VERSION = 5
 
 /**
  * `schemaVersion` 키 자체가 없던 최초 형식. 그 파일은 이후 버전이 더한 어떤 필드도 담지 못한다.
@@ -24,6 +24,12 @@ internal const val PREFERENCE_SCHEMA_VERSION = 3
 
 /** 단축키 오버라이드 매핑이 들어온 버전(UND-40). 이보다 낮은 파일은 그 매핑을 담지 못한다. */
 internal const val SHORTCUT_OVERRIDES_SCHEMA_VERSION = 4
+
+/**
+ * 탭 6건이 쓸 Git·도구·고급 값(기본 브랜치·pull 방식·자동 fetch·탭 폭·고정폭 서체·대용량 임계치·
+ * 커밋 페이지 크기)이 들어온 버전(UND-74). 이보다 낮은 파일은 그 값들을 담지 못한다.
+ */
+internal const val TAB_VALUE_SCHEMA_VERSION = 5
 
 /** 최근 저장소 보관 상한. 초과분은 `save` 시점에 목록 뒤(= 오래된 쪽)에서 잘린다. */
 internal const val MAX_RECENT_REPOSITORIES = 20
@@ -98,7 +104,14 @@ internal fun encodeSettings(settings: Settings): String {
           "$KEY_OPEN_TABS": [${encodeOpenTabs(settings.openTabs)}],
           "$KEY_ACTIVE_TAB_INDEX": ${settings.activeTabIndex},
           "$KEY_UPDATE_CHECK": ${encodeUpdateCheck(settings.updateCheck)},
-          "$KEY_SHORTCUT_OVERRIDES": ${encodeShortcutOverrides(settings.shortcutOverrides)}
+          "$KEY_SHORTCUT_OVERRIDES": ${encodeShortcutOverrides(settings.shortcutOverrides)},
+          "$KEY_DEFAULT_BRANCH_NAME": ${jsonString(settings.defaultBranchName)},
+          "$KEY_PULL_STRATEGY": ${jsonString(settings.pullStrategy.name)},
+          "$KEY_AUTOMATIC_FETCH": ${encodeAutomaticFetch(settings.automaticFetch)},
+          "$KEY_TAB_WIDTH": ${settings.tabWidth},
+          "$KEY_MONOSPACE_FONT_FAMILY": ${jsonStringOrNull(settings.monospaceFontFamily)},
+          "$KEY_LARGE_FILE_THRESHOLD_BYTES": ${settings.largeFileThresholdBytes},
+          "$KEY_COMMIT_PAGE_SIZE": ${settings.commitPageSize}
         }
     """.trimIndent() + "\n"
 }
@@ -145,7 +158,8 @@ private fun decodeFields(document: Any?): SettingsDecodeResult {
 
 /**
  * 알려진 키만 읽는다. 새 키(스키마 2 의 [KEY_IDENTITY_PROFILES]·[KEY_EXTERNAL_TOOLS], 스키마 3 의
- * [KEY_LANGUAGE] 이하)가 없는 구버전 파일은 그 필드만 기본값이 되고 나머지 값은 그대로 보존된다.
+ * [KEY_LANGUAGE] 이하, 스키마 5 의 [KEY_DEFAULT_BRANCH_NAME] 이하)가 없는 구버전 파일은 그 필드만
+ * 기본값이 되고 나머지 값은 그대로 보존된다.
  */
 private fun readSettings(fields: Map<*, *>): Settings {
     val openTabs = readOpenTabs(fields[KEY_OPEN_TABS])
@@ -168,6 +182,13 @@ private fun readSettings(fields: Map<*, *>): Settings {
         activeTabIndex = readActiveTabIndex(fields[KEY_ACTIVE_TAB_INDEX], openTabs),
         updateCheck = readUpdateCheck(fields[KEY_UPDATE_CHECK]),
         shortcutOverrides = readShortcutOverrides(fields[KEY_SHORTCUT_OVERRIDES]),
+        defaultBranchName = readDefaultBranchName(fields[KEY_DEFAULT_BRANCH_NAME]),
+        pullStrategy = readPullStrategy(fields[KEY_PULL_STRATEGY]),
+        automaticFetch = readAutomaticFetch(fields[KEY_AUTOMATIC_FETCH]),
+        tabWidth = readTabWidth(fields[KEY_TAB_WIDTH]),
+        monospaceFontFamily = readMonospaceFontFamily(fields[KEY_MONOSPACE_FONT_FAMILY]),
+        largeFileThresholdBytes = readLargeFileThresholdBytes(fields[KEY_LARGE_FILE_THRESHOLD_BYTES]),
+        commitPageSize = readCommitPageSize(fields[KEY_COMMIT_PAGE_SIZE]),
     )
 }
 

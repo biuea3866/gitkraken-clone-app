@@ -49,3 +49,18 @@ class CheckIdentityBeforeCommitUseCase(private val identityService: IdentityServ
 
     suspend fun execute(): List<IdentityWarning> = identityService.checkBeforeCommit()
 }
+
+/**
+ * 신원 UseCase 묶음. 환경설정 계정 탭이 필요한 다섯 동작을 **한 의존성으로** 전달한다.
+ *
+ * 묶는 이유는 시그니처를 고정하기 위해서다 — 탭이 쓰는 동작이 늘 때마다 `PreferencesScreen` 의
+ * 호출부까지 바뀌면, 그 파일을 수정할 수 없는 탭 티켓이 자기 일을 할 수 없다. 묶음 안을 늘리는 것은
+ * 계정 탭 티켓의 자기 파일 변경으로 끝난다. 형태는 `RecoveryBisectUseCases` 와 같다.
+ */
+data class IdentityUseCases(
+    val loadProfiles: LoadProfilesUseCase,
+    val saveProfile: SaveProfileUseCase,
+    val deleteProfile: DeleteProfileUseCase,
+    val applyProfile: ApplyProfileUseCase,
+    val clearLocalIdentity: ClearLocalIdentityUseCase,
+)

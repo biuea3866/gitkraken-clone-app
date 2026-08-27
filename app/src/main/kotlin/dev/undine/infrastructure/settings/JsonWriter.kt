@@ -8,6 +8,9 @@ package dev.undine.infrastructure.settings
  */
 internal fun jsonString(raw: String): String = "\"${escapeJsonString(raw)}\""
 
+/** 값이 없는 선택 필드. `null` 은 JSON `null` 로 적어 빈 문자열과 구분한다. */
+internal fun jsonStringOrNull(raw: String?): String = raw?.let(::jsonString) ?: "null"
+
 /** JSON 이 날것으로 허용하지 않는 C0 제어문자 구간. 이름 있는 이스케이프가 없는 값은 `\uXXXX` 로 적는다. */
 private val CONTROL_CHARACTERS = '\u0000'..'\u001F'
 private const val UNICODE_ESCAPE_FORMAT = "\\u%04x"

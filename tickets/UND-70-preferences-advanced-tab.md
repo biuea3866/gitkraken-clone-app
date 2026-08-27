@@ -1,6 +1,6 @@
 # [UND-70] 설정 — 고급 탭 · 전체 초기화
 
-> wave 8 · 사이즈 S · 의존 UND-40 · UND-11 · 소유 `presentation/preferences/AdvancedPreferences.kt` · `presentation/preferences/AdvancedPreferencesState.kt`
+> wave 8 · 사이즈 S · 의존 UND-40 · UND-74 · UND-11 · 소유 `presentation/preferences/AdvancedPreferences.kt` · `presentation/preferences/AdvancedPreferencesState.kt`
 
 ## 작업 내용 (설계 의도)
 
