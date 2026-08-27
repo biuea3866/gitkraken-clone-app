@@ -75,6 +75,19 @@ private fun restoreFieldsMissingFrom(
             restored = restored.copy(shortcutOverrides = backedUp.shortcutOverrides)
         }
     }
+    if (loadedSchemaVersion < TAB_VALUE_SCHEMA_VERSION) {
+        newestExpressing(backupsNewestFirst, TAB_VALUE_SCHEMA_VERSION)?.let { backedUp ->
+            restored = restored.copy(
+                defaultBranchName = backedUp.defaultBranchName,
+                pullStrategy = backedUp.pullStrategy,
+                automaticFetch = backedUp.automaticFetch,
+                tabWidth = backedUp.tabWidth,
+                monospaceFontFamily = backedUp.monospaceFontFamily,
+                largeFileThresholdBytes = backedUp.largeFileThresholdBytes,
+                commitPageSize = backedUp.commitPageSize,
+            )
+        }
+    }
     return restored
 }
 

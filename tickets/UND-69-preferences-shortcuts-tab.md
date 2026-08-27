@@ -1,6 +1,6 @@
 # [UND-69] 설정 — 단축키 탭 (재지정 · 충돌 해소)
 
-> wave 8 · 사이즈 M · 의존 UND-40 · UND-22 · UND-63 · 소유 `presentation/preferences/ShortcutPreferences.kt` · `presentation/preferences/ShortcutPreferencesState.kt` · `presentation/preferences/ShortcutPreferencesController.kt`
+> wave 8 · 사이즈 M · 의존 UND-40 · UND-74 · UND-22 · UND-63 · 소유 `presentation/preferences/ShortcutPreferences.kt` · `presentation/preferences/ShortcutPreferencesState.kt` · `presentation/preferences/ShortcutPreferencesController.kt`
 
 ## 작업 내용 (설계 의도)
 

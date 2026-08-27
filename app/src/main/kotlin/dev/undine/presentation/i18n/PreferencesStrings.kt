@@ -60,6 +60,33 @@ object PreferencesKeys {
     val shortcutOverridden = StringKey("$PREFERENCES_NAMESPACE.shortcutOverridden")
     val updateCheck = StringKey("$PREFERENCES_NAMESPACE.updateCheck")
     val updateCheckInterval = StringKey("$PREFERENCES_NAMESPACE.updateCheckInterval")
+    val invalidValue = StringKey("$PREFERENCES_NAMESPACE.invalidValue")
+    val defaultBranchName = StringKey("$PREFERENCES_NAMESPACE.defaultBranchName")
+    val pullStrategy = StringKey("$PREFERENCES_NAMESPACE.pullStrategy")
+    val pullStrategyMerge = StringKey("$PREFERENCES_NAMESPACE.pullStrategyMerge")
+    val pullStrategyRebase = StringKey("$PREFERENCES_NAMESPACE.pullStrategyRebase")
+    val automaticFetch = StringKey("$PREFERENCES_NAMESPACE.automaticFetch")
+    val automaticFetchInterval = StringKey("$PREFERENCES_NAMESPACE.automaticFetchInterval")
+    val profileAdd = StringKey("$PREFERENCES_NAMESPACE.profileAdd")
+    val profileEdit = StringKey("$PREFERENCES_NAMESPACE.profileEdit")
+    val profileDelete = StringKey("$PREFERENCES_NAMESPACE.profileDelete")
+    val profileDeleteConfirm = StringKey("$PREFERENCES_NAMESPACE.profileDeleteConfirm")
+    val repositoryMapping = StringKey("$PREFERENCES_NAMESPACE.repositoryMapping")
+    val repositoryMappingUnset = StringKey("$PREFERENCES_NAMESPACE.repositoryMappingUnset")
+    val emailInvalid = StringKey("$PREFERENCES_NAMESPACE.emailInvalid")
+    val customToolCommand = StringKey("$PREFERENCES_NAMESPACE.customToolCommand")
+    val executableNotFound = StringKey("$PREFERENCES_NAMESPACE.executableNotFound")
+    val tabWidth = StringKey("$PREFERENCES_NAMESPACE.tabWidth")
+    val monospaceFont = StringKey("$PREFERENCES_NAMESPACE.monospaceFont")
+    val monospaceFontSystem = StringKey("$PREFERENCES_NAMESPACE.monospaceFontSystem")
+    val shortcutConflict = StringKey("$PREFERENCES_NAMESPACE.shortcutConflict")
+    val shortcutReplaceConfirm = StringKey("$PREFERENCES_NAMESPACE.shortcutReplaceConfirm")
+    val shortcutClear = StringKey("$PREFERENCES_NAMESPACE.shortcutClear")
+    val shortcutApplyFailed = StringKey("$PREFERENCES_NAMESPACE.shortcutApplyFailed")
+    val largeFileThreshold = StringKey("$PREFERENCES_NAMESPACE.largeFileThreshold")
+    val commitPageSize = StringKey("$PREFERENCES_NAMESPACE.commitPageSize")
+    val logLocation = StringKey("$PREFERENCES_NAMESPACE.logLocation")
+    val openFolder = StringKey("$PREFERENCES_NAMESPACE.openFolder")
 }
 
 /** 환경설정 문구 접근자. `strings.preferences.title` 로 읽는다. */
@@ -108,6 +135,33 @@ value class PreferencesStrings internal constructor(private val strings: Strings
     val shortcutOverridden: String get() = strings.text(PreferencesKeys.shortcutOverridden)
     val updateCheck: String get() = strings.text(PreferencesKeys.updateCheck)
     val updateCheckInterval: String get() = strings.text(PreferencesKeys.updateCheckInterval)
+    val invalidValue: String get() = strings.text(PreferencesKeys.invalidValue)
+    val defaultBranchName: String get() = strings.text(PreferencesKeys.defaultBranchName)
+    val pullStrategy: String get() = strings.text(PreferencesKeys.pullStrategy)
+    val pullStrategyMerge: String get() = strings.text(PreferencesKeys.pullStrategyMerge)
+    val pullStrategyRebase: String get() = strings.text(PreferencesKeys.pullStrategyRebase)
+    val automaticFetch: String get() = strings.text(PreferencesKeys.automaticFetch)
+    val automaticFetchInterval: String get() = strings.text(PreferencesKeys.automaticFetchInterval)
+    val profileAdd: String get() = strings.text(PreferencesKeys.profileAdd)
+    val profileEdit: String get() = strings.text(PreferencesKeys.profileEdit)
+    val profileDelete: String get() = strings.text(PreferencesKeys.profileDelete)
+    val profileDeleteConfirm: String get() = strings.text(PreferencesKeys.profileDeleteConfirm)
+    val repositoryMapping: String get() = strings.text(PreferencesKeys.repositoryMapping)
+    val repositoryMappingUnset: String get() = strings.text(PreferencesKeys.repositoryMappingUnset)
+    val emailInvalid: String get() = strings.text(PreferencesKeys.emailInvalid)
+    val customToolCommand: String get() = strings.text(PreferencesKeys.customToolCommand)
+    val executableNotFound: String get() = strings.text(PreferencesKeys.executableNotFound)
+    val tabWidth: String get() = strings.text(PreferencesKeys.tabWidth)
+    val monospaceFont: String get() = strings.text(PreferencesKeys.monospaceFont)
+    val monospaceFontSystem: String get() = strings.text(PreferencesKeys.monospaceFontSystem)
+    val shortcutConflict: String get() = strings.text(PreferencesKeys.shortcutConflict)
+    val shortcutReplaceConfirm: String get() = strings.text(PreferencesKeys.shortcutReplaceConfirm)
+    val shortcutClear: String get() = strings.text(PreferencesKeys.shortcutClear)
+    val shortcutApplyFailed: String get() = strings.text(PreferencesKeys.shortcutApplyFailed)
+    val largeFileThreshold: String get() = strings.text(PreferencesKeys.largeFileThreshold)
+    val commitPageSize: String get() = strings.text(PreferencesKeys.commitPageSize)
+    val logLocation: String get() = strings.text(PreferencesKeys.logLocation)
+    val openFolder: String get() = strings.text(PreferencesKeys.openFolder)
 }
 
 /** 환경설정 문구 네임스페이스 진입점. */
@@ -128,8 +182,8 @@ internal val preferencesTranslations: Map<Locale, Map<StringKey, String>> = mapO
         PreferencesKeys.restoreDefault to "기본값으로",
         PreferencesKeys.resetAll to "전체 초기화",
         PreferencesKeys.resetAllWarning to
-            "테마·언어·시작 동작·확인 표시·단축키·업데이트 주기와 열린 탭이 기본값으로 돌아갑니다. " +
-            "신원 프로필과 외부 도구 설정, 저장소의 git 설정은 그대로 둡니다. 되돌릴 수 없습니다.",
+            "화면·동작 취향과 Git·도구·고급 설정, 단축키, 열린 탭이 모두 기본값으로 돌아갑니다. " +
+            "신원 프로필과 외부 도구 경로, 저장소의 git 설정은 그대로 둡니다. 되돌릴 수 없습니다.",
         PreferencesKeys.resetAllConfirm to "초기화",
         PreferencesKeys.resetAllCancel to "그대로 두기",
         PreferencesKeys.loadFailed to "설정을 읽지 못해 기본값으로 열었습니다",
@@ -160,6 +214,33 @@ internal val preferencesTranslations: Map<Locale, Map<StringKey, String>> = mapO
         PreferencesKeys.shortcutOverridden to "변경됨",
         PreferencesKeys.updateCheck to "업데이트 확인",
         PreferencesKeys.updateCheckInterval to "확인 주기(시간)",
+        PreferencesKeys.invalidValue to "값이 올바르지 않아 저장하지 않았습니다",
+        PreferencesKeys.defaultBranchName to "기본 브랜치 이름",
+        PreferencesKeys.pullStrategy to "pull 방식",
+        PreferencesKeys.pullStrategyMerge to "병합(merge)",
+        PreferencesKeys.pullStrategyRebase to "재배치(rebase)",
+        PreferencesKeys.automaticFetch to "자동 fetch",
+        PreferencesKeys.automaticFetchInterval to "fetch 주기(분)",
+        PreferencesKeys.profileAdd to "프로필 추가",
+        PreferencesKeys.profileEdit to "프로필 수정",
+        PreferencesKeys.profileDelete to "프로필 삭제",
+        PreferencesKeys.profileDeleteConfirm to "이 프로필을 지웁니다. 되돌릴 수 없습니다.",
+        PreferencesKeys.repositoryMapping to "이 저장소에 쓸 프로필",
+        PreferencesKeys.repositoryMappingUnset to "지정하지 않음",
+        PreferencesKeys.emailInvalid to "이메일 형식이 올바르지 않습니다",
+        PreferencesKeys.customToolCommand to "사용자 지정 명령",
+        PreferencesKeys.executableNotFound to "실행 파일을 찾을 수 없습니다",
+        PreferencesKeys.tabWidth to "탭 폭(칸)",
+        PreferencesKeys.monospaceFont to "고정폭 서체",
+        PreferencesKeys.monospaceFontSystem to "시스템 기본을 따름",
+        PreferencesKeys.shortcutConflict to "다른 명령이 이미 쓰고 있는 단축키입니다",
+        PreferencesKeys.shortcutReplaceConfirm to "이 단축키를 새 명령으로 옮깁니다",
+        PreferencesKeys.shortcutClear to "단축키 해제",
+        PreferencesKeys.shortcutApplyFailed to "단축키를 적용하지 못했습니다",
+        PreferencesKeys.largeFileThreshold to "대용량 파일 임계치(바이트)",
+        PreferencesKeys.commitPageSize to "이력을 한 번에 읽을 개수",
+        PreferencesKeys.logLocation to "로그 위치",
+        PreferencesKeys.openFolder to "폴더 열기",
     ),
     Locale.ENGLISH to mapOf(
         PreferencesKeys.title to "Preferences",
@@ -175,9 +256,9 @@ internal val preferencesTranslations: Map<Locale, Map<StringKey, String>> = mapO
         PreferencesKeys.restoreDefault to "Restore default",
         PreferencesKeys.resetAll to "Reset all",
         PreferencesKeys.resetAllWarning to
-            "Theme, language, startup behaviour, confirmations, shortcuts, update interval and open tabs " +
-            "go back to their defaults. Identity profiles, external tools and repository git config are " +
-            "left alone. This cannot be undone.",
+            "Appearance and behaviour preferences, Git, tool and advanced settings, shortcuts and open " +
+            "tabs all go back to their defaults. Identity profiles, external tool paths and repository " +
+            "git config are left alone. This cannot be undone.",
         PreferencesKeys.resetAllConfirm to "Reset",
         PreferencesKeys.resetAllCancel to "Keep as is",
         PreferencesKeys.loadFailed to "Could not read settings — opened with defaults",
@@ -208,5 +289,32 @@ internal val preferencesTranslations: Map<Locale, Map<StringKey, String>> = mapO
         PreferencesKeys.shortcutOverridden to "Changed",
         PreferencesKeys.updateCheck to "Check for updates",
         PreferencesKeys.updateCheckInterval to "Check every (hours)",
+        PreferencesKeys.invalidValue to "Not saved — the value is not valid",
+        PreferencesKeys.defaultBranchName to "Default branch name",
+        PreferencesKeys.pullStrategy to "Pull strategy",
+        PreferencesKeys.pullStrategyMerge to "Merge",
+        PreferencesKeys.pullStrategyRebase to "Rebase",
+        PreferencesKeys.automaticFetch to "Automatic fetch",
+        PreferencesKeys.automaticFetchInterval to "Fetch every (minutes)",
+        PreferencesKeys.profileAdd to "Add profile",
+        PreferencesKeys.profileEdit to "Edit profile",
+        PreferencesKeys.profileDelete to "Delete profile",
+        PreferencesKeys.profileDeleteConfirm to "This deletes the profile. It cannot be undone.",
+        PreferencesKeys.repositoryMapping to "Profile for this repository",
+        PreferencesKeys.repositoryMappingUnset to "Not assigned",
+        PreferencesKeys.emailInvalid to "That is not a valid email address",
+        PreferencesKeys.customToolCommand to "Custom command",
+        PreferencesKeys.executableNotFound to "Could not find that executable",
+        PreferencesKeys.tabWidth to "Tab width (columns)",
+        PreferencesKeys.monospaceFont to "Monospace font",
+        PreferencesKeys.monospaceFontSystem to "Follow system",
+        PreferencesKeys.shortcutConflict to "Another command already uses this shortcut",
+        PreferencesKeys.shortcutReplaceConfirm to "Move this shortcut to the new command",
+        PreferencesKeys.shortcutClear to "Clear shortcut",
+        PreferencesKeys.shortcutApplyFailed to "Could not apply the shortcut",
+        PreferencesKeys.largeFileThreshold to "Large file threshold (bytes)",
+        PreferencesKeys.commitPageSize to "Commits loaded per page",
+        PreferencesKeys.logLocation to "Log location",
+        PreferencesKeys.openFolder to "Open folder",
     ),
 )

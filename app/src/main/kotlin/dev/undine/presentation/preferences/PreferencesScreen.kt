@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import dev.undine.presentation.design.UndineTokens
 import dev.undine.presentation.design.component.UndineToolbarButton
+import dev.undine.presentation.i18n.PreferencesStrings
 import dev.undine.presentation.i18n.preferences
 import dev.undine.presentation.i18n.strings
 
@@ -32,10 +33,17 @@ private const val NEXT_TAB = 1
  *
  * **저장 버튼이 없다.** 값 편집기는 각 탭이 붙이고, 바뀐 값은 [PreferencesState.apply] 로 곧바로
  * 반영·저장된다. 탭 내용은 후속 티켓이 채우는 스텁이며 이 셸은 파일 경계와 공통 계약만 정한다.
+ *
+ * **탭별 의존을 여기서 받아 넘긴다.** 여섯 탭이 공통으로 [state] 와 문구를 받고, 세 탭만 자기
+ * 외부 의존을 하나씩 더 받는다. 그 의존을 탭 티켓이 나중에 추가하려 하면 이 파일도 고쳐야 하는데
+ * 이 파일은 탭 티켓의 수정 대상이 아니다 — 그래서 지금 확정한다.
+ *
+ * @param dependencies 설정 저장 경로 밖의 것을 다루는 세 탭(계정·도구·단축키)이 쓸 입력.
  */
 @Composable
 fun PreferencesScreen(
     state: PreferencesState,
+    dependencies: PreferencesTabDependencies,
     modifier: Modifier = Modifier,
 ) {
     val texts = strings.preferences
@@ -56,12 +64,15 @@ fun PreferencesScreen(
         )
         PreferencesTabBar(state)
         state.loadFailure?.let { PreferencesNotice(texts.loadFailed, PreferencesTags.LOAD_FAILURE) }
-        state.saveFailure?.let { PreferencesNotice(texts.saveFailed, PreferencesTags.SAVE_FAILURE) }
+        // 값 거부와 쓰기 실패는 사용자가 할 일이 달라 문구가 갈린다 — 하나로 뭉개지 않는다.
+        state.saveFailure?.let { failure ->
+            PreferencesNotice(failure.messageIn(texts), PreferencesTags.SAVE_FAILURE)
+        }
 
         // 선택된 탭 하나만 그린다 — 나머지 탭의 스텁은 컴포지션에 들어가지 않는다.
         Column(modifier = Modifier.testTag(PreferencesTags.CONTENT)) {
             PreferencesTab.entries.filter(state::rendersContent).forEach { tab ->
-                PreferencesTabContent(tab)
+                PreferencesTabContent(tab, state, texts, dependencies)
             }
         }
         PreferencesResetAll(state)
@@ -98,16 +109,25 @@ private fun PreferencesTabBar(state: PreferencesState) {
     }
 }
 
-/** 선택 탭의 내용. 각 탭은 후속 티켓이 채운다. */
+/**
+ * 선택 탭의 내용. 각 탭의 항목은 후속 티켓이 채우고, 여기서는 **무엇을 넘기는지**만 정한다.
+ *
+ * 여섯 호출이 같은 모양이다 — 공통 인자가 앞에 오고 탭별 의존이 그 뒤에 하나 붙는다.
+ */
 @Composable
-private fun PreferencesTabContent(tab: PreferencesTab) {
+private fun PreferencesTabContent(
+    tab: PreferencesTab,
+    state: PreferencesState,
+    texts: PreferencesStrings,
+    dependencies: PreferencesTabDependencies,
+) {
     when (tab) {
-        PreferencesTab.GENERAL -> GeneralPreferencesContent()
-        PreferencesTab.GIT -> GitPreferencesContent()
-        PreferencesTab.ACCOUNTS -> AccountPreferencesContent()
-        PreferencesTab.TOOLS -> ToolPreferencesContent()
-        PreferencesTab.SHORTCUTS -> ShortcutPreferencesContent()
-        PreferencesTab.ADVANCED -> AdvancedPreferencesContent()
+        PreferencesTab.GENERAL -> GeneralPreferencesContent(state, texts)
+        PreferencesTab.GIT -> GitPreferencesContent(state, texts)
+        PreferencesTab.ACCOUNTS -> AccountPreferencesContent(state, texts, dependencies.identity)
+        PreferencesTab.TOOLS -> ToolPreferencesContent(state, texts, dependencies.externalTools)
+        PreferencesTab.SHORTCUTS -> ShortcutPreferencesContent(state, texts, dependencies.commands)
+        PreferencesTab.ADVANCED -> AdvancedPreferencesContent(state, texts)
     }
 }
 

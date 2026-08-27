@@ -1,6 +1,6 @@
 # [UND-66] 설정 — Git 탭
 
-> wave 8 · 사이즈 S · 의존 UND-40 · UND-11 · UND-36 · 소유 `presentation/preferences/GitPreferences.kt` · `presentation/preferences/GitPreferencesState.kt`
+> wave 8 · 사이즈 S · 의존 UND-40 · UND-74 · UND-11 · UND-36 · 소유 `presentation/preferences/GitPreferences.kt` · `presentation/preferences/GitPreferencesState.kt`
 
 ## 작업 내용 (설계 의도)
 

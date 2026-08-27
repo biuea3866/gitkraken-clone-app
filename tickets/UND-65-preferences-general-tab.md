@@ -1,6 +1,6 @@
 # [UND-65] 설정 — 일반 탭
 
-> wave 8 · 사이즈 S · 의존 UND-40 · UND-11 · 소유 `presentation/preferences/GeneralPreferences.kt` · `presentation/preferences/GeneralPreferencesState.kt`
+> wave 8 · 사이즈 S · 의존 UND-40 · UND-74 · UND-11 · 소유 `presentation/preferences/GeneralPreferences.kt` · `presentation/preferences/GeneralPreferencesState.kt`
 
 ## 작업 내용 (설계 의도)
 

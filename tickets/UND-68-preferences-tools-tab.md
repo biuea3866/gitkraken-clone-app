@@ -1,6 +1,6 @@
 # [UND-68] 설정 — 도구 탭 (외부 diff/merge · 표시)
 
-> wave 8 · 사이즈 S · 의존 UND-40 · UND-39 · 소유 `presentation/preferences/ToolsPreferences.kt` · `presentation/preferences/ToolsPreferencesState.kt`
+> wave 8 · 사이즈 S · 의존 UND-40 · UND-74 · UND-39 · 소유 `presentation/preferences/ToolsPreferences.kt` · `presentation/preferences/ToolsPreferencesState.kt`
 
 ## 작업 내용 (설계 의도)
 

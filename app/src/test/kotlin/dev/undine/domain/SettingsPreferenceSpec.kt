@@ -41,6 +41,26 @@ private val CUSTOMIZED = Settings.DEFAULTS.copy(
     activeTabIndex = 1,
     updateCheck = UpdateCheckSettings(enabled = false, intervalHours = 72),
     shortcutOverrides = mapOf(REFRESH_COMMAND to REFRESH_OVERRIDE),
+    defaultBranchName = "trunk",
+    pullStrategy = PullStrategy.REBASE,
+    automaticFetch = AutomaticFetchSettings(enabled = true, intervalMinutes = 30),
+    tabWidth = 8,
+    monospaceFontFamily = "JetBrains Mono",
+    largeFileThresholdBytes = 32L * 1024 * 1024,
+    commitPageSize = 500,
+)
+
+/** UND-74 가 더한 항목과 그 항목만 되돌렸을 때 기대되는 값. 복원 대상 누락을 한 자리에서 본다. */
+private val TAB_VALUE_RESTORATIONS: List<Pair<SettingsPreference, (Settings) -> Boolean>> = listOf(
+    SettingsPreference.DEFAULT_BRANCH_NAME to { it.defaultBranchName == Settings.DEFAULT_BRANCH_NAME },
+    SettingsPreference.PULL_STRATEGY to { it.pullStrategy == Settings.DEFAULT_PULL_STRATEGY },
+    SettingsPreference.AUTOMATIC_FETCH to { it.automaticFetch == AutomaticFetchSettings.DEFAULT },
+    SettingsPreference.TAB_WIDTH to { it.tabWidth == Settings.DEFAULT_TAB_WIDTH },
+    SettingsPreference.MONOSPACE_FONT to { it.monospaceFontFamily == null },
+    SettingsPreference.LARGE_FILE_THRESHOLD to {
+        it.largeFileThresholdBytes == Settings.DEFAULT_LARGE_FILE_THRESHOLD_BYTES
+    },
+    SettingsPreference.COMMIT_PAGE_SIZE to { it.commitPageSize == Settings.DEFAULT_COMMIT_PAGE_SIZE },
 )
 
 class SettingsPreferenceSpec : FunSpec({
@@ -102,5 +122,38 @@ class SettingsPreferenceSpec : FunSpec({
     test("전체 초기화 대상 목록에 identity·외부 도구가 없다 — 되돌릴 수 없는 값은 항목별로만 지운다") {
         RESET_ALL_PREFERENCES.contains(SettingsPreference.IDENTITY_PROFILES) shouldBe false
         RESET_ALL_PREFERENCES.contains(SettingsPreference.EXTERNAL_TOOLS) shouldBe false
+    }
+
+    test("탭 값 항목은 각각 자기 필드만 기본값으로 되돌린다") {
+        TAB_VALUE_RESTORATIONS.forEach { (preference, isRestored) ->
+            val restored = CUSTOMIZED.withDefault(preference)
+
+            isRestored(restored) shouldBe true
+            // 되돌린 항목 외에는 그대로다 — 한 항목 복원이 옆 항목을 쓸어가지 않는다.
+            restored.theme shouldBe ThemeMode.DARK
+            restored.language shouldBe "en-GB"
+            restored.identityProfiles shouldContainExactly listOf(PROFILE)
+        }
+    }
+
+    test("탭 값 항목은 전체 초기화 대상에도 빠짐없이 들어 있다") {
+        TAB_VALUE_RESTORATIONS.forEach { (preference, _) ->
+            RESET_ALL_PREFERENCES.contains(preference) shouldBe true
+        }
+    }
+
+    test("전체 초기화는 탭 값도 기본값으로 되돌린다") {
+        val reset = CUSTOMIZED.withDefaultPreferences()
+
+        TAB_VALUE_RESTORATIONS.forEach { (_, isRestored) -> isRestored(reset) shouldBe true }
+    }
+
+    test("자동 fetch 만 되돌려도 다른 탭 값은 그대로다") {
+        val restored = CUSTOMIZED.withDefault(SettingsPreference.AUTOMATIC_FETCH)
+
+        restored.automaticFetch shouldBe AutomaticFetchSettings.DEFAULT
+        restored.defaultBranchName shouldBe "trunk"
+        restored.pullStrategy shouldBe PullStrategy.REBASE
+        restored.commitPageSize shouldBe 500
     }
 })

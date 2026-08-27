@@ -4,9 +4,11 @@ import dev.undine.application.preferences.LoadPreferencesUseCase
 import dev.undine.application.preferences.LoadSigningPreferencesUseCase
 import dev.undine.application.preferences.UpdatePreferencesUseCase
 import dev.undine.domain.AuthenticationMethod
+import dev.undine.domain.AutomaticFetchSettings
 import dev.undine.domain.ExternalTool
 import dev.undine.domain.ExternalToolSettings
 import dev.undine.domain.IdentityProfile
+import dev.undine.domain.PullStrategy
 import dev.undine.domain.RepositoryPath
 import dev.undine.domain.Settings
 import dev.undine.domain.SettingsGateway
@@ -24,6 +26,7 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.maps.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
@@ -56,6 +59,11 @@ private val STORED = Settings.DEFAULTS.copy(
     shortcutOverrides = mapOf(
         "graph.refresh" to ShortcutBinding(keyCode = KeyEvent.VK_R, modifiers = setOf(ShortcutModifierKey.PRIMARY)),
     ),
+    defaultBranchName = "trunk",
+    pullStrategy = PullStrategy.REBASE,
+    automaticFetch = AutomaticFetchSettings(enabled = true, intervalMinutes = 30),
+    tabWidth = 2,
+    commitPageSize = 250,
 )
 
 private val SIGNING = SigningSettings(
@@ -505,6 +513,72 @@ class PreferencesStateSpec : FunSpec({
 
         state.signing shouldBe SIGNING
         state.signingFailure shouldBe null
+    }
+
+    test("허용 범위를 벗어난 값은 저장되지 않고 입력 오류로 표시된다") {
+        val fixture = PreferencesStateFixture()
+        val state = fixture.state()
+        state.refresh()
+
+        state.apply { it.copy(commitPageSize = 0) }
+
+        state.saveFailure.shouldBeInstanceOf<PreferencesSaveFailure.Rejected>()
+        // 화면도 파일도 저장된 값에 머문다 — domain 이 거부해 저장 경로에 닿지도 않았다.
+        state.settings shouldBe STORED
+        fixture.gateway.stored shouldBe STORED
+    }
+
+    test("값 거부와 쓰기 실패는 서로 다른 사유로 구분된다 — 사용자가 할 일이 다르다") {
+        val fixture = PreferencesStateFixture()
+        val state = fixture.state()
+        state.refresh()
+        fixture.gateway.saveFailure = IOException("디스크가 가득 찼습니다")
+
+        state.apply { it.copy(theme = ThemeMode.LIGHT) }
+
+        state.saveFailure.shouldBeInstanceOf<PreferencesSaveFailure.NotWritten>()
+    }
+
+    test("거부된 뒤 올바른 값을 저장하면 실패 표시가 지워진다") {
+        val fixture = PreferencesStateFixture()
+        val state = fixture.state()
+        state.refresh()
+        state.apply { it.copy(tabWidth = -1) }
+        state.saveFailure.shouldNotBeNull()
+
+        state.apply { it.copy(tabWidth = 8) }
+
+        state.saveFailure shouldBe null
+        state.settings.tabWidth shouldBe 8
+        fixture.gateway.stored.tabWidth shouldBe 8
+    }
+
+    test("빈 기본 브랜치명도 저장 전에 거부된다") {
+        val fixture = PreferencesStateFixture()
+        val state = fixture.state()
+        state.refresh()
+
+        state.apply { it.copy(defaultBranchName = "") }
+
+        state.saveFailure.shouldBeInstanceOf<PreferencesSaveFailure.Rejected>()
+        // 파일은 저장돼 있던 이름 그대로다 — 빈 값이 잠깐이라도 들어가지 않는다.
+        fixture.gateway.stored.defaultBranchName shouldBe STORED.defaultBranchName
+        state.settings.defaultBranchName shouldBe STORED.defaultBranchName
+    }
+
+    test("전체 초기화는 탭 값도 기본값으로 되돌린다") {
+        val fixture = PreferencesStateFixture()
+        val state = fixture.state()
+        state.refresh()
+
+        state.requestResetAll()
+        state.confirmResetAll()
+
+        state.settings.defaultBranchName shouldBe Settings.DEFAULT_BRANCH_NAME
+        state.settings.pullStrategy shouldBe Settings.DEFAULT_PULL_STRATEGY
+        state.settings.automaticFetch shouldBe AutomaticFetchSettings.DEFAULT
+        state.settings.tabWidth shouldBe Settings.DEFAULT_TAB_WIDTH
+        state.settings.commitPageSize shouldBe Settings.DEFAULT_COMMIT_PAGE_SIZE
     }
 
     test("서명 실효값을 다시 읽는 데 성공하면 앞선 실패 사유가 지워진다") {

@@ -330,8 +330,16 @@ class SettingsGatewayImplSpec : FunSpec({
             "activeTabIndex",
             "updateCheck",
             "shortcutOverrides",
+            "defaultBranchName",
+            "pullStrategy",
+            "automaticFetch",
+            "tabWidth",
+            "monospaceFontFamily",
+            "largeFileThresholdBytes",
+            "commitPageSize",
         )
         (root["updateCheck"] as Map<*, *>).keys.toList() shouldBe listOf("enabled", "intervalHours")
+        (root["automaticFetch"] as Map<*, *>).keys.toList() shouldBe listOf("enabled", "intervalMinutes")
         (root["window"] as Map<*, *>).keys.toList() shouldBe listOf("width", "height", "maximized")
         CREDENTIAL_WORDS.forEach { word -> content.lowercase() shouldNotContain word }
     }

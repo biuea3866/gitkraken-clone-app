@@ -26,6 +26,24 @@ package dev.undine.domain
  * 만들지 않는다 — 없다는 것이 곧 "기본 단축키를 쓴다" 는 뜻이라, 기본값을 적어 두면 나중에 기본값이
  * 바뀌어도 옛 값이 남는다. 지금 등록돼 있지 않은 커맨드의 항목도 이 자리에서는 지우지 않는다
  * (그 정리 규칙은 단축키 탭이 정한다).
+ *
+ * [defaultBranchName] 이후 일곱 필드는 UND-74 가 탭 6건(Git·도구·고급)을 위해 넓힌 자리다. 앞의
+ * 필드들과 같은 이유로 전부 기본값 있는 선택 필드이며, **값을 소비하는 경로**(diff 접기·이력 페이지
+ * 크기·fetch 스케줄러)는 별도 후속 티켓이다 — 여기와 `SettingsCodec` 은 담는 자리와 왕복만 책임진다.
+ *
+ * **범위 위반은 여기서 거부한다.** 여섯 탭이 각자 범위를 알면 한 곳만 틀려도 조용히 통과한다.
+ * 생성이 실패하면 저장 자체가 일어나지 않아 화면에 저장 안 된 값이 남지 않는다. 거부하는 것은
+ * **명백히 틀린 값**(빈 이름·0 이하)뿐이고 **상한은 두지 않는다** — 근거 없는 상한은 큰 값이
+ * 필요한 저장소를 막는다.
+ *
+ * @property defaultBranchName 새 저장소를 만들 때 쓸 기본 브랜치 이름.
+ * @property pullStrategy pull 이 원격 변경을 합치는 방식.
+ * @property automaticFetch 자동 fetch 의 on/off 와 주기.
+ * @property tabWidth 탭 문자를 몇 칸으로 보일지.
+ * @property monospaceFontFamily 고정폭 서체 이름. `null` 은 **시스템 기본을 따른다**는 뜻이다 —
+ * [language] 와 같은 규약이라 빈 문자열과 뭉개지 않는다.
+ * @property largeFileThresholdBytes 이보다 큰 파일을 "대용량" 으로 다루는 경계(바이트).
+ * @property commitPageSize 이력을 한 번에 몇 개씩 읽을지.
  */
 data class Settings(
     val recentRepositories: List<RepositoryPath>,
@@ -40,12 +58,44 @@ data class Settings(
     val activeTabIndex: Int = 0,
     val updateCheck: UpdateCheckSettings = UpdateCheckSettings.DEFAULT,
     val shortcutOverrides: Map<String, ShortcutBinding> = emptyMap(),
+    val defaultBranchName: String = DEFAULT_BRANCH_NAME,
+    val pullStrategy: PullStrategy = DEFAULT_PULL_STRATEGY,
+    val automaticFetch: AutomaticFetchSettings = AutomaticFetchSettings.DEFAULT,
+    val tabWidth: Int = DEFAULT_TAB_WIDTH,
+    val monospaceFontFamily: String? = null,
+    val largeFileThresholdBytes: Long = DEFAULT_LARGE_FILE_THRESHOLD_BYTES,
+    val commitPageSize: Int = DEFAULT_COMMIT_PAGE_SIZE,
 ) {
+
+    init {
+        // 공백뿐인 이름도 거부한다 — git 이 만들 수 없는 이름이라 빈 문자열과 똑같이 명백히 틀렸다.
+        require(defaultBranchName.isNotBlank()) { "기본 브랜치 이름이 비어 있습니다" }
+        require(tabWidth > 0) { "탭 폭은 1 이상이어야 합니다: $tabWidth" }
+        require(largeFileThresholdBytes > 0) {
+            "대용량 파일 임계치는 1 바이트 이상이어야 합니다: $largeFileThresholdBytes"
+        }
+        require(commitPageSize > 0) { "커밋 페이지 크기는 1 이상이어야 합니다: $commitPageSize" }
+    }
 
     companion object {
 
         /** 테마 기본값 — OS 설정을 따른다. 항목별 기본값 복원과 최초 실행이 같은 값을 쓴다. */
         val DEFAULT_THEME: ThemeMode = ThemeMode.SYSTEM
+
+        /** git 이 새 저장소에 쓰는 이름과 같은 값. 앱이 다른 관례를 만들지 않는다. */
+        const val DEFAULT_BRANCH_NAME: String = "main"
+
+        /** git 의 pull 기본 동작과 같다 — rebase 는 사용자가 명시적으로 고르는 쪽이다. */
+        val DEFAULT_PULL_STRATEGY: PullStrategy = PullStrategy.MERGE
+
+        /** 탭 폭 기본값. git 의 `core.pager` 관례와 같은 4 칸이다. */
+        const val DEFAULT_TAB_WIDTH: Int = 4
+
+        /** 대용량 파일 경계 기본값 — 1 MiB. */
+        const val DEFAULT_LARGE_FILE_THRESHOLD_BYTES: Long = 1024L * 1024
+
+        /** 이력을 한 번에 읽는 개수 기본값. */
+        const val DEFAULT_COMMIT_PAGE_SIZE: Int = 100
 
         /** 창 크기 기본값. 저장된 창 상태가 없을 때 이 값으로 연다. */
         val DEFAULT_WINDOW: WindowBounds = WindowBounds(width = 1280, height = 800, maximized = false)
@@ -95,6 +145,54 @@ enum class ThemeMode {
     LIGHT,
     DARK,
     SYSTEM,
+}
+
+/**
+ * pull 이 원격 변경을 합치는 방식.
+ *
+ * **enum 이라 그 밖의 값은 애초에 표현되지 않는다** — 문자열로 두고 `require` 로 거르면 잘못된
+ * 값이 타입 안에 잠깐이라도 존재하고, 그 검사를 빠뜨린 경로가 생긴다. 설정 파일에서 온 알 수 없는
+ * 문자열은 `SettingsCodec` 이 기본값으로 읽는다(테마와 같은 규약).
+ */
+enum class PullStrategy {
+    MERGE,
+    REBASE,
+}
+
+/**
+ * 자동 fetch 의 on/off 와 주기.
+ *
+ * [UpdateCheckSettings] 와 같은 이유로 한 단위다 — 두 값은 항상 함께 읽히고 함께 바뀐다.
+ *
+ * **꺼짐을 주기 0 으로 표현하지 않는다.** 0 을 꺼짐으로 쓰면 "0분마다" 와 구분되지 않고, 껐다 켤 때
+ * 이전 주기를 잃는다.
+ *
+ * 그래서 [intervalMinutes] 는 **[enabled] 와 무관하게 항상 양수**다. 꺼진 상태의 주기를 검증하지
+ * 않으면 `(enabled=false, intervalMinutes=0)` 이 만들어지는데, 그 값은 다시 켤 때 되찾을 것이
+ * 없어 "껐다 켤 때 이전 주기를 잃지 않는다" 는 목적을 배신한다. 앱이 뜻 없는 주기를 만들 수 없으면
+ * `SettingsCodec` 이 읽으면서 값을 되돌릴 일도 없다.
+ *
+ * 실제 fetch 스케줄링은 소비 티켓 소관이다. 여기는 값만 보관한다.
+ */
+data class AutomaticFetchSettings(
+    val enabled: Boolean,
+    val intervalMinutes: Int,
+) {
+
+    init {
+        require(intervalMinutes > 0) {
+            "자동 fetch 주기는 1분 이상이어야 합니다: $intervalMinutes"
+        }
+    }
+
+    companion object {
+
+        /**
+         * 꺼짐 · 10분. 자동 fetch 는 원격을 주기적으로 두드리므로 켜는 것이 사용자의 명시적 선택이다.
+         * 꺼져 있어도 주기 값을 들고 있어야 켤 때 되찾을 값이 있다.
+         */
+        val DEFAULT = AutomaticFetchSettings(enabled = false, intervalMinutes = 10)
+    }
 }
 
 /** 마지막 창 상태. [maximized] 면 크기 값은 복원 시 무시된다. */

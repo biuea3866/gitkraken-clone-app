@@ -35,6 +35,10 @@ import java.io.IOException
  * 반영된 줄 안다. 설정을 읽지 못한 경우에는 기본값 상태로 열고 그 사실을 [loadFailure] 로 알린다 —
  * 설정 파일 하나 때문에 화면이 열리지 않는 편이 더 나쁘다.
  *
+ * **허용 범위 검사는 domain 이 소유한다.** 값이 범위를 벗어나면 `Settings` 생성이 `require` 로 거부해
+ * 저장 자체가 일어나지 않고, 이 홀더는 그 거부를 [saveFailure] 로 옮긴다. 검사를 탭마다 흩으면
+ * 한 곳만 틀려도 조용히 통과한다.
+ *
  * **설정 변경은 Git Undo 스택에 기록하지 않는다.** Git 되돌리기와 설정 되돌리기는 다른 개념이라
  * 한 스택에 섞으면 Undo 를 눌렀을 때 무엇이 되돌아갈지 예측할 수 없다. 되돌리기 경로는 이 화면이
  * 제공한다 — 항목별 [restoreDefault] 와 확인을 받는 전체 초기화([requestResetAll]·[confirmResetAll]).
@@ -71,8 +75,13 @@ class PreferencesState(
     var signingFailure: UndineException? by mutableStateOf(null)
         private set
 
-    /** 마지막 즉시 저장이 실패한 사유. 다음 저장이 성공하면 지워진다. */
-    var saveFailure: IOException? by mutableStateOf(null)
+    /**
+     * 마지막 즉시 저장이 반영되지 못한 사유. 다음 저장이 성공하면 지워진다.
+     *
+     * 값 거부와 쓰기 실패를 한 자리에 모은다 — 둘 다 "화면은 저장된 값에 머문다" 는 같은 결과이고,
+     * 사용자에게 보일 문구만 갈린다 ([PreferencesSaveFailure.messageIn]).
+     */
+    var saveFailure: PreferencesSaveFailure? by mutableStateOf(null)
         private set
 
     /** 전체 초기화 확인을 보여주는 중인가. 확인 전에는 아무것도 되돌리지 않는다. */
@@ -140,8 +149,11 @@ class PreferencesState(
                 // 파일에 있는 값이다. 뒤 요청이 실패했다고 앞의 성공을 버리면 화면만 옛 값이 된다.
                 settings = updatePreferences.execute(change)
                 if (request == latestSettingsRequest) saveFailure = null
+            } catch (failure: IllegalArgumentException) {
+                // 범위를 벗어난 값은 domain 의 `require` 가 저장 **전에** 거부한다 — 파일은 그대로다.
+                if (request == latestSettingsRequest) saveFailure = PreferencesSaveFailure.Rejected(failure)
             } catch (failure: IOException) {
-                if (request == latestSettingsRequest) saveFailure = failure
+                if (request == latestSettingsRequest) saveFailure = PreferencesSaveFailure.NotWritten(failure)
             }
         }
     }
@@ -161,8 +173,9 @@ class PreferencesState(
     }
 
     /**
-     * 확인을 받은 전체 초기화. 화면·동작 취향과 탭 세션만 되돌리고 신원 프로필·외부 도구·
-     * 저장소 git 설정은 건드리지 않는다. 되돌리기 경로는 항목별 복원과 같은 즉시 적용 경로다.
+     * 확인을 받은 전체 초기화. 화면·동작 취향과 탭 세션, 탭 값(Git·도구·고급)을 되돌리고
+     * 신원 프로필·외부 도구 경로·저장소 git 설정은 건드리지 않는다. 되돌리기 경로는 항목별 복원과
+     * 같은 즉시 적용 경로다.
      */
     fun confirmResetAll() {
         isResetConfirmationVisible = false
