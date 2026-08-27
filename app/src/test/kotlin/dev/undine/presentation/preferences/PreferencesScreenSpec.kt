@@ -37,6 +37,7 @@ import dev.undine.presentation.i18n.LocalStrings
 import dev.undine.presentation.i18n.builtInStringCatalog
 import dev.undine.presentation.palette.CommandRegistry
 import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.ints.shouldBeLessThanOrEqual
 import io.kotest.matchers.shouldBe
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
@@ -148,8 +149,11 @@ class PreferencesScreenSpec : FunSpec({
 
                 state.selectedTab shouldBe tab
                 onNodeWithTag(PreferencesTags.CONTENT).assertIsDisplayed()
-                // 스텁은 아직 같은 자리 표시를 그린다 — 한 탭만 컴포지션에 들어간다.
-                onAllNodesWithText(TEXTS.comingSoon).fetchSemanticsNodes().size shouldBe 1
+                // **어느 탭이 내용을 채웠는지 열거하지 않는다.** 열거하면 탭이 자기 내용을 채울
+                // 때마다 이 공용 파일을 고쳐야 해 같은 wave 의 탭 티켓들이 서로 충돌한다.
+                // 검증할 것은 "한 탭만 컴포지션에 들어간다" 이므로, 자리 표시가 둘 이상 보이지
+                // 않는 것으로 확인한다 — 채운 탭은 0, 스텁 탭은 1 이고 둘 다 이 단언을 만족한다.
+                onAllNodesWithText(TEXTS.comingSoon).fetchSemanticsNodes().size shouldBeLessThanOrEqual 1
             }
         }
     }
