@@ -24,6 +24,15 @@ class OpenMergeToolUseCase(private val externalToolGateway: ExternalToolGateway)
 }
 
 /**
+ * 설정한 실행 파일이 지금 있는지 확인한다. 없다고 저장을 막지는 않는다 — 아직 설치하지 않은 도구를
+ * 미리 설정해 둘 수 있어야 한다.
+ */
+class CheckToolAvailabilityUseCase(private val externalToolGateway: ExternalToolGateway) {
+
+    suspend fun execute(executable: String): Boolean = externalToolGateway.isToolAvailable(executable)
+}
+
+/**
  * 외부 도구 UseCase 묶음. 환경설정 도구 탭이 설정한 도구를 **실제로 띄워 확인**할 때 쓴다.
  *
  * 묶는 이유는 [dev.undine.application.identity.IdentityUseCases] 와 같다 — 탭이 쓰는 동작이 늘어도
@@ -32,4 +41,5 @@ class OpenMergeToolUseCase(private val externalToolGateway: ExternalToolGateway)
 data class ExternalToolUseCases(
     val openDiff: OpenDiffToolUseCase,
     val openMerge: OpenMergeToolUseCase,
+    val checkAvailability: CheckToolAvailabilityUseCase,
 )

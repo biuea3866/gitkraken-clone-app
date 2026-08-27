@@ -2,6 +2,7 @@ package dev.undine.application.identity
 
 import dev.undine.domain.IdentityProfile
 import dev.undine.domain.UndineException
+import dev.undine.domain.identity.IdentityGateway
 import dev.undine.domain.identity.IdentityService
 import dev.undine.domain.identity.IdentityWarning
 
@@ -33,6 +34,16 @@ class DeleteProfileUseCase(private val identityService: IdentityService) {
 }
 
 /** 열려 있는 저장소의 **로컬** Git 설정에 프로필을 적용한다. 전역 설정은 바뀌지 않는다. */
+/**
+ * 현재 저장소에 적용된 프로필 이름을 읽는다. 매핑이 없으면 `null`.
+ *
+ * presentation 은 Gateway 를 직접 부르지 않으므로 진입점이 필요하다 (결정 G16).
+ */
+class AssignedProfileNameUseCase(private val identityGateway: IdentityGateway) {
+
+    suspend fun execute(): String? = identityGateway.assignedProfileName()
+}
+
 class ApplyProfileUseCase(private val identityService: IdentityService) {
 
     suspend fun execute(profile: IdentityProfile) = identityService.applyProfile(profile)
@@ -63,4 +74,5 @@ data class IdentityUseCases(
     val deleteProfile: DeleteProfileUseCase,
     val applyProfile: ApplyProfileUseCase,
     val clearLocalIdentity: ClearLocalIdentityUseCase,
+    val assignedProfileName: AssignedProfileNameUseCase,
 )

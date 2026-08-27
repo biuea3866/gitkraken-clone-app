@@ -49,6 +49,8 @@ class ExternalToolGatewayImpl(
         is ToolResolution.Configured -> runDiff(resolved.tool, input)
     }
 
+    override suspend fun isToolAvailable(executable: String): Boolean = runner.isInstalled(executable)
+
     override suspend fun openMerge(input: MergeToolInput): MergeToolResult =
         when (val resolved = resolve(ToolKind.MERGE)) {
             is ToolResolution.Unavailable -> resolved.result

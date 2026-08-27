@@ -47,4 +47,12 @@ interface ExternalToolGateway {
      * 임시 파일은 비정상 종료·취소 경로에서도 정리된다.
      */
     suspend fun openMerge(input: MergeToolInput): MergeToolResult
+
+    /**
+     * [executable] 이 지금 실행 가능한지. 설정 화면이 사용자가 적은 명령을 저장한 뒤 **찾을 수
+     * 없음**을 알리는 데 쓴다.
+     *
+     * **저장을 막지 않는다** — 아직 설치하지 않은 도구를 미리 설정해 둘 수 있어야 한다.
+     */
+    suspend fun isToolAvailable(executable: String): Boolean
 }
