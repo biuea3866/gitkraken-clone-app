@@ -70,6 +70,11 @@ private fun restoreFieldsMissingFrom(
             )
         }
     }
+    if (loadedSchemaVersion < SHORTCUT_OVERRIDES_SCHEMA_VERSION) {
+        newestExpressing(backupsNewestFirst, SHORTCUT_OVERRIDES_SCHEMA_VERSION)?.let { backedUp ->
+            restored = restored.copy(shortcutOverrides = backedUp.shortcutOverrides)
+        }
+    }
     return restored
 }
 

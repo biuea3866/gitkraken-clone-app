@@ -1,6 +1,6 @@
 # [UND-40] 설정 화면 골격 · 공통 설정 행 계약
 
-> wave 8 · 사이즈 M · 의존 UND-10 · UND-11 · UND-49 · UND-63 · 소유 `presentation/preferences/PreferencesScreen.kt` · `presentation/preferences/PreferencesState.kt` · `presentation/preferences/PreferencesRow.kt` · `presentation/preferences/PreferencesTab.kt` · `application/preferences/` · `presentation/i18n/PreferencesStrings.kt`
+> wave 8 · 사이즈 L · 의존 UND-10 · UND-11 · UND-22 · UND-49 · UND-63 · 소유 `presentation/preferences/` · `application/preferences/` · `presentation/i18n/PreferencesStrings.kt` · `domain/Settings.kt` · `domain/SettingsGateway.kt` · `infrastructure/settings/` · `presentation/palette/`(런타임 재바인딩)
 
 ## 작업 내용 (설계 의도)
 
@@ -29,7 +29,29 @@ UND-39 외부 도구)에 붙는다. 한 티켓으로 묶으면 사이즈가 L �
 **범위 밖**: 탭 내용 구현 · 단축키 재지정 로직 · identity 프로필 관리 · 외부 도구 설정.
 전부 후속 티켓이다. 이 티켓에서 그 코드를 미리 넣지 않는다.
 
-**롤백**: 화면 추가만이라 되돌리기는 revert 로 끝난다. 설정 스키마는 건드리지 않는다.
+### 저장 계약도 이 티켓이 세운다 (결정 E2 · G10)
+
+단축키 오버라이드는 **공유 병목**이라 골격이 세운다 — `Settings` 스키마 3→4(`커맨드 id → 단축키`
+매핑) · `SettingsCodec` 왕복 · `CommandRegistry` 런타임 재바인딩. 탭 티켓은 UI 만 만든다.
+**재지정 UI · 충돌 해소 · 미등록 명령 오버라이드 보존 규칙은 UND-69 소유다.**
+
+### 화면은 낙관적으로 그리지 않는다 (결정 G12)
+
+값은 **저장·읽기 결과로만** 갱신하고 순서는 홀더의 FIFO 작업 줄이 보장한다. 세대 검사는 값이 아니라
+**실패 표시에만** 쓴다. "즉시 적용" 은 저장 버튼이 없다는 뜻이지 낙관적 렌더링을 요구하지 않는다.
+
+**롤백**: 설정 스키마를 3 → 4 로 올린다 — 단축키 오버라이드 매핑(`shortcutOverrides`)을 담는 자리다
+(E2·G10). 코드는 revert 로 되돌아가지만 **이미 v4 로 저장된 파일이 남는다.**
+
+- v3 앱이 v4 파일을 읽으면 `SettingsGatewayImpl` 이 원본을 `settings.json.newer-<epochMillis>` 로
+  보존한 뒤 v3 파일을 새로 쓴다 — 오버라이드 값은 지워지지 않고 백업에 남는다.
+- 다시 v4 로 올라오면 `recoverFieldsFromNewerSchemaBackup` 이 그 백업에서 **v3 이 담을 수 없던
+  `shortcutOverrides` 만** 되살린다. v3 이 아는 필드는 사용자가 그 사이 고쳤을 수 있어 건드리지 않는다.
+- 오버라이드를 실제로 지우려면 단축키 항목의 기본값 복원 또는 전체 초기화를 쓴다. 스키마 롤백은
+  값을 지우는 수단이 아니다.
+
+PR 본문 **추가 유의사항**에 이 스키마 상승(3 → 4)과 위 역방향 복구 경로를 적는다 —
+설정 스키마 변경은 프로세스 게이트 룰 4(파괴적 변경 명시) 대상이다.
 
 ## 다이어그램
 

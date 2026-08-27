@@ -38,6 +38,9 @@ sealed interface CommandOutcome {
  * 동작만 실행하는 경로를 막는다 — 실행은 [execute] 하나로만 들어간다.
  *
  * @param availability 실행 조건. Compose 상태를 읽으면 팔레트가 열린 채로도 갱신된다.
+ * @param shortcut 명령이 들고 오는 **기본 단축키**이며 불변이다. 사용자가 바꾼 단축키는 명령을
+ *   다시 만들지 않고 [CommandRegistry.applyShortcutOverrides] 로 얹으므로, 지금 실제로 이 명령을
+ *   부르는 값은 [CommandRegistry.effectiveShortcutOf] 가 답한다.
  */
 class Command(
     val id: CommandId,
