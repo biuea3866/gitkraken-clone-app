@@ -182,8 +182,9 @@ internal val preferencesTranslations: Map<Locale, Map<StringKey, String>> = mapO
         PreferencesKeys.restoreDefault to "기본값으로",
         PreferencesKeys.resetAll to "전체 초기화",
         PreferencesKeys.resetAllWarning to
-            "화면·동작 취향과 Git·도구·고급 설정, 단축키, 열린 탭이 모두 기본값으로 돌아갑니다. " +
-            "신원 프로필과 외부 도구 경로, 저장소의 git 설정은 그대로 둡니다. 되돌릴 수 없습니다.",
+            "화면·동작 취향과 Git 기본값, 탭 폭·서체, 고급 설정, 단축키, 열린 탭이 모두 기본값으로 " +
+            "돌아갑니다. 신원 프로필과 외부 diff/merge 도구 설정, 저장소의 git 설정은 그대로 둡니다. " +
+            "되돌릴 수 없습니다.",
         PreferencesKeys.resetAllConfirm to "초기화",
         PreferencesKeys.resetAllCancel to "그대로 두기",
         PreferencesKeys.loadFailed to "설정을 읽지 못해 기본값으로 열었습니다",
@@ -256,9 +257,10 @@ internal val preferencesTranslations: Map<Locale, Map<StringKey, String>> = mapO
         PreferencesKeys.restoreDefault to "Restore default",
         PreferencesKeys.resetAll to "Reset all",
         PreferencesKeys.resetAllWarning to
-            "Appearance and behaviour preferences, Git, tool and advanced settings, shortcuts and open " +
-            "tabs all go back to their defaults. Identity profiles, external tool paths and repository " +
-            "git config are left alone. This cannot be undone.",
+            "Appearance and behaviour preferences, Git defaults, tab width and font, advanced " +
+            "settings, shortcuts and open tabs all go back to their defaults. Identity profiles, " +
+            "external diff/merge tool settings and repository git config are left alone. " +
+            "This cannot be undone.",
         PreferencesKeys.resetAllConfirm to "Reset",
         PreferencesKeys.resetAllCancel to "Keep as is",
         PreferencesKeys.loadFailed to "Could not read settings — opened with defaults",
