@@ -54,12 +54,17 @@ private val CATALOG = builtInStringCatalog()
 private val TEXTS = PREFERENCES_TEST_STRINGS
 
 /**
- * 탭별 의존은 **전달되는지만** 본다 — 스텁이 아직 쓰지 않으므로 동작을 검증할 것이 없다.
- * Mock 은 Git 연산이 아니라 아직 구현되지 않은 탭의 협력자 자리라 쓸 수 있다.
+ * 탭별 의존은 **전달되는지만** 본다 — 이 셸 검증의 대상은 탭 내용이 아니라 디스패치다.
+ * Mock 은 Git 연산이 아니라 탭의 협력자 자리라 쓸 수 있다.
+ *
+ * **`relaxed` 인 이유**: 탭이 자기 내용을 채우면 렌더링 중에 이 협력자들을 실제로 부른다.
+ * 스텁 없는 mock 은 그때 `MockKException` 을 던지고, 탭마다 자기 스텁을 여기에 더하면 같은
+ * wave 의 탭 티켓들이 이 공용 파일에서 충돌한다 — 어느 탭이 무엇을 부르든 통과하게 둔다.
+ * 협력자의 **동작** 검증은 각 탭의 자기 테스트가 한다.
  */
 private fun tabDependencies(): PreferencesTabDependencies {
-    val identityService = mockk<IdentityService>()
-    val externalToolGateway = mockk<ExternalToolGateway>()
+    val identityService = mockk<IdentityService>(relaxed = true)
+    val externalToolGateway = mockk<ExternalToolGateway>(relaxed = true)
     return PreferencesTabDependencies(
         identity = IdentityUseCases(
             loadProfiles = LoadProfilesUseCase(identityService),
@@ -67,7 +72,7 @@ private fun tabDependencies(): PreferencesTabDependencies {
             deleteProfile = DeleteProfileUseCase(identityService),
             applyProfile = ApplyProfileUseCase(identityService),
             clearLocalIdentity = ClearLocalIdentityUseCase(identityService),
-            assignedProfileName = AssignedProfileNameUseCase(mockk()),
+            assignedProfileName = AssignedProfileNameUseCase(mockk(relaxed = true)),
         ),
         externalTools = ExternalToolUseCases(
             openDiff = OpenDiffToolUseCase(externalToolGateway),
