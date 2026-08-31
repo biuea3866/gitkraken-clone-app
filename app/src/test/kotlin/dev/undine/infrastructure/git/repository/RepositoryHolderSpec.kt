@@ -34,6 +34,12 @@ private fun countingHolder(): RepositoryHolder =
 
 private fun Repository.closeCount(): Int = (this as CloseCountingRepository).closeCount
 
+/**
+ * 활성 세션의 핸들. 홀더는 **키만** 노출하므로(`GitAccess` 가 락을 잡기 전에 키로 실행 대상을
+ * 고정한다 — UND-80) 여기서 잇는다.
+ */
+private fun RepositoryHolder.activeRepository(): Repository? = activeSessionKey()?.let { sessionAt(it) }
+
 /** 세션 키로 꺼낸 핸들 — 방금 연 세션이므로 없으면 그 자체가 실패다. */
 private fun Repository?.require(): Repository = requireNotNull(this) { "세션 핸들이 없습니다" }
 
@@ -44,8 +50,8 @@ private fun committedRepositoryAt(directory: File): File {
 
 class RepositoryHolderSpec : FunSpec({
 
-    test("열기 전에는 current 가 null 이다") {
-        countingHolder().current() shouldBe null
+    test("열기 전에는 활성 핸들이 없다") {
+        countingHolder().activeRepository() shouldBe null
     }
 
     test("같은 저장소를 다시 열면 기존 핸들을 재사용한다") {
@@ -99,11 +105,11 @@ class RepositoryHolderSpec : FunSpec({
         secondRepository shouldNotBe firstRepository
         firstRepository.closeCount() shouldBe 1
         secondRepository.closeCount() shouldBe 0
-        holder.current() shouldBe secondRepository
+        holder.activeRepository() shouldBe secondRepository
         holder.close()
     }
 
-    test("close 는 현재 핸들을 닫고 current 를 비운다") {
+    test("close 는 현재 핸들을 닫고 활성 세션을 비운다") {
         val directory = committedRepositoryAt(tempdir())
         val holder = countingHolder()
         val repository = holder.open(RepositoryPath(directory.path))
@@ -111,7 +117,7 @@ class RepositoryHolderSpec : FunSpec({
         holder.close()
 
         repository.closeCount() shouldBe 1
-        holder.current() shouldBe null
+        holder.activeRepository() shouldBe null
     }
 
     test("열지 않은 상태의 close 는 아무 일도 하지 않는다") {
@@ -131,7 +137,7 @@ class RepositoryHolderSpec : FunSpec({
 
         first.closeCount() shouldBe 1
         second.closeCount() shouldBe 0
-        holder.current() shouldBe second
+        holder.activeRepository() shouldBe second
         holder.close()
     }
 
@@ -164,9 +170,22 @@ class RepositoryHolderSpec : FunSpec({
 
         second.closeCount() shouldBe 1
         first.closeCount() shouldBe 0
-        holder.current() shouldBe null
+        holder.activeRepository() shouldBe null
         holder.close()
         first.closeCount() shouldBe 1
+    }
+
+    test("활성 세션 키는 열기 전에 null 이고 회수하면 다시 비워진다") {
+        val directory = committedRepositoryAt(tempdir())
+        val holder = countingHolder()
+        holder.activeSessionKey() shouldBe null
+
+        val key = holder.openSession(RepositoryPath(directory.path))
+
+        holder.activeSessionKey() shouldBe key
+        holder.releaseSession(key)
+        holder.activeSessionKey() shouldBe null
+        holder.close()
     }
 
     test("close 는 열려 있는 모든 세션을 닫는다") {
@@ -180,7 +199,7 @@ class RepositoryHolderSpec : FunSpec({
 
         first.closeCount() shouldBe 1
         second.closeCount() shouldBe 1
-        holder.current() shouldBe null
+        holder.activeRepository() shouldBe null
     }
 
     test("restoreSessions 는 목록 밖 세션을 회수하고 닫힌 세션을 다시 연다") {
@@ -198,7 +217,7 @@ class RepositoryHolderSpec : FunSpec({
         restored shouldBe listOf(secondKey)
         first.closeCount() shouldBe 1
         holder.sessionAt(firstKey) shouldBe null
-        holder.current() shouldBe holder.sessionAt(secondKey)
+        holder.activeRepository() shouldBe holder.sessionAt(secondKey)
         holder.close()
     }
 
@@ -223,8 +242,8 @@ class RepositoryHolderSpec : FunSpec({
         }
 
         // 마지막 활성 세션은 인터리빙이 정하므로 단정하지 않는다 — 여기서 보는 것은 손상 없이 끝나는가다.
-        holder.current() shouldNotBe null
+        holder.activeRepository() shouldNotBe null
         holder.close()
-        holder.current() shouldBe null
+        holder.activeRepository() shouldBe null
     }
 })
