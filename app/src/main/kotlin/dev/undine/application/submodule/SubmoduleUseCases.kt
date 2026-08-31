@@ -48,9 +48,11 @@ class InitializeSubmoduleUseCase(
 ) {
     suspend fun execute(path: String) {
         currentCoroutineContext().ensureActive()
-        withContext(NonCancellable) {
-            gateway.initialize(path, recursive = false)
-            recorder.recordIrreversible(GitOperationKind.SUBMODULE_INIT, INIT_IRREVERSIBLE_REASON)
+        recorder.recordingChange {
+            withContext(NonCancellable) {
+                gateway.initialize(path, recursive = false)
+                recorder.recordIrreversible(GitOperationKind.SUBMODULE_INIT, INIT_IRREVERSIBLE_REASON)
+            }
         }
     }
 }
@@ -62,9 +64,11 @@ class UpdateSubmoduleUseCase(
 ) {
     suspend fun execute(path: String) {
         currentCoroutineContext().ensureActive()
-        withContext(NonCancellable) {
-            gateway.update(path, recursive = false)
-            recorder.recordIrreversible(GitOperationKind.SUBMODULE_UPDATE, UPDATE_IRREVERSIBLE_REASON)
+        recorder.recordingChange {
+            withContext(NonCancellable) {
+                gateway.update(path, recursive = false)
+                recorder.recordIrreversible(GitOperationKind.SUBMODULE_UPDATE, UPDATE_IRREVERSIBLE_REASON)
+            }
         }
     }
 }

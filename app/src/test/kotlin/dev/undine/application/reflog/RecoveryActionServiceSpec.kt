@@ -29,6 +29,7 @@ import dev.undine.testsupport.FIXED_NOW
 import dev.undine.testsupport.FIXTURE_AUTHOR
 import dev.undine.testsupport.commit
 import dev.undine.testsupport.commitId
+import dev.undine.testsupport.spyRecorderOf
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.collections.shouldContainExactly
@@ -99,7 +100,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
             then("생성 브랜치를 지우는 되돌리기 전략으로 Undo에 기록한다") {
                 val target = commitId(3)
                 val reflog = mockk<ReflogGateway>()
-                val recorder = mockk<OperationRecorder>(relaxed = true)
+                val recorder = spyRecorderOf()
                 val actions = service(reflog, mockk(), mockk(), recorder)
                 val branch = RefName("refs/heads/recovered")
                 coEvery { reflog.recover(target, RecoveryTarget.NewBranch(branch)) } returns
@@ -124,7 +125,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
                 val target = commitId(3)
                 val displaced = commitId(4)
                 val reflog = mockk<ReflogGateway>()
-                val recorder = mockk<OperationRecorder>(relaxed = true)
+                val recorder = spyRecorderOf()
                 val actions = service(reflog, mockk(), mockk(), recorder)
                 val move = RecoveryTarget.MoveExisting(
                     RefName("refs/heads/main"),
@@ -145,7 +146,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
 
         `when`("bisect 판정을 적용하면") {
             then("세션 변경을 Undo 이력에 누락하지 않는다") {
-                val recorder = mockk<OperationRecorder>(relaxed = true)
+                val recorder = spyRecorderOf()
                 val service = mockk<BisectService>()
                 coEvery { service.mark(BisectVerdict.GOOD) } returns BisectResult.FirstBad(commitId(9))
                 val actions = bisectActions(service, recorder)
@@ -158,7 +159,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
 
         `when`("bisect 세션을 시작하면") {
             then("시작도 세션 변경으로 Undo 이력에 남긴다") {
-                val recorder = mockk<OperationRecorder>(relaxed = true)
+                val recorder = spyRecorderOf()
                 val service = mockk<BisectService>()
                 val started = BisectResult.Testing(commitId(6), 4, 2)
                 coEvery { service.start(commitId(1), commitId(8)) } returns started
@@ -172,7 +173,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
 
         `when`("bisect 세션을 reset 하면") {
             then("reset 도 세션 변경으로 Undo 이력에 남긴다") {
-                val recorder = mockk<OperationRecorder>(relaxed = true)
+                val recorder = spyRecorderOf()
                 val service = mockk<BisectService>()
                 coEvery { service.reset() } returns Unit
                 val actions = bisectActions(service, recorder)
@@ -190,7 +191,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
                 val target = commitId(3)
                 val branch = RefName("refs/heads/recovered")
                 val reflog = mockk<ReflogGateway>()
-                val recorder = mockk<OperationRecorder>()
+                val recorder = spyRecorderOf()
                 coEvery { reflog.recover(target, RecoveryTarget.NewBranch(branch)) } returns
                     RecoveredRef(branch, RECOVERED_BASELINE)
                 coEvery { recorder.record(any(), any(), any(), any()) } throws
@@ -210,7 +211,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
             then("이동 결과를 유지하면서 기록 실패 사유를 함께 돌려준다") {
                 val target = commitId(3)
                 val reflog = mockk<ReflogGateway>()
-                val recorder = mockk<OperationRecorder>()
+                val recorder = spyRecorderOf()
                 val move = RecoveryTarget.MoveExisting(
                     RefName("refs/heads/main"),
                     RefMoveConfirmation.ofDisplacedCommit(commitId(4)),
@@ -229,7 +230,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
 
         `when`("bisect 판정이 이미 적용된 뒤 기록이 실패하면") {
             then("판정 결과를 삼키지 않고 기록 실패 사유와 함께 돌려준다") {
-                val recorder = mockk<OperationRecorder>()
+                val recorder = spyRecorderOf()
                 val service = mockk<BisectService>()
                 val marked = BisectResult.Testing(commitId(5), 2, 1)
                 coEvery { service.mark(BisectVerdict.BAD) } returns marked
@@ -246,7 +247,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
 
         `when`("bisect 시작·reset 의 기록이 실패하면") {
             then("시작과 reset 도 기록 실패 사유를 결과에 싣는다") {
-                val recorder = mockk<OperationRecorder>()
+                val recorder = spyRecorderOf()
                 val service = mockk<BisectService>()
                 coEvery { service.start(commitId(1), commitId(8)) } returns BisectResult.Testing(commitId(4), 3, 2)
                 coEvery { service.reset() } returns Unit
@@ -279,7 +280,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
                 val target = commitId(3)
                 val branch = RefName("refs/heads/recovered")
                 val reflog = mockk<ReflogGateway>()
-                val recorder = mockk<OperationRecorder>()
+                val recorder = spyRecorderOf()
                 coEvery { reflog.recover(target, RecoveryTarget.NewBranch(branch)) } returns
                     RecoveredRef(branch, RECOVERED_BASELINE)
                 coEvery { recorder.record(any(), any(), any(), any()) } throws CancellationException("기록 취소")
@@ -295,7 +296,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
             then("취소를 삼키지 않고 그대로 전파한다") {
                 val target = commitId(3)
                 val reflog = mockk<ReflogGateway>()
-                val recorder = mockk<OperationRecorder>()
+                val recorder = spyRecorderOf()
                 val move = RecoveryTarget.MoveExisting(
                     RefName("refs/heads/main"),
                     RefMoveConfirmation.ofDisplacedCommit(commitId(4)),
@@ -310,7 +311,7 @@ class RecoveryActionServiceSpec : BehaviorSpec({
 
         `when`("bisect 세션 변경의 기록이 취소되면") {
             then("판정 결과로 접지 않고 취소를 전파한다") {
-                val recorder = mockk<OperationRecorder>()
+                val recorder = spyRecorderOf()
                 val service = mockk<BisectService>()
                 coEvery { service.mark(BisectVerdict.BAD) } returns BisectResult.Testing(commitId(5), 2, 1)
                 coEvery { recorder.recordIrreversible(any(), any(), any()) } throws CancellationException("기록 취소")
@@ -335,7 +336,7 @@ private fun service(
     reflog: ReflogGateway,
     history: HistoryGateway,
     diff: DiffGateway,
-    recorder: OperationRecorder = mockk(relaxed = true),
+    recorder: OperationRecorder = spyRecorderOf(),
 ): RecoveryActionService = RecoveryActionService(
     reflogGateway = reflog,
     historyGateway = history,

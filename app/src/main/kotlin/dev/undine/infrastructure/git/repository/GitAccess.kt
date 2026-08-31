@@ -4,6 +4,7 @@ import dev.undine.domain.RepositoryPath
 import dev.undine.domain.RepositorySessionKey
 import dev.undine.domain.RepositorySessions
 import dev.undine.domain.UndineException
+import dev.undine.domain.undo.ChangeRecordingOrder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -26,9 +27,21 @@ internal const val REPOSITORY_NOT_OPEN = "저장소가 열려 있지 않습니�
  */
 class GitAccess(
     private val holder: RepositoryHolder = RepositoryHolder(),
-) {
+) : ChangeRecordingOrder {
 
     private val serialAccess = Mutex()
+    private val changeRecordingAccess = Mutex()
+
+    /**
+     * 저장소 변경과 Undo 기록을 한 순서로 끝낸다.
+     *
+     * Git 변경만 [serialAccess]로 감싸고 기록을 그 뒤에 두면, 먼저 바꾼 코루틴의 기록보다 뒤 코루틴의
+     * 기록이 먼저 스택에 들어갈 수 있다. 이 바깥 구역은 모든 기록 producer가 공유하는 순서를 만들고,
+     * 내부 Git 접근은 여전히 이 클래스의 [serialAccess]가 직렬화한다. 순번을 결과에 실어 사후 정렬하는
+     * 방식은 기존 producer와 UndoStack의 용량 축출 계약을 모두 확장해야 하므로 택하지 않았다 (결정 G32).
+     */
+    override suspend fun <T> withOrderedChange(block: suspend () -> T): T =
+        changeRecordingAccess.withLock { block() }
 
     /**
      * [path] 의 저장소를 열고(이미 열려 있으면 전환하고) 그 핸들로 [block] 을 수행한다.

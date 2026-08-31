@@ -2,6 +2,7 @@ package dev.undine.domain.rebase
 
 import dev.undine.domain.CommitId
 import dev.undine.domain.RefName
+import dev.undine.domain.RepositoryBaseline
 import dev.undine.domain.UndineException
 
 /**
@@ -13,8 +14,17 @@ import dev.undine.domain.UndineException
  */
 sealed interface InteractiveRebaseOutcome {
 
-    /** 계획 전체가 적용됐다. */
-    data object Completed : InteractiveRebaseOutcome
+    /**
+     * 계획 전체가 적용됐다.
+     *
+     * [previousHead] 와 [baseline] 은 **적용과 같은 임계 구역에서** 캡처한 되돌리기 재료다 (UND-73) —
+     * 기록하는 호출자가 적용 뒤 스스로 읽으면 그 사이의 다른 조작까지 반영된 상태가 남는다.
+     * 되돌릴 기록을 남기는 변이가 이것뿐이라 여기에만 담는다.
+     */
+    data class Completed(
+        val previousHead: CommitId?,
+        val baseline: RepositoryBaseline,
+    ) : InteractiveRebaseOutcome
 
     /** 적용할 것이 없었다 (대상이 없거나 이미 최신). */
     data object NothingToDo : InteractiveRebaseOutcome

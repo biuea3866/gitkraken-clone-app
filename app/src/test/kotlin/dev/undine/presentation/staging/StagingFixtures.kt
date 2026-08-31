@@ -6,6 +6,7 @@ import dev.undine.application.staging.LoadWorkingTreeStatusUseCase
 import dev.undine.application.staging.StageFilesUseCase
 import dev.undine.application.staging.StageHunksUseCase
 import dev.undine.application.staging.UnstageFilesUseCase
+import dev.undine.application.undo.OperationRecorder
 import dev.undine.domain.AmendConfirmation
 import dev.undine.domain.AmendPreflight
 import dev.undine.domain.ChangeType
@@ -19,6 +20,9 @@ import dev.undine.domain.RepositoryPath
 import dev.undine.domain.StagingGateway
 import dev.undine.domain.UndineException
 import dev.undine.domain.WorkingTreeStatus
+import dev.undine.domain.undo.UndoStack
+import dev.undine.testsupport.baselineOf
+import dev.undine.testsupport.recorderOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 
@@ -95,7 +99,7 @@ internal class RecordingStagingGateway(
     override suspend fun commit(message: String): CommitResult {
         commitFailure?.let { throw it }
         commitMessages += message
-        return CommitResult(commitId("c"))
+        return committed("c")
     }
 
     override suspend fun inspectAmend(): AmendPreflight =
@@ -103,7 +107,7 @@ internal class RecordingStagingGateway(
 
     override suspend fun amend(message: String, confirmation: AmendConfirmation): CommitResult {
         amendMessages += message to confirmation
-        return CommitResult(commitId("d"))
+        return committed("d")
     }
 }
 
@@ -114,14 +118,19 @@ internal class RecordingStagingGateway(
 internal fun stagingStateWith(
     repositoryGateway: RepositoryGateway,
     stagingGateway: StagingGateway,
+    recorder: OperationRecorder = recorderOf(UndoStack()),
 ): StagingState = StagingState(
     actions = StagingActions(
         loadStatus = LoadWorkingTreeStatusUseCase(repositoryGateway),
         stageFiles = StageFilesUseCase(stagingGateway),
         unstageFiles = UnstageFilesUseCase(stagingGateway),
         stageHunks = StageHunksUseCase(stagingGateway),
-        commitStaged = CommitStagedUseCase(stagingGateway),
-        amendCommit = AmendCommitUseCase(stagingGateway),
+        commitStaged = CommitStagedUseCase(stagingGateway, recorder),
+        amendCommit = AmendCommitUseCase(stagingGateway, recorder),
     ),
     scope = CoroutineScope(Dispatchers.Unconfined),
 )
+
+/** 커밋 결과가 싣는 되돌리기 재료 (UND-73). 화면은 그 값을 통과시키기만 한다. */
+private fun committed(seed: String): CommitResult =
+    CommitResult(commitId(seed), previousHead = commitId("b"), baseline = baselineOf(commitId(seed)))

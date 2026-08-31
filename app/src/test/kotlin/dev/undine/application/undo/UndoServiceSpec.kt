@@ -2,6 +2,7 @@ package dev.undine.application.undo
 
 import dev.undine.domain.Branch
 import dev.undine.domain.ChangeType
+import dev.undine.domain.CheckoutResult
 import dev.undine.domain.CommitId
 import dev.undine.domain.DeleteBranchResult
 import dev.undine.domain.FileChange
@@ -107,7 +108,9 @@ private class UndoFixture(
     init {
         coEvery { refGateway.listBranches() } returns branches
         coEvery { repositoryGateway.status() } returns status
-        coEvery { refGateway.checkout(any(), any()) } just Runs
+        // 체크아웃도 변경 직후 기준 상태와 이전 위치를 결과로 준다 (UND-73) — 되돌리기는 그 값을 쓰지 않는다.
+        coEvery { refGateway.checkout(any(), any()) } returns
+            CheckoutResult(previousRef = FEATURE, baseline = BASELINE)
         coEvery { refGateway.deleteBranch(any(), any()) } returns DeleteBranchResult.DELETED
         coEvery { worktreeOpsGateway.reset(any(), any()) } just Runs
         coEvery { worktreeOpsGateway.hardReset(any()) } just Runs

@@ -315,7 +315,7 @@ private fun AppContent(
         }
     }
 
-    val screens = rememberRepositoryScreens(component, shellState, latestContext, errors, dragDrop)
+    val screens = rememberRepositoryScreens(component, undo.scope, shellState, latestContext, errors, dragDrop)
     val latestScreens = rememberUpdatedState(screens)
 
     // 팔레트 열기 요청. 커맨드 action 은 non-composable 이라 여기서 신호만 세우고 열기는 효과가 한다.
@@ -472,8 +472,10 @@ private fun rememberActiveUndo(
  * 그래프·검색은 훑는 참조가 바뀌므로 참조 목록이 키다.
  */
 @Composable
+@Suppress("LongParameterList") // 배선 한 지점이 화면 홀더 전부에 값을 나눠 주는 자리다.
 private fun rememberRepositoryScreens(
     component: AppComponent,
+    undoScope: AppComponent.RepositoryUndoScope,
     shellState: AppShellState,
     context: State<RepositoryContext>,
     errors: AppErrorState,
@@ -488,29 +490,31 @@ private fun rememberRepositoryScreens(
     val search = rememberSearchState(component.searchCommits, refs)
     val detail = rememberCommitDetailState(component.loadChangedFiles)
     val diff = rememberDiffViewerState()
-    val staging = remember(repositoryPath) { StagingState(actions = component.stagingActions, scope = scope) }
+    // 기록 경로를 가진 홀더는 **범위도 키다** — 새 범위가 생기면 홀더도 새로 만들어야 옛 이력에
+    // 기록하지 않는다 (결정 G29).
+    val staging = remember(repositoryPath, undoScope) { StagingState(undoScope.stagingActions, scope) }
     // 계속(continue)이 병합인지 리베이스인지는 **저장소를 열 때 읽은 상태**로 가른다. 홀더를 다시
     // 만들지 않고 최신 값을 읽게 하려고 State 를 그대로 읽는다 — remember 람다가 첫 context 를
     // 붙잡으면 저장소를 바꿔도 옛 상태로 계속을 시도한다.
-    val conflict = remember(repositoryPath) {
+    val conflict = remember(repositoryPath, undoScope) {
         ConflictState(
-            actions = component.conflictActions,
+            actions = undoScope.conflictActions,
             repositoryState = { context.value.opened?.state ?: RepositoryState.NORMAL },
             scope = scope,
         )
     }
     // 리베이스 기준은 현재 브랜치의 upstream 이다 — upstream 이 없으면 비교 대상이 없어 대상도 없다.
-    val rebase = remember(repositoryPath) {
+    val rebase = remember(repositoryPath, undoScope) {
         RebasePlanState(
-            actions = component.rebaseActions,
+            actions = undoScope.rebaseActions,
             upstream = { context.value.currentBranch?.upstream },
             scope = scope,
         )
     }
-    val sidebar = remember(repositoryPath) {
+    val sidebar = remember(repositoryPath, undoScope) {
         SidebarState(
             loadRefs = component.loadSidebarRefs,
-            checkoutBranch = component.checkoutBranch,
+            checkoutBranch = undoScope.checkoutBranch,
             renameBranch = component.renameBranch,
             deleteBranch = component.deleteBranch,
             scope = scope,

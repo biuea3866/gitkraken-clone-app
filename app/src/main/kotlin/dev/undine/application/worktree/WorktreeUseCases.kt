@@ -43,10 +43,12 @@ class AddWorktreeUseCase(
 ) {
     suspend fun execute(path: RepositoryPath, branch: RefName): Worktree {
         currentCoroutineContext().ensureActive()
-        return withContext(NonCancellable) {
-            val added = gateway.add(path, branch)
-            recorder.recordIrreversible(GitOperationKind.WORKTREE_ADD, ADD_IRREVERSIBLE_REASON)
-            added
+        return recorder.recordingChange {
+            withContext(NonCancellable) {
+                val added = gateway.add(path, branch)
+                recorder.recordIrreversible(GitOperationKind.WORKTREE_ADD, ADD_IRREVERSIBLE_REASON)
+                added
+            }
         }
     }
 }
@@ -62,9 +64,11 @@ class RemoveWorktreeUseCase(
 ) {
     suspend fun execute(name: String) {
         currentCoroutineContext().ensureActive()
-        withContext(NonCancellable) {
-            gateway.remove(name)
-            recorder.recordIrreversible(GitOperationKind.WORKTREE_REMOVE, REMOVE_IRREVERSIBLE_REASON)
+        recorder.recordingChange {
+            withContext(NonCancellable) {
+                gateway.remove(name)
+                recorder.recordIrreversible(GitOperationKind.WORKTREE_REMOVE, REMOVE_IRREVERSIBLE_REASON)
+            }
         }
     }
 }

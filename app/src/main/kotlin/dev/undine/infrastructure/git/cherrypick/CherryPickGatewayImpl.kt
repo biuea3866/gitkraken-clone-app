@@ -6,6 +6,7 @@ import dev.undine.domain.UndineException
 import dev.undine.domain.cherrypick.CherryPickAbortConfirmation
 import dev.undine.domain.cherrypick.CherryPickGateway
 import dev.undine.domain.cherrypick.CherryPickStep
+import dev.undine.infrastructure.git.ref.baselineHeld
 import dev.undine.infrastructure.git.repository.GitAccess
 import dev.undine.infrastructure.git.repository.toOpenedRepository
 import org.eclipse.jgit.api.Git
@@ -92,9 +93,15 @@ class CherryPickGatewayImpl(private val gitAccess: GitAccess) : CherryPickGatewa
             val stopped = git.repository.cherryPickHeadCommit()
                 ?: throw UndineException.StateViolation(UNRESOLVED_REMAIN)
             val message = git.repository.messageOf(stopped)
+            // 이어가기 직전 HEAD 가 이 단계의 되돌리기 목적지다 — 충돌 중에는 HEAD 가 멈춘 자리 그대로다.
+            val previousHead = git.repository.resolve(Constants.HEAD)?.let { CommitId.of(it.name) }
             val created = git.commit().setMessage(message).call()
             git.repository.clearCherryPickHead()
-            CherryPickStep.Created(CommitId.of(created.name))
+            CherryPickStep.Created(
+                commit = CommitId.of(created.name),
+                previousHead = previousHead,
+                baseline = git.repository.baselineHeld(),
+            )
         }
 
     override suspend fun abort(confirmation: CherryPickAbortConfirmation) =

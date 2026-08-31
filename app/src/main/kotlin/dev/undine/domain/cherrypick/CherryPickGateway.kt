@@ -1,14 +1,25 @@
 package dev.undine.domain.cherrypick
 
 import dev.undine.domain.CommitId
+import dev.undine.domain.RepositoryBaseline
 import dev.undine.domain.RepositoryState
 import dev.undine.domain.UndineException
 
 /** 커밋 하나를 적용한 결과. 여러 커밋의 결과는 [CherryPickService] 가 모아 [CherryPickResult] 로 만든다. */
 sealed interface CherryPickStep {
 
-    /** 새 커밋이 만들어졌다. */
-    data class Created(val commit: CommitId) : CherryPickStep
+    /**
+     * 새 커밋이 만들어졌다.
+     *
+     * [previousHead] 와 [baseline] 은 **적용과 같은 임계 구역에서** 캡처한 되돌리기 재료다 (UND-73).
+     * 여러 커밋을 적용하면 단계마다 다른 임계 구역이라, [CherryPickService] 가 첫 단계의
+     * [previousHead] 와 마지막 단계의 [baseline] 을 묶어 하나의 되돌리기로 만든다.
+     */
+    data class Created(
+        val commit: CommitId,
+        val previousHead: CommitId?,
+        val baseline: RepositoryBaseline,
+    ) : CherryPickStep
 
     /** 적용할 변경이 없어 커밋을 만들지 않았다. */
     data object Empty : CherryPickStep

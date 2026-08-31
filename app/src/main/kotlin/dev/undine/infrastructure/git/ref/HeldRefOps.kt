@@ -1,5 +1,6 @@
 package dev.undine.infrastructure.git.ref
 
+import dev.undine.domain.CheckoutResult
 import dev.undine.domain.CommitId
 import dev.undine.domain.RefName
 import dev.undine.domain.RepositoryBaseline
@@ -36,17 +37,27 @@ private val ACCEPTED_REF_UPDATES = setOf(
  * 구역을 연 쪽에 있다. 조작 로직을 두 벌로 만들지 않으려고 Gateway 구현과 이 경로가 같은 함수를 쓴다.
  */
 
-/** [RefGatewayImpl.checkout] 의 본체. 원격 ref 는 추적 로컬 브랜치로 옮겨 detached HEAD 를 피한다. */
-internal fun Git.checkoutHeld(ref: RefName, force: Boolean) {
+/**
+ * [RefGatewayImpl.checkout] 의 본체. 원격 ref 는 추적 로컬 브랜치로 옮겨 detached HEAD 를 피한다.
+ *
+ * **옮기기 직전 위치를 같은 구역에서 읽어 결과에 싣는다** — 체크아웃하고 나면 이전 위치를 알 방법이
+ * 없고, 호출자가 미리 읽으면 그 읽기와 체크아웃 사이의 다른 이동을 놓친다 (UND-73).
+ * 옮기기 전이 브랜치가 아니었으면(detached HEAD·커밋 없는 저장소) 다시 체크아웃할 이름이 없어 null 이다.
+ */
+internal fun Git.checkoutHeld(ref: RefName, force: Boolean): CheckoutResult {
     val candidates = validatedCheckoutCandidates(ref)
     val resolved = candidates.firstNotNullOfOrNull { repository.exactRef(it) }
         ?: throw UndineException.NotFound(UndineException.NotFound.Kind.REF, ref.value)
     if (!force) rejectIfDirty()
+    // 이전 위치도 [baselineHeld] 로 읽는다 — "브랜치 위에 있었는가" 의 판정 기준을 되돌리기 비교와
+    // 한 곳에 두어야 기록과 판단이 어긋나지 않는다.
+    val previousRef = repository.baselineHeld().branch
     if (resolved.name.startsWith(REMOTE_BRANCH_PREFIX)) {
         checkoutTracking(resolved, force)
     } else {
         checkout().setName(resolved.name).setForced(force).call()
     }
+    return CheckoutResult(previousRef = previousRef, baseline = repository.baselineHeld())
 }
 
 /**

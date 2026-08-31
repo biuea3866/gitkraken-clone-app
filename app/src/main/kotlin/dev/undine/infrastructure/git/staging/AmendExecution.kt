@@ -5,6 +5,7 @@ import dev.undine.domain.AmendPreflight
 import dev.undine.domain.CommitId
 import dev.undine.domain.CommitResult
 import dev.undine.domain.UndineException
+import dev.undine.infrastructure.git.ref.baselineHeld
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.lib.BranchConfig
 import org.eclipse.jgit.lib.Constants
@@ -43,7 +44,13 @@ internal fun Repository.amendCommit(
     confirmation.validateFor(CommitId.of(target.name), existsOnRemote(target))
     backupAmendTarget(target, currentTimeMillis())
     return Git(this).use { git ->
-        CommitResult(commitId = CommitId.of(git.commit().setMessage(message).setAmend(true).call().name))
+        val amended = git.commit().setMessage(message).setAmend(true).call()
+        CommitResult(
+            commitId = CommitId.of(amended.name),
+            // 고치기 전 원본이 되돌리기 목적지다 — 백업 ref 가 그 커밋을 살려 두므로 도달할 수 있다.
+            previousHead = CommitId.of(target.name),
+            baseline = baselineHeld(),
+        )
     }
 }
 

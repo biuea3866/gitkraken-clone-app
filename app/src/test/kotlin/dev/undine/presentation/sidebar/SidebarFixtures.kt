@@ -5,7 +5,9 @@ import dev.undine.application.sidebar.DeleteBranchUseCase
 import dev.undine.application.sidebar.LoadSidebarRefsUseCase
 import dev.undine.application.sidebar.RenameBranchUseCase
 import dev.undine.application.sidebar.SidebarRefs
+import dev.undine.application.undo.OperationRecorder
 import dev.undine.domain.Branch
+import dev.undine.domain.CheckoutResult
 import dev.undine.domain.CommitId
 import dev.undine.domain.RefGateway
 import dev.undine.domain.RefName
@@ -13,7 +15,11 @@ import dev.undine.domain.StashEntry
 import dev.undine.domain.Tag
 import dev.undine.domain.WorktreeOpsGateway
 import dev.undine.domain.submodule.Submodule
+import dev.undine.domain.undo.UndoStack
 import dev.undine.domain.worktree.Worktree
+import dev.undine.testsupport.baselineOf
+import dev.undine.testsupport.commitId
+import dev.undine.testsupport.recorderOf
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
@@ -78,10 +84,19 @@ internal class SidebarStateHarness(
     val worktreeOpsGateway: WorktreeOpsGateway = mockk(relaxUnitFun = true),
     submodules: () -> List<Submodule> = { emptyList() },
     worktrees: () -> List<Worktree> = { emptyList() },
+    recorder: OperationRecorder = recorderOf(UndoStack()),
 ) {
+    init {
+        // 체크아웃은 이전 위치·기준 상태를 결과로 준다 (UND-73) — 반환값이 있어 relaxUnitFun 이 채우지 못한다.
+        coEvery { refGateway.checkout(any(), any()) } returns CheckoutResult(
+            previousRef = RefName("main"),
+            baseline = baselineOf(commitId(1)),
+        )
+    }
+
     val state: SidebarState = SidebarState(
         loadRefs = LoadSidebarRefsUseCase(refGateway, worktreeOpsGateway),
-        checkoutBranch = CheckoutBranchUseCase(refGateway),
+        checkoutBranch = CheckoutBranchUseCase(refGateway, recorder),
         renameBranch = RenameBranchUseCase(refGateway),
         deleteBranch = DeleteBranchUseCase(refGateway),
         scope = CoroutineScope(Dispatchers.Unconfined),

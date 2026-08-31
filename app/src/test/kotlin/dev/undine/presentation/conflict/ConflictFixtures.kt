@@ -6,6 +6,7 @@ import dev.undine.application.conflict.LoadConflictContentUseCase
 import dev.undine.application.conflict.LoadConflictedFilesUseCase
 import dev.undine.application.conflict.ResolveConflictUseCase
 import dev.undine.application.staging.LoadWorkingTreeStatusUseCase
+import dev.undine.application.undo.OperationRecorder
 import dev.undine.domain.ChangeType
 import dev.undine.domain.CommitId
 import dev.undine.domain.FileChange
@@ -24,7 +25,10 @@ import dev.undine.domain.merge.MergeResult
 import dev.undine.domain.merge.MergeService
 import dev.undine.domain.merge.RebaseResult
 import dev.undine.domain.merge.SkipConfirmation
+import dev.undine.domain.undo.UndoStack
+import dev.undine.testsupport.baselineOf
 import dev.undine.testsupport.commitId
+import dev.undine.testsupport.recorderOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 
@@ -38,6 +42,7 @@ internal fun conflictStateWith(
     conflict: RecordingConflictGateway,
     repository: FixedStatusRepositoryGateway = FixedStatusRepositoryGateway(),
     merge: StubMergeGateway = StubMergeGateway(),
+    recorder: OperationRecorder = recorderOf(UndoStack()),
 ): ConflictState {
     val mergeService = MergeService(repository, merge)
     return ConflictState(
@@ -45,7 +50,7 @@ internal fun conflictStateWith(
             loadFiles = LoadConflictedFilesUseCase(conflict),
             loadContent = LoadConflictContentUseCase(conflict),
             resolve = ResolveConflictUseCase(conflict),
-            continueAfterResolve = ContinueAfterResolveUseCase(mergeService),
+            continueAfterResolve = ContinueAfterResolveUseCase(mergeService, recorder),
             abort = AbortConflictedOperationUseCase(mergeService),
             loadStatus = LoadWorkingTreeStatusUseCase(repository),
         ),
@@ -123,7 +128,7 @@ internal class StubMergeGateway(
 
     override suspend fun continueMerge(): MergeResult {
         calls += "continueMerge"
-        return MergeResult.Succeeded(commitId(1), fastForward = false)
+        return mergedResult()
     }
 
     override suspend fun abortMerge(confirmation: AbortConfirmation) {
@@ -135,7 +140,7 @@ internal class StubMergeGateway(
 
     override suspend fun continueRebase(): RebaseResult {
         calls += "continueRebase"
-        return RebaseResult.Succeeded(commitId(1))
+        return rebasedResult()
     }
 
     override suspend fun rebasingCommit(): CommitId? = null
@@ -147,3 +152,10 @@ internal class StubMergeGateway(
         calls += "abortRebase"
     }
 }
+
+/** 이어가기 결과가 싣는 되돌리기 재료 (UND-73). 화면은 그 값을 통과시키기만 한다. */
+private fun mergedResult(): MergeResult.Succeeded =
+    MergeResult.Succeeded(commitId(1), fastForward = false, commitId(9), baselineOf(commitId(1)))
+
+private fun rebasedResult(): RebaseResult.Succeeded =
+    RebaseResult.Succeeded(commitId(1), commitId(9), baselineOf(commitId(1)))

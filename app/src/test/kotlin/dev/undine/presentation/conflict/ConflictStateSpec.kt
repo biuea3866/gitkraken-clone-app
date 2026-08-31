@@ -10,10 +10,10 @@ import dev.undine.domain.ChangeType
 import dev.undine.domain.CommitId
 import dev.undine.domain.FileChange
 import dev.undine.domain.OpenedRepository
+import dev.undine.domain.RefName
 import dev.undine.domain.RepositoryGateway
 import dev.undine.domain.RepositoryPath
 import dev.undine.domain.RepositoryState
-import dev.undine.domain.RefName
 import dev.undine.domain.UndineException
 import dev.undine.domain.WorkingTreeStatus
 import dev.undine.domain.conflict.ConflictChoice
@@ -26,6 +26,10 @@ import dev.undine.domain.merge.MergeResult
 import dev.undine.domain.merge.MergeService
 import dev.undine.domain.merge.RebaseResult
 import dev.undine.domain.merge.SkipConfirmation
+import dev.undine.domain.undo.UndoStack
+import dev.undine.testsupport.baselineOf
+import dev.undine.testsupport.commitId
+import dev.undine.testsupport.recorderOf
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
@@ -301,7 +305,7 @@ private fun stateWith(
             loadFiles = LoadConflictedFilesUseCase(conflict),
             loadContent = LoadConflictContentUseCase(conflict),
             resolve = ResolveConflictUseCase(conflict),
-            continueAfterResolve = ContinueAfterResolveUseCase(mergeService),
+            continueAfterResolve = ContinueAfterResolveUseCase(mergeService, recorderOf(UndoStack())),
             abort = AbortConflictedOperationUseCase(mergeService),
             loadStatus = LoadWorkingTreeStatusUseCase(StatusOnlyRepositoryGateway()),
         ),
@@ -373,7 +377,7 @@ private class RecordingMergeGateway(
 
     override suspend fun continueMerge(): MergeResult {
         calls += "continueMerge"
-        return MergeResult.Succeeded(CommitId.of("a".repeat(40)), fastForward = false)
+        return mergedResult()
     }
 
     override suspend fun abortMerge(confirmation: AbortConfirmation) {
@@ -385,7 +389,7 @@ private class RecordingMergeGateway(
 
     override suspend fun continueRebase(): RebaseResult {
         calls += "continueRebase"
-        return RebaseResult.Succeeded(CommitId.of("b".repeat(40)))
+        return rebasedResult()
     }
 
     override suspend fun rebasingCommit(): CommitId? = null
@@ -398,3 +402,17 @@ private class RecordingMergeGateway(
         aborted = true
     }
 }
+
+/** 이어가기 결과가 싣는 되돌리기 재료 (UND-73). 화면은 그 값을 통과시키기만 한다. */
+private fun mergedResult(): MergeResult.Succeeded = MergeResult.Succeeded(
+    CommitId.of("a".repeat(40)),
+    fastForward = false,
+    previousHead = commitId(9),
+    baseline = baselineOf(CommitId.of("a".repeat(40))),
+)
+
+private fun rebasedResult(): RebaseResult.Succeeded = RebaseResult.Succeeded(
+    CommitId.of("b".repeat(40)),
+    previousHead = commitId(9),
+    baseline = baselineOf(CommitId.of("b".repeat(40))),
+)

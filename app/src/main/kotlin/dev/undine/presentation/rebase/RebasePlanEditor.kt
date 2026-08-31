@@ -170,7 +170,7 @@ private fun RebasePlanViolation.describe(): String = when (this) {
 
 @Composable
 private fun InteractiveRebaseOutcome.describe(): String = when (this) {
-    InteractiveRebaseOutcome.Completed -> strings.rebase.outcomeCompleted
+    is InteractiveRebaseOutcome.Completed -> strings.rebase.outcomeCompleted
     InteractiveRebaseOutcome.NothingToDo -> strings.rebase.outcomeNothingToDo
     is InteractiveRebaseOutcome.Conflicted -> strings.rebase.outcomeConflicted(paths.joinToString())
     is InteractiveRebaseOutcome.StoppedForEdit -> strings.rebase.outcomeStoppedForEdit

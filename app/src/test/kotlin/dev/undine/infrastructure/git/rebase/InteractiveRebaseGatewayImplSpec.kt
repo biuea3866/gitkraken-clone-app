@@ -62,7 +62,7 @@ class InteractiveRebaseGatewayImplSpec : FunSpec({
         val gateway = gatewayFor(work)
         val plan = RebasePlan.of(gateway.listTargets(MAIN_REF)).move(from = 1, to = 0)
 
-        gateway.apply(MAIN_REF, plan) shouldBe InteractiveRebaseOutcome.Completed
+        gateway.apply(MAIN_REF, plan).shouldBeInstanceOf<InteractiveRebaseOutcome.Completed>()
 
         work.messagesOldestFirst() shouldContainExactly listOf("initial", "add b", "add a")
     }
@@ -72,7 +72,7 @@ class InteractiveRebaseGatewayImplSpec : FunSpec({
         val gateway = gatewayFor(work)
         val plan = RebasePlan.of(gateway.listTargets(MAIN_REF)).withAction(1, RebaseAction.Squash)
 
-        gateway.apply(MAIN_REF, plan) shouldBe InteractiveRebaseOutcome.Completed
+        gateway.apply(MAIN_REF, plan).shouldBeInstanceOf<InteractiveRebaseOutcome.Completed>()
 
         work.messagesOldestFirst().size shouldBe 2
         // 합쳐진 커밋에도 두 파일이 모두 들어 있다.
@@ -85,7 +85,7 @@ class InteractiveRebaseGatewayImplSpec : FunSpec({
         val gateway = gatewayFor(work)
         val plan = RebasePlan.of(gateway.listTargets(MAIN_REF)).withAction(0, RebaseAction.Drop)
 
-        gateway.apply(MAIN_REF, plan) shouldBe InteractiveRebaseOutcome.Completed
+        gateway.apply(MAIN_REF, plan).shouldBeInstanceOf<InteractiveRebaseOutcome.Completed>()
 
         work.messagesOldestFirst() shouldContainExactly listOf("initial", "add b")
         File(work, "a").exists() shouldBe false
@@ -97,7 +97,7 @@ class InteractiveRebaseGatewayImplSpec : FunSpec({
         val plan = RebasePlan.of(gateway.listTargets(MAIN_REF))
             .withAction(0, RebaseAction.Reword("고친 메시지"))
 
-        gateway.apply(MAIN_REF, plan) shouldBe InteractiveRebaseOutcome.Completed
+        gateway.apply(MAIN_REF, plan).shouldBeInstanceOf<InteractiveRebaseOutcome.Completed>()
 
         work.messagesOldestFirst() shouldContainExactly listOf("initial", "고친 메시지")
         File(work, "a").isFile shouldBe true

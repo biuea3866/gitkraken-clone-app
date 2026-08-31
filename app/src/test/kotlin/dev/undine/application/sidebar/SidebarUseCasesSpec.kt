@@ -1,6 +1,7 @@
 package dev.undine.application.sidebar
 
 import dev.undine.domain.Branch
+import dev.undine.domain.CheckoutResult
 import dev.undine.domain.CommitId
 import dev.undine.domain.DeleteBranchResult
 import dev.undine.domain.RefGateway
@@ -9,6 +10,10 @@ import dev.undine.domain.StashEntry
 import dev.undine.domain.Tag
 import dev.undine.domain.UndineException
 import dev.undine.domain.WorktreeOpsGateway
+import dev.undine.domain.undo.UndoStack
+import dev.undine.testsupport.baselineOf
+import dev.undine.testsupport.commitId
+import dev.undine.testsupport.recorderOf
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
@@ -88,9 +93,14 @@ class SidebarUseCasesSpec : BehaviorSpec({
 
     given("브랜치를 조작하는 Gateway") {
         val refGateway = mockk<RefGateway>(relaxUnitFun = true)
+        // 체크아웃은 이전 위치·기준 상태를 결과로 준다 (UND-73) — 반환값이 있어 relaxUnitFun 이 채우지 못한다.
+        coEvery { refGateway.checkout(any(), any()) } returns CheckoutResult(
+            previousRef = RefName("main"),
+            baseline = baselineOf(commitId(1)),
+        )
 
         `when`("체크아웃 UseCase 를 실행하면") {
-            CheckoutBranchUseCase(refGateway).invoke(RefName("feature/login"))
+            CheckoutBranchUseCase(refGateway, recorderOf(UndoStack())).invoke(RefName("feature/login"))
 
             then("강제 없이 체크아웃을 위임한다") {
                 coVerify(exactly = 1) { refGateway.checkout(RefName("feature/login"), force = false) }

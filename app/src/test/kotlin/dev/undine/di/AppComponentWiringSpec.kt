@@ -25,9 +25,12 @@ private const val WORKTREE_BRANCH = "wt"
  * 조립(`AppComponent`)이 실제 저장소 위에서 성립하는지 본다. **Mock 을 쓰지 않는다** — 대역으로
  * 바꾸면 조립이 아니라 대역을 검증하게 된다 (`testing` 규칙 1).
  *
- * 핵심 검증은 **기록기가 하나뿐인가** 다. `OperationRecorder` 를 받는 네 경로(graphops · reflog ·
- * submodule · worktree)를 실제로 실행해, 넷의 기록이 같은 이력 한 곳에 쌓이는지 확인한다.
- * 조립이 둘로 갈리면 이력도 조용히 둘로 갈라지고, 사용자는 되돌리려는 순간에야 그것을 안다.
+ * 핵심 검증은 **기록기가 하나뿐인가** 다. `OperationRecorder` 를 받는 경로를 실제로 실행해, 기록이
+ * 같은 이력 한 곳에 쌓이는지 확인한다. 조립이 둘로 갈리면 이력도 조용히 둘로 갈라지고, 사용자는
+ * 되돌리려는 순간에야 그것을 안다.
+ *
+ * UND-79 로 커밋·체크아웃·push·이어가기·계획 적용도 기록을 남기게 되어, 그 UseCase 들이 되돌리기
+ * 범위로 옮겨 왔다 — 앱 수명에 두면 저장소를 바꾼 뒤에도 옛 이력에 기록한다 (결정 G29).
  */
 class AppComponentWiringSpec : BehaviorSpec({
 
@@ -65,6 +68,33 @@ class AppComponentWiringSpec : BehaviorSpec({
                     GitOperationKind.WORKTREE_ADD,
                     GitOperationKind.BRANCH_MOVE,
                     GitOperationKind.REFLOG_RESTORE,
+                )
+            }
+        }
+
+        `when`("범위로 옮겨 온 커밋·체크아웃 경로를 실행하면") {
+            then("같은 범위의 이력에 함께 쌓인다") {
+                val work = repositoryWithUninitializedSubmodule()
+                Git.open(work).use { git ->
+                    git.branchCreate().setName(MOVABLE_BRANCH).call()
+                    git.repository.config.apply {
+                        setString("user", null, "name", "Undine Test")
+                        setString("user", null, "email", "test@undine.dev")
+                        save()
+                    }
+                }
+                val component = componentIn(tempdir())
+                component.welcomeActions.openRepository.execute(RepositoryPath(work.path))
+                val undo = component.newUndoScope()
+
+                File(work, "note.txt").writeText("메모\n")
+                undo.stagingActions.stageFiles.execute(listOf("note.txt"))
+                undo.stagingActions.commitStaged.execute("메모를 남긴다").undoRecordFailure.shouldBeNull()
+                undo.checkoutBranch(RefName(MOVABLE_BRANCH)).undoRecordFailure.shouldBeNull()
+
+                undo.loadUndoHistory.execute().map { it.operation } shouldContainExactlyInAnyOrder listOf(
+                    GitOperationKind.COMMIT,
+                    GitOperationKind.CHECKOUT,
                 )
             }
         }

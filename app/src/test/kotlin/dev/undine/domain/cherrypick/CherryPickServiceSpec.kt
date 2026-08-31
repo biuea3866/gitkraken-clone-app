@@ -10,6 +10,7 @@ import dev.undine.domain.RepositoryPath
 import dev.undine.domain.RepositoryState
 import dev.undine.domain.UndineException
 import dev.undine.domain.WorkingTreeStatus
+import dev.undine.testsupport.baselineOf
 import dev.undine.testsupport.commitId
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
@@ -34,7 +35,11 @@ class CherryPickServiceSpec : FunSpec({
         val result = service.cherryPick(listOf(commitId(3), commitId(1), commitId(2)), recordOrigin = false)
 
         gateway.appliedOrder shouldContainExactly listOf(commitId(1), commitId(2), commitId(3))
-        result shouldBe CherryPickResult.Applied(gateway.appliedOrder.map { created(it) })
+        result shouldBe CherryPickResult.Applied(
+            created = gateway.appliedOrder.map { created(it) },
+            previousHead = commitId(9),
+            baseline = baselineOf(created(gateway.appliedOrder.last())),
+        )
     }
 
     test("워킹트리가 더티하면 시작하지 않는다") {
@@ -68,6 +73,9 @@ class CherryPickServiceSpec : FunSpec({
             paths = listOf("shared.txt"),
             stoppedAt = commitId(2),
             created = listOf(created(commitId(1))),
+            // 멈추기 전에 만든 커밋은 중단해도 남는다 — 그 묶음의 되돌리기 재료가 함께 실린다.
+            previousHead = commitId(9),
+            baseline = baselineOf(created(commitId(1))),
         )
         // 남은 커밋을 계속 적용하지 않는다 — 충돌이 여러 겹으로 쌓이면 해결할 수 없다.
         gateway.appliedOrder shouldContainExactly listOf(commitId(1), commitId(2))
@@ -131,6 +139,9 @@ class CherryPickServiceSpec : FunSpec({
             paths = listOf("shared.txt"),
             stoppedAt = commitId(2),
             created = emptyList(),
+            // 만든 커밋이 없으면 되돌릴 것도 없다.
+            previousHead = null,
+            baseline = null,
         )
     }
 })
@@ -160,7 +171,7 @@ private class FakeCherryPickGateway(
     private val conflictAt: CommitId? = null,
     private val emptyAt: CommitId? = null,
     private val state: RepositoryState = RepositoryState.NORMAL,
-    private val continueStep: CherryPickStep = CherryPickStep.Created(commitId(1)),
+    private val continueStep: CherryPickStep = createdStep(commitId(1)),
     private val stoppedAt: CommitId? = null,
 ) : CherryPickGateway {
 
@@ -180,7 +191,7 @@ private class FakeCherryPickGateway(
         return when (commit) {
             conflictAt -> CherryPickStep.Conflicted(listOf("shared.txt"))
             emptyAt -> CherryPickStep.Empty
-            else -> CherryPickStep.Created(created(commit))
+            else -> createdStep(created(commit))
         }
     }
 
@@ -203,3 +214,7 @@ private class FixedStatusRepositoryGateway(private val status: WorkingTreeStatus
 
     override suspend fun close() = Unit
 }
+
+/** 적용 단계가 자기 임계 구역에서 캡처해 돌려주는 되돌리기 재료 (UND-73). */
+private fun createdStep(commit: CommitId): CherryPickStep.Created =
+    CherryPickStep.Created(commit, previousHead = commitId(9), baseline = baselineOf(commit))

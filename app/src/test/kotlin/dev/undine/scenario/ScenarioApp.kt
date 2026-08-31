@@ -1,5 +1,8 @@
 package dev.undine.scenario
 
+import dev.undine.application.cherrypick.AbortCherryPickUseCase
+import dev.undine.application.cherrypick.CherryPickCommitsUseCase
+import dev.undine.application.cherrypick.ContinueCherryPickUseCase
 import dev.undine.application.conflict.ContinueAfterResolveUseCase
 import dev.undine.application.conflict.LoadConflictContentUseCase
 import dev.undine.application.conflict.LoadConflictedFilesUseCase
@@ -7,18 +10,30 @@ import dev.undine.application.conflict.ResolveConflictUseCase
 import dev.undine.application.graph.LoadCommitHistoryUseCase
 import dev.undine.application.merge.AbortMergeOrRebaseUseCase
 import dev.undine.application.merge.MergeBranchUseCase
+import dev.undine.application.merge.RebaseBranchUseCase
 import dev.undine.application.rebase.ApplyRebasePlanUseCase
 import dev.undine.application.rebase.LoadRebaseTargetsUseCase
+import dev.undine.application.sidebar.CheckoutBranchUseCase
+import dev.undine.application.staging.AmendCommitUseCase
 import dev.undine.application.staging.CommitStagedUseCase
 import dev.undine.application.staging.LoadWorkingTreeStatusUseCase
 import dev.undine.application.staging.StageFilesUseCase
 import dev.undine.application.toolbar.FetchRemoteUseCase
 import dev.undine.application.toolbar.PushRemoteUseCase
+import dev.undine.application.undo.OperationRecorder
+import dev.undine.application.undo.PeekUndoTargetUseCase
+import dev.undine.application.undo.UndoExecution
+import dev.undine.application.undo.UndoLastOperationUseCase
+import dev.undine.application.undo.UndoService
+import dev.undine.application.undo.UndoTarget
 import dev.undine.application.welcome.OpenRepositoryUseCase
 import dev.undine.domain.CommitId
 import dev.undine.domain.RefName
 import dev.undine.domain.RepositoryPath
+import dev.undine.domain.cherrypick.CherryPickService
 import dev.undine.domain.merge.MergeService
+import dev.undine.domain.undo.UndoStack
+import dev.undine.infrastructure.git.cherrypick.CherryPickGatewayImpl
 import dev.undine.infrastructure.git.conflict.ConflictGatewayImpl
 import dev.undine.infrastructure.git.history.HistoryGatewayImpl
 import dev.undine.infrastructure.git.merge.MergeGatewayImpl
@@ -79,21 +94,54 @@ internal class ScenarioApp(val work: File) {
 
     private val mergeService = MergeService(repositoryGateway, mergeGateway)
 
+    private val cherryPickGateway = CherryPickGatewayImpl(gitAccess)
+    private val cherryPickService = CherryPickService(repositoryGateway, cherryPickGateway)
+
+    /**
+     * 되돌리기 이력과 그 이력에 기록하는 실행 경로. 배선(`AppComponent.RepositoryUndoScope`)과 같은
+     * 조합이라, 시나리오가 "커밋하고 되돌린다" 를 앱과 같은 경로로 재현한다.
+     */
+    val undoStack = UndoStack()
+    private val operationRecorder = OperationRecorder(refGateway, undoStack, changeRecordingOrder = gitAccess)
+    private val undoService =
+        UndoService(undoStack, refGateway, repositoryGateway, worktreeOpsGateway)
+
+    val peekUndoTarget = PeekUndoTargetUseCase(undoService)
+    val undoLastOperation = UndoLastOperationUseCase(undoService)
+
     val openRepository = OpenRepositoryUseCase(repositoryGateway, settingsGateway)
     val loadStatus = LoadWorkingTreeStatusUseCase(repositoryGateway)
     val stageFiles = StageFilesUseCase(stagingGateway)
-    val commitStaged = CommitStagedUseCase(stagingGateway)
+    val commitStaged = CommitStagedUseCase(stagingGateway, operationRecorder)
+    val amendCommit = AmendCommitUseCase(stagingGateway, operationRecorder)
+    val checkoutBranch = CheckoutBranchUseCase(refGateway, operationRecorder)
     val loadHistory = LoadCommitHistoryUseCase(historyGateway)
-    val mergeBranch = MergeBranchUseCase(mergeService)
-    val continueAfterResolve = ContinueAfterResolveUseCase(mergeService)
+    val mergeBranch = MergeBranchUseCase(mergeService, operationRecorder)
+    val rebaseBranch = RebaseBranchUseCase(mergeService, operationRecorder)
+    val cherryPickCommits = CherryPickCommitsUseCase(cherryPickService, operationRecorder)
+    val continueCherryPick = ContinueCherryPickUseCase(cherryPickService, operationRecorder)
+    val abortCherryPick = AbortCherryPickUseCase(cherryPickService)
+    val continueAfterResolve = ContinueAfterResolveUseCase(mergeService, operationRecorder)
     val abortMergeOrRebase = AbortMergeOrRebaseUseCase(mergeService)
     val loadConflicted = LoadConflictedFilesUseCase(conflictGateway)
     val loadConflictContent = LoadConflictContentUseCase(conflictGateway)
     val resolveConflict = ResolveConflictUseCase(conflictGateway)
     val loadRebaseTargets = LoadRebaseTargetsUseCase(rebaseGateway)
-    val applyRebasePlan = ApplyRebasePlanUseCase(rebaseGateway)
-    val pushRemote = PushRemoteUseCase(remoteGateway)
+    val applyRebasePlan = ApplyRebasePlanUseCase(rebaseGateway, operationRecorder)
+    val pushRemote = PushRemoteUseCase(remoteGateway, operationRecorder)
     val fetchRemote = FetchRemoteUseCase(remoteGateway)
+
+    /**
+     * 화면과 같은 순서로 최상단 한 건을 되돌린다 — 미리 본 대상을 그대로 지목한다 (결정 G4).
+     *
+     * @throws IllegalStateException 되돌릴 대상이 없거나 막혀 있을 때. 시나리오가 그 상태를 검증할
+     *   때는 [peekUndoTarget] 을 직접 쓴다.
+     */
+    suspend fun undoTop(): UndoExecution {
+        val target = peekUndoTarget.execute()
+        check(target is UndoTarget.Undoable) { "되돌릴 수 있는 최상단 기록이 없습니다: $target" }
+        return undoLastOperation.execute(target.entry)
+    }
 
     /** 저장소 참조·상태 조회는 시나리오가 직접 쓴다 (전용 UseCase 가 없는 축). */
     val refs = refGateway
@@ -108,7 +156,7 @@ internal class ScenarioApp(val work: File) {
     /** 앱 경로로 stage → commit. 시나리오의 기본 동작이다. */
     suspend fun stageAndCommit(message: String, vararg paths: String): CommitId {
         stageFiles.execute(paths.toList())
-        return commitStaged.execute(message).commitId
+        return commitStaged.execute(message).result.commitId
     }
 
     fun writeFile(name: String, content: String) {

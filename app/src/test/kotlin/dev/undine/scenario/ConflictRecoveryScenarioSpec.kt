@@ -88,7 +88,7 @@ private suspend fun conflictedApp(work: File): ScenarioApp {
     app.stageAndCommit("우리가 고친다", SHARED)
 
     val result = app.mergeBranch.execute(RefName("refs/heads/$FEATURE"), allowFastForward = false)
-    result.shouldBeInstanceOf<MergeResult.Conflicted>().paths shouldContainExactly listOf(SHARED)
+    result.result.shouldBeInstanceOf<MergeResult.Conflicted>().paths shouldContainExactly listOf(SHARED)
     return app
 }
 

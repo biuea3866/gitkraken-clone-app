@@ -39,6 +39,14 @@ class RebasePlanState(
     var outcome: InteractiveRebaseOutcome? by mutableStateOf(null)
         private set
 
+    /**
+     * 되돌리기 기록만 실패한 사유. null 이 아니면 **리베이스는 적용됐고 Undo 항목만 남지 않았다.**
+     *
+     * 여기서는 값을 **전달만** 한다 — 문구를 그리는 일은 화면별 과제로 남겨 둔다 (결정 G30 3).
+     */
+    var undoRecordFailure: UndineException? by mutableStateOf(null)
+        private set
+
     /** 진행 중인 리베이스의 진행률. 진행 중이 아니면 null 이다. */
     var progress: RebaseRunProgress? by mutableStateOf(null)
         private set
@@ -72,6 +80,7 @@ class RebasePlanState(
         val base = upstream() ?: return
         failure = null
         outcome = null
+        undoRecordFailure = null
         scope.launch {
             plan = try {
                 RebasePlan.of(actions.loadTargets.execute(base))
@@ -111,7 +120,9 @@ class RebasePlanState(
         failure = null
         scope.launch {
             try {
-                outcome = actions.applyPlan.execute(base, current)
+                val applied = actions.applyPlan.execute(base, current)
+                outcome = applied.outcome
+                undoRecordFailure = applied.undoRecordFailure
             } catch (thrown: UndineException) {
                 failure = thrown
             } finally {
@@ -126,6 +137,7 @@ class RebasePlanState(
         plan = null
         outcome = null
         failure = null
+        undoRecordFailure = null
     }
 
     fun refreshProgress() {

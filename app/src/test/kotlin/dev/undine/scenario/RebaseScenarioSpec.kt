@@ -9,6 +9,7 @@ import io.kotest.engine.spec.tempdir
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import java.io.File
 
 private const val TOPIC = "topic"
@@ -32,7 +33,8 @@ class RebaseScenarioSpec : FunSpec({
         val plan = RebasePlan.of(targets).move(from = 2, to = 0)
         app.messagesOldestFirst() shouldContainExactly before
 
-        app.applyRebasePlan.execute(mainRef(), plan) shouldBe InteractiveRebaseOutcome.Completed
+        app.applyRebasePlan.execute(mainRef(), plan).outcome
+            .shouldBeInstanceOf<InteractiveRebaseOutcome.Completed>()
 
         app.messagesOldestFirst() shouldContainExactly listOf("initial", "셋", "첫", "둘")
     }
@@ -43,7 +45,8 @@ class RebaseScenarioSpec : FunSpec({
         val plan = RebasePlan.of(app.loadRebaseTargets.execute(mainRef()))
             .withAction(1, RebaseAction.Squash)
 
-        app.applyRebasePlan.execute(mainRef(), plan) shouldBe InteractiveRebaseOutcome.Completed
+        app.applyRebasePlan.execute(mainRef(), plan).outcome
+            .shouldBeInstanceOf<InteractiveRebaseOutcome.Completed>()
 
         // 메시지 본문은 squash 방식에 따라 달라 개수만 본다.
         app.messagesOldestFirst() shouldHaveSize 2

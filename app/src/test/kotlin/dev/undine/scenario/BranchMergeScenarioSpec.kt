@@ -36,7 +36,7 @@ class BranchMergeScenarioSpec : FunSpec({
 
         val result = app.mergeBranch.execute(RefName("refs/heads/$FEATURE"), allowFastForward = false)
 
-        result.shouldBeInstanceOf<MergeResult.Succeeded>().fastForward shouldBe false
+        result.result.shouldBeInstanceOf<MergeResult.Succeeded>().fastForward shouldBe false
         parentsOfHead(app) shouldBe 2
         head.currentBranch shouldBe mainRef()
         // 양쪽 변경이 결과 워킹트리에 함께 있다.
@@ -56,7 +56,7 @@ class BranchMergeScenarioSpec : FunSpec({
 
         val result = app.mergeBranch.execute(RefName("refs/heads/$FEATURE"), allowFastForward = true)
 
-        result.shouldBeInstanceOf<MergeResult.Succeeded>().fastForward shouldBe true
+        result.result.shouldBeInstanceOf<MergeResult.Succeeded>().fastForward shouldBe true
         parentsOfHead(app) shouldBe 1
         app.messagesOldestFirst() shouldContain "기능만 추가한다"
     }

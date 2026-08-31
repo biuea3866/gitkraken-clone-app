@@ -3,6 +3,7 @@ package dev.undine.infrastructure.git.cherrypick
 import dev.undine.domain.CommitId
 import dev.undine.domain.UndineException
 import dev.undine.domain.cherrypick.CherryPickStep
+import dev.undine.infrastructure.git.ref.baselineHeld
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.lib.Constants
 import org.eclipse.jgit.lib.ObjectId
@@ -38,11 +39,14 @@ internal fun Git.applyHeld(commit: CommitId, recordOrigin: Boolean): CherryPickS
  */
 private fun Git.stepFor(before: ObjectId?, origin: CommitId, recordOrigin: Boolean): CherryPickStep {
     val after = repository.resolve(Constants.HEAD)
-    return when {
-        after == null || after == before -> CherryPickStep.Empty
-        !recordOrigin -> CherryPickStep.Created(CommitId.of(after.name))
-        else -> CherryPickStep.Created(CommitId.of(recordOrigin(CommitId.of(after.name), origin).name))
-    }
+    if (after == null || after == before) return CherryPickStep.Empty
+    val created = if (recordOrigin) recordOrigin(CommitId.of(after.name), origin).name else after.name
+    // 되돌리기 재료는 적용과 **같은 임계 구역**에서 캡처한다 — [before] 는 이 단계 직전 HEAD 다 (UND-73).
+    return CherryPickStep.Created(
+        commit = CommitId.of(created),
+        previousHead = before?.let { CommitId.of(it.name) },
+        baseline = repository.baselineHeld(),
+    )
 }
 
 /** 만들어진 커밋의 메시지 끝에 원본 해시 줄을 붙인다 (`git cherry-pick -x` 상당). */

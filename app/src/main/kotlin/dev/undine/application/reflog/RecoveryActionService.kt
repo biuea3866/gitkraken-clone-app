@@ -21,11 +21,6 @@ import dev.undine.domain.reflog.ReflogGateway
 import dev.undine.domain.reflog.UnreachableCommitScan
 import dev.undine.domain.undo.GitOperationKind
 import dev.undine.domain.undo.UndoStrategy
-import kotlinx.coroutines.CancellationException
-import java.util.logging.Level
-import java.util.logging.Logger
-
-private val LOGGER: Logger = Logger.getLogger("dev.undine.application.reflog.RecoveryActionService")
 
 /** Reflog 목록과 만료 가능성. 빈 목록은 실패가 아니라 실제 조회 결과다. */
 data class ReflogListing(val entries: List<ReflogEntry>, val mayBeExpired: Boolean)
@@ -108,8 +103,9 @@ class RecoveryActionService(
      * 직전의 외부 변경 비교가 오염된다.
      */
     override suspend fun recover(commit: CommitId, target: RecoveryTarget): RecoveryOutcome<RefName> {
-        val recovered = reflogGateway.recover(commit, target)
-        val recordFailure = recordQuietly(GitOperationKind.REFLOG_RESTORE) {
+        return operationRecorder.recordingChange {
+            val recovered = reflogGateway.recover(commit, target)
+            val recordFailure = operationRecorder.recordQuietly(GitOperationKind.REFLOG_RESTORE) {
             when (target) {
                 is RecoveryTarget.NewBranch -> operationRecorder.record(
                     GitOperationKind.REFLOG_RESTORE,
@@ -123,53 +119,39 @@ class RecoveryActionService(
                         "${target.confirmation.displacedCommit.value}의 기존 위치를 덮어썼습니다.",
                 )
             }
+            }
+            RecoveryOutcome(recovered.ref, recordFailure)
         }
-        return RecoveryOutcome(recovered.ref, recordFailure)
     }
 
     override suspend fun restoreBisect(): BisectSession? = bisect.restore.execute()
 
     override suspend fun startBisect(good: CommitId, bad: CommitId): RecoveryOutcome<BisectResult> =
-        bisect.start.execute(good, bad).let { RecoveryOutcome(it, recordBisectChange()) }
+        operationRecorder.recordingChange {
+            bisect.start.execute(good, bad).let { RecoveryOutcome(it, recordBisectChange()) }
+        }
 
     override suspend fun markBisect(verdict: BisectVerdict): RecoveryOutcome<BisectResult> =
-        bisect.mark.execute(verdict).let { RecoveryOutcome(it, recordBisectChange()) }
+        operationRecorder.recordingChange {
+            bisect.mark.execute(verdict).let { RecoveryOutcome(it, recordBisectChange()) }
+        }
 
     override suspend fun resetBisect(): RecoveryOutcome<Unit> {
-        bisect.reset.execute()
-        return RecoveryOutcome(Unit, recordBisectChange())
+        return operationRecorder.recordingChange {
+            bisect.reset.execute()
+            RecoveryOutcome(Unit, recordBisectChange())
+        }
     }
 
     /** UndoService에는 bisect 상태 파일을 복원하는 전략이 없으므로 화면의 reset 경로를 안내한다. */
     private suspend fun recordBisectChange(): UndineException? =
-        recordQuietly(GitOperationKind.BISECT_SESSION) {
+        operationRecorder.recordQuietly(GitOperationKind.BISECT_SESSION) {
             operationRecorder.recordIrreversible(
                 GitOperationKind.BISECT_SESSION,
                 "bisect 세션은 Recovery 화면의 reset으로만 시작 지점으로 복구할 수 있습니다.",
             )
         }
 
-    /**
-     * Undo 기록 실패를 저장소 변경 실패로 승격하지 않고, **사유를 호출자에게 돌려준다.**
-     *
-     * 여기 오는 시점에 Git 변경은 **이미 적용돼 있다.** 기록이 실패했다고 예외를 올리면 화면은
-     * "실패" 를 보여 주는데 저장소는 바뀐 상태가 되어, 사용자가 되돌릴 대상도 이어갈 대상도 잃는다.
-     * 그렇다고 로그로만 삼키면 Undo 항목이 없어진 사실이 화면에 닿지 않는다 — 강등이지 은폐가
-     * 아니므로 실패를 [RecoveryOutcome.undoRecordFailure]로 올려 화면이 알리게 한다.
-     */
-    private suspend fun recordQuietly(
-        operation: GitOperationKind,
-        record: suspend () -> Unit,
-    ): UndineException? =
-        try {
-            record()
-            null
-        } catch (cancellation: CancellationException) {
-            throw cancellation
-        } catch (failure: UndineException) {
-            LOGGER.log(Level.WARNING, "undo record failed after applied change: operation=$operation", failure)
-            failure
-        }
 }
 
 private const val FIRST_PARENT_INDEX = 0

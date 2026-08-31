@@ -13,6 +13,8 @@ import dev.undine.domain.submodule.SubmoduleGateway
 import dev.undine.domain.submodule.SubmoduleState
 import dev.undine.domain.undo.GitOperationKind
 import dev.undine.domain.undo.UndoStack
+import dev.undine.testsupport.baselineOf
+import dev.undine.testsupport.commitId
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.collections.shouldContainExactly
@@ -170,7 +172,7 @@ class SubmoduleUseCasesSpec : BehaviorSpec({
 
     given("스테이징 Gateway") {
         val gateway = mockk<StagingGateway>(relaxUnitFun = true)
-        val result = CommitResult(CommitId.of("a".repeat(40)))
+        val result = committed()
         coEvery { gateway.commit("서브모듈 포인터 갱신") } returns result
 
         `when`("현재 서브모듈 상태를 부모에 커밋하면") {
@@ -187,3 +189,10 @@ class SubmoduleUseCasesSpec : BehaviorSpec({
         }
     }
 })
+
+/** 커밋 결과가 싣는 되돌리기 재료 (UND-73). 이 스펙은 gitlink 커밋 경로만 본다. */
+private fun committed(): CommitResult = CommitResult(
+    CommitId.of("a".repeat(40)),
+    previousHead = commitId(9),
+    baseline = baselineOf(CommitId.of("a".repeat(40))),
+)

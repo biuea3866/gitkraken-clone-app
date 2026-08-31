@@ -172,7 +172,6 @@ class AppComponent(settingsFile: Path) {
     )
 
     val loadSidebarRefs = LoadSidebarRefsUseCase(refGateway, worktreeOpsGateway)
-    val checkoutBranch = CheckoutBranchUseCase(refGateway)
     val renameBranch = RenameBranchUseCase(refGateway)
     val deleteBranch = DeleteBranchUseCase(refGateway)
 
@@ -182,46 +181,8 @@ class AppComponent(settingsFile: Path) {
     val loadChangedFiles = LoadChangedFilesUseCase(diffGateway)
     val loadFileDiff = LoadFileDiffUseCase(diffGateway)
 
-    /** 스테이징 패널이 쓰는 동작 묶음. 패널이 인덱스 상태의 단일 소유자다. */
-    val stagingActions = StagingActions(
-        loadStatus = LoadWorkingTreeStatusUseCase(repositoryGateway),
-        stageFiles = StageFilesUseCase(stagingGateway),
-        unstageFiles = UnstageFilesUseCase(stagingGateway),
-        stageHunks = StageHunksUseCase(stagingGateway),
-        commitStaged = CommitStagedUseCase(stagingGateway),
-        amendCommit = AmendCommitUseCase(stagingGateway),
-    )
-
-    /**
-     * 충돌 에디터가 쓰는 동작 묶음.
-     *
-     * `loadStatus` 는 스테이징 패널과 같은 UseCase 를 공유한다 — 중단 확인에 담을 "사라질 경로" 는
-     * 스테이징이 보는 것과 같은 워킹트리 상태여야 한다.
-     */
-    val conflictActions = ConflictActions(
-        loadFiles = LoadConflictedFilesUseCase(conflictGateway),
-        loadContent = LoadConflictContentUseCase(conflictGateway),
-        resolve = ResolveConflictUseCase(conflictGateway),
-        continueAfterResolve = ContinueAfterResolveUseCase(mergeService),
-        abort = AbortConflictedOperationUseCase(mergeService),
-        loadStatus = stagingActions.loadStatus,
-    )
-
-    /**
-     * 대화형 리베이스 계획 화면이 쓰는 동작 묶음.
-     *
-     * 계획 **편집**용 UseCase 는 없다 — 편집은 불변 `RebasePlan` 안에서 끝나고, 저장소는 적용
-     * 시점에만 바뀐다.
-     */
-    val rebaseActions = RebaseActions(
-        loadTargets = LoadRebaseTargetsUseCase(rebaseGateway),
-        applyPlan = ApplyRebasePlanUseCase(rebaseGateway),
-        loadProgress = LoadRebaseProgressUseCase(rebaseGateway),
-    )
-
     val fetchRemote = FetchRemoteUseCase(remoteGateway)
     val pullRemote = PullRemoteUseCase(remoteGateway)
-    val pushRemote = PushRemoteUseCase(remoteGateway)
 
     // ── 2차 UseCase (application) ──
 
@@ -266,7 +227,7 @@ class AppComponent(settingsFile: Path) {
 
         private val undoStack = UndoStack()
         private val undoService = UndoService(undoStack, refGateway, repositoryGateway, worktreeOpsGateway)
-        private val operationRecorder = OperationRecorder(refGateway, undoStack)
+        private val operationRecorder = OperationRecorder(refGateway, undoStack, changeRecordingOrder = gitAccess)
 
         /** Undo 버튼·이력 패널이 쓰는 네 동작. 모두 이 세션의 [undoStack] 하나를 본다. */
         val peekUndoTarget = PeekUndoTargetUseCase(undoService)
@@ -304,6 +265,54 @@ class AppComponent(settingsFile: Path) {
 
         /** 그래프 드래그·컨텍스트 메뉴·팔레트가 공유하는 조작 실행 경로. 기록은 [operationRecorder] 다. */
         val executeGraphOperation = ExecuteGraphOperationUseCase(worktreeOpsGateway, refGateway, operationRecorder)
+
+        /**
+         * 아래 다섯은 **UND-79 로 기록 경로가 생겨** 이 범위로 옮겨 온 것들이다.
+         *
+         * 기록은 활성 저장소의 이력에 남아야 하므로 [operationRecorder] 를 받는 UseCase 는 앱 수명이
+         * 아니라 이 범위의 수명을 갖는다 — 앱 수명으로 두면 저장소를 바꾼 뒤에도 옛 이력에 기록한다
+         * (결정 G29).
+         */
+        val checkoutBranch = CheckoutBranchUseCase(refGateway, operationRecorder)
+
+        val pushRemote = PushRemoteUseCase(remoteGateway, operationRecorder)
+
+        /** 스테이징 패널이 쓰는 동작 묶음. 패널이 인덱스 상태의 단일 소유자다. */
+        val stagingActions = StagingActions(
+            loadStatus = LoadWorkingTreeStatusUseCase(repositoryGateway),
+            stageFiles = StageFilesUseCase(stagingGateway),
+            unstageFiles = UnstageFilesUseCase(stagingGateway),
+            stageHunks = StageHunksUseCase(stagingGateway),
+            commitStaged = CommitStagedUseCase(stagingGateway, operationRecorder),
+            amendCommit = AmendCommitUseCase(stagingGateway, operationRecorder),
+        )
+
+        /**
+         * 충돌 에디터가 쓰는 동작 묶음.
+         *
+         * `loadStatus` 는 스테이징 패널과 같은 UseCase 를 공유한다 — 중단 확인에 담을 "사라질 경로" 는
+         * 스테이징이 보는 것과 같은 워킹트리 상태여야 한다.
+         */
+        val conflictActions = ConflictActions(
+            loadFiles = LoadConflictedFilesUseCase(conflictGateway),
+            loadContent = LoadConflictContentUseCase(conflictGateway),
+            resolve = ResolveConflictUseCase(conflictGateway),
+            continueAfterResolve = ContinueAfterResolveUseCase(mergeService, operationRecorder),
+            abort = AbortConflictedOperationUseCase(mergeService),
+            loadStatus = stagingActions.loadStatus,
+        )
+
+        /**
+         * 대화형 리베이스 계획 화면이 쓰는 동작 묶음.
+         *
+         * 계획 **편집**용 UseCase 는 없다 — 편집은 불변 `RebasePlan` 안에서 끝나고, 저장소는 적용
+         * 시점에만 바뀐다.
+         */
+        val rebaseActions = RebaseActions(
+            loadTargets = LoadRebaseTargetsUseCase(rebaseGateway),
+            applyPlan = ApplyRebasePlanUseCase(rebaseGateway, operationRecorder),
+            loadProgress = LoadRebaseProgressUseCase(rebaseGateway),
+        )
     }
 
     /**

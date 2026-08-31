@@ -73,6 +73,14 @@ class ConflictState(
     var failure: UndineException? by mutableStateOf(null)
         private set
 
+    /**
+     * 되돌리기 기록만 실패한 사유. null 이 아니면 **병합·리베이스는 이어졌고 Undo 항목만 남지 않았다.**
+     *
+     * 여기서는 값을 **전달만** 한다 — 문구를 그리는 일은 화면별 과제로 남겨 둔다 (결정 G30 3).
+     */
+    var undoRecordFailure: UndineException? by mutableStateOf(null)
+        private set
+
     /** 충돌이 하나도 없는지 — 빈 상태 안내와 목록을 구분하는 기준이다. */
     val isClean: Boolean get() = files.isEmpty()
 
@@ -156,7 +164,9 @@ class ConflictState(
 
     /** 남은 충돌이 없으면 상위 병합·리베이스를 이어간다. */
     fun continueOperation() {
-        runOperation { actions.continueAfterResolve.execute(repositoryState()) }
+        runOperation {
+            undoRecordFailure = actions.continueAfterResolve.execute(repositoryState()).undoRecordFailure
+        }
     }
 
     /**

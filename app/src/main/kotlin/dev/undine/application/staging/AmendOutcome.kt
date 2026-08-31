@@ -1,7 +1,6 @@
 package dev.undine.application.staging
 
 import dev.undine.domain.CommitId
-import dev.undine.domain.CommitResult
 
 /**
  * [AmendCommitUseCase] 실행 결과. 화면은 이 값으로 "고쳤다" 와 "물어봐야 한다" 를 구분한다.
@@ -10,8 +9,11 @@ import dev.undine.domain.CommitResult
  */
 sealed interface AmendOutcome {
 
-    /** amend 가 실행됐다. */
-    data class Amended(val result: CommitResult) : AmendOutcome
+    /**
+     * amend 가 실행됐다. [outcome] 에는 고쳐진 커밋과 되돌리기 기록 실패 사유가 함께 들어 있다 —
+     * 기록만 실패해도 amend 자체는 성공이므로 결과를 실패로 바꾸지 않는다 (결정 G30).
+     */
+    data class Amended(val outcome: CommitOutcome) : AmendOutcome
 
     /**
      * [target] 이 원격에 이미 있어 실행하지 않았다. 저장소는 그대로다.

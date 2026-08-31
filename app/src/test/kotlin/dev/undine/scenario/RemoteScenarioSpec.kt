@@ -34,7 +34,7 @@ class RemoteScenarioSpec : FunSpec({
         app.stageAndCommit("메모를 올린다", NOTE)
 
         val pushed = app.pushRemote.execute(mainRef(), force = false) { }
-        pushed shouldBe PushResult.Accepted
+        pushed.result shouldBe PushResult.Accepted
 
         // 다른 클론이 같은 커밋을 받는다 — 베어 저장소를 통해서만 전달된다.
         val clone = File(root, "clone").also(::mkdirsOrFail)

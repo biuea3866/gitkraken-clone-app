@@ -109,6 +109,7 @@ internal fun DestinationArea(
 
             AppDestination.REPOSITORY -> RepositoryArea(
                 component = component,
+                undoScope = undo.scope,
                 errors = errors,
                 shellState = shellState,
                 context = context,
@@ -360,6 +361,7 @@ internal suspend fun loadSelectedFileDiff(
 @Suppress("LongMethod", "LongParameterList") // 배선은 조립 순서를 한눈에 보여야 한다 — 쪼개면 흐름이 흩어진다.
 private fun RepositoryArea(
     component: AppComponent,
+    undoScope: AppComponent.RepositoryUndoScope,
     errors: AppErrorState,
     shellState: AppShellState,
     context: RepositoryContext,
@@ -373,7 +375,8 @@ private fun RepositoryArea(
     val toolbarState = rememberRemoteToolbarState(
         fetchRemote = component.fetchRemote,
         pullRemote = component.pullRemote,
-        pushRemote = component.pushRemote,
+        // push 는 되돌릴 수 없다는 사유와 함께 활성 저장소의 이력에 남는다 — 그래서 범위의 것을 쓴다.
+        pushRemote = undoScope.pushRemote,
         remotes = context.remotes,
         branch = context.currentBranch,
     )

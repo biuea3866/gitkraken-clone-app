@@ -4,6 +4,8 @@ import dev.undine.domain.UndineException
 import dev.undine.domain.rebase.InteractiveRebaseOutcome
 import dev.undine.domain.rebase.RebaseAction
 import dev.undine.domain.rebase.RebaseRunProgress
+import dev.undine.testsupport.baselineOf
+import dev.undine.testsupport.commitId
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
@@ -85,7 +87,7 @@ class RebasePlanStateSpec : FunSpec({
     test("적용하면 계획이 저장소로 가고 결과가 남는다") {
         val gateway = RecordingRebaseGateway(
             targets = targetsOf("첫", "둘"),
-            outcome = InteractiveRebaseOutcome.Completed,
+            outcome = completedOutcome(),
             progress = null,
         )
         val state = rebaseStateWith(gateway)
@@ -94,7 +96,7 @@ class RebasePlanStateSpec : FunSpec({
         state.apply()
 
         gateway.appliedPlans.size shouldBe 1
-        state.outcome shouldBe InteractiveRebaseOutcome.Completed
+        state.outcome shouldBe completedOutcome()
         state.applying shouldBe false
     }
 
