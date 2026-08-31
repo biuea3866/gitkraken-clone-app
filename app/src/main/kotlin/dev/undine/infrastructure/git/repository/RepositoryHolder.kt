@@ -13,7 +13,7 @@ import java.nio.file.Path
 /**
  * 세션당 하나의 장수명 JGit [Repository] 핸들을 보유한다.
  *
- * **이 클래스가 핸들의 유일한 소유자다.** 다른 Gateway 구현은 [current] 로 얻은 핸들을 받아 쓰기만 하고
+ * **이 클래스가 핸들의 유일한 소유자다.** 다른 Gateway 구현은 [sessionAt] 으로 얻은 핸들을 받아 쓰기만 하고
  * 닫지 않는다 — 조회마다 새로 열면 JGit 객체 캐시가 매번 무효화돼 대형 저장소의 이력 로딩이 느려진다.
  * 이전 활성 핸들은 저장소를 전환할 때, 명시적으로 [release]할 때, [close]할 때 닫힌다.
  *
@@ -76,9 +76,15 @@ class RepositoryHolder internal constructor(
     @Synchronized
     fun sessionAt(key: Path): Repository? = sessions[key]
 
-    /** 현재 열려 있는 핸들. 열기 전이거나 [close] 후에는 null 이다. */
+    /**
+     * 현재 활성 세션의 **키**. 열기 전이거나 [close] 후에는 null 이다.
+     *
+     * 핸들이 아니라 키를 주는 이유는 호출부가 **락을 기다리기 전에** 실행 대상을 정하기 때문이다
+     * (UND-80). 핸들을 미리 쥐여 주면 대기 중 세션이 닫혀도 그 사실을 모른 채 닫힌 핸들로
+     * 실행한다 — 키로 받아 두면 [sessionAt] 조회가 그 창을 드러낸다.
+     */
     @Synchronized
-    fun current(): Repository? = activeSessionKey?.let(sessions::get)
+    fun activeSessionKey(): Path? = activeSessionKey
 
     /**
      * 특정 비활성/LRU 세션의 핸들을 닫는다. 현재 세션을 회수하면 활성 세션도 비운다.

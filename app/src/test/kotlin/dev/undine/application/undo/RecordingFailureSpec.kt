@@ -27,6 +27,12 @@ import kotlinx.coroutines.launch
 
 private val RECORD_FAILED = UndineException.GitOperationFailed("undo.record")
 
+/**
+ * 시작한 세션이 락 대기 중 닫혀 `GitAccess` 가 실행을 거부한 실패 (UND-80).
+ * 사유 문장은 infrastructure 가 소유하므로 여기서는 **도메인 예외 종류**만 본다.
+ */
+private val SESSION_CLOSED = UndineException.StateViolation("작업을 시작한 저장소가 닫혀 실행하지 않았습니다")
+
 /** [block] 을 실행하되 Git 변경이 성공하는 순간 호출자를 취소한다. 취소됐으면 true. */
 private suspend fun cancellingCallerOnChange(block: suspend (Job) -> Unit): Boolean {
     val callerJob = Job()
@@ -59,6 +65,23 @@ private suspend fun afterCallerCancelled(block: suspend () -> Unit) {
  * 3. 변경이 성공한 뒤 호출자가 취소돼도 기록은 **정확히 한 건** 남는다.
  */
 class RecordingFailureSpec : BehaviorSpec({
+
+    given("시작한 저장소가 바뀌어 Gateway 가 실행 자체를 거부한 상황") {
+        `when`("커밋 Gateway 가 세션 종료 사유로 실패하면") {
+            val harness = RecordingHarness()
+            coEvery { harness.staging.commit(any()) } throws SESSION_CLOSED
+
+            then("저장소를 바꾸지 않았으므로 기록 단계에 닿지 않는다") {
+                shouldThrow<UndineException.StateViolation> {
+                    harness.commitStaged.execute("메시지")
+                }.detail shouldBe SESSION_CLOSED.detail
+
+                coVerify(exactly = 0) { harness.recorder.record(any(), any(), any(), any()) }
+                coVerify(exactly = 0) { harness.recorder.recordIrreversible(any(), any(), any()) }
+                harness.stack.history().shouldBeEmpty()
+            }
+        }
+    }
 
     given("Git 변경 뒤 기록만 실패하는 상황") {
         `when`("커밋 기록이 UndineException 으로 실패하면") {

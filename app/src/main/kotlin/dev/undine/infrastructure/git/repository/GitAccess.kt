@@ -15,6 +15,14 @@ import java.nio.file.Path
 internal const val REPOSITORY_NOT_OPEN = "저장소가 열려 있지 않습니다"
 
 /**
+ * 작업을 시작한 세션이 락 대기 중 닫혔을 때의 사유.
+ *
+ * [REPOSITORY_NOT_OPEN] 과 문장을 나눈다 — 사용자가 취할 행동이 다르다. 저장소를 열라는 안내가
+ * 아니라, **이 변경은 적용되지 않았고 다시 시도해야 한다**는 사실이 닿아야 한다.
+ */
+internal const val REPOSITORY_SESSION_CLOSED = "작업을 시작한 저장소가 닫혀 실행하지 않았습니다"
+
+/**
  * 공유 JGit [Repository] 핸들에 접근하는 **유일한 통로**다.
  *
  * JGit `Repository` 는 스레드 안전하지 않으므로 모든 접근을 [Mutex] 로 직렬화하고,
@@ -64,14 +72,14 @@ class GitAccess(
         withContext(Dispatchers.IO) { serialAccess.withLock { block(HeldSessions(holder)) } }
 
     /**
-     * 현재 열려 있는 핸들로 [block] 을 수행한다.
+     * **호출을 시작한 세션**의 핸들로 [block] 을 수행한다.
      *
      * 열기 전이나 [close] 후의 호출은 빈 결과가 아니라 실패다 — 빈 결과를 주면 화면이
      * "변경 없음" 으로 오해한다.
      *
-     * @throws UndineException.StateViolation 저장소가 열려 있지 않을 때
+     * @throws UndineException.StateViolation 저장소가 열려 있지 않거나, 시작한 세션이 닫혔을 때
      */
-    suspend fun <T> withRepository(block: (Repository) -> T): T = onGitThread { block(heldRepository()) }
+    suspend fun <T> withRepository(block: (Repository) -> T): T = onStartingSession(block)
 
     /**
      * **여러 Git 조작으로 이루어진 시퀀스 하나 전체**를 이 클래스의 임계구역 안에서 수행한다.
@@ -89,15 +97,34 @@ class GitAccess(
      * 이 도착한다. 그래서 **변경과 그 결과의 소비(Undo 기록 등)를 한 단위로 묶는 것은 호출자의
      * 몫**이다 — 그 계약은 각 Gateway 의 변경 연산이 명시한다 (결정 A-L2·G4).
      *
-     * @throws UndineException.StateViolation 저장소가 열려 있지 않을 때
+     * @throws UndineException.StateViolation 저장소가 열려 있지 않거나, 시작한 세션이 닫혔을 때
      */
-    suspend fun <T> withSequence(block: (Repository) -> T): T = onGitThread { block(heldRepository()) }
+    suspend fun <T> withSequence(block: (Repository) -> T): T = onStartingSession(block)
 
     /** 열려 있는 모든 핸들을 닫는다. 열려 있지 않으면 아무 일도 하지 않는다. */
     suspend fun close(): Unit = onGitThread { holder.close() }
 
-    private fun heldRepository(): Repository =
-        holder.current() ?: throw UndineException.StateViolation(REPOSITORY_NOT_OPEN)
+    /**
+     * 실행 대상을 **호출이 시작된 시점의 세션**으로 고정한다 (UND-80).
+     *
+     * 세션 키를 `withContext` 와 락 대기 **전에** 캡처하는 것이 요점이다. 락 안에서
+     * `holder.current()` 를 읽으면 실행 대상이 "락을 얻은 순간 열려 있는 저장소" 가 되고, A 에서
+     * 시작한 변경이 대기 중 B 로 전환한 사용자의 **B 저장소에 적용**된다. 결과는 A 의 이력에 남아
+     * `HardResetTo` 같은 전략이 B 의 작업을 잃게 만든다 (결정 G26).
+     *
+     * 캡처한 세션이 대기 중 닫혔으면 `current()` 로 갈아타지 않고 거부한다 — 닫힌 핸들로 실행할
+     * 수도, 다른 저장소를 조용히 바꿀 수도 없다. 세션 결속은 여기서 끝나고 Gateway·UseCase
+     * 시그니처로 새지 않는다.
+     */
+    private suspend fun <T> onStartingSession(block: (Repository) -> T): T {
+        val startingSession = holder.activeSessionKey()
+            ?: throw UndineException.StateViolation(REPOSITORY_NOT_OPEN)
+        return onGitThread {
+            val repository = holder.sessionAt(startingSession)
+                ?: throw UndineException.StateViolation(REPOSITORY_SESSION_CLOSED)
+            block(repository)
+        }
+    }
 
     private suspend fun <T> onGitThread(block: () -> T): T =
         withContext(Dispatchers.IO) { serialAccess.withLock { block() } }
