@@ -23,6 +23,7 @@ private const val BASE = "공통 조상 내용"
 private const val MERGED = "<<<<<<< 충돌 표식이 든 내용"
 private const val RESOLVED = "사용자가 고친 내용"
 private const val LAUNCH_FAILURE = "임시 파일을 만들지 못했습니다"
+private const val EXECUTABLE = "meld"
 
 private val DIFF_INPUT = DiffToolInput(local = LOCAL, remote = REMOTE)
 
@@ -130,6 +131,34 @@ class ExternalToolUseCasesSpec : BehaviorSpec({
                 shouldThrow<CancellationException> {
                     runBlocking { OpenDiffToolUseCase(gateway).execute(DIFF_INPUT) }
                 }
+            }
+        }
+    }
+
+    Given("설정한 실행 파일이 지금 깔려 있는 상태") {
+        val gateway = mockk<ExternalToolGateway>()
+        coEvery { gateway.isToolAvailable(EXECUTABLE) } returns true
+
+        When("존재 확인을 요청하면") {
+            val available = runBlocking { CheckToolAvailabilityUseCase(gateway).execute(EXECUTABLE) }
+
+            Then("실행 파일 이름을 그대로 넘기고 사용 가능을 그대로 돌려준다") {
+                available shouldBe true
+                coVerify(exactly = 1) { gateway.isToolAvailable(EXECUTABLE) }
+                confirmVerified(gateway)
+            }
+        }
+    }
+
+    Given("설정한 실행 파일이 아직 깔려 있지 않은 상태") {
+        val gateway = mockk<ExternalToolGateway>()
+        coEvery { gateway.isToolAvailable(EXECUTABLE) } returns false
+
+        When("존재 확인을 요청하면") {
+            val available = runBlocking { CheckToolAvailabilityUseCase(gateway).execute(EXECUTABLE) }
+
+            Then("없음을 오류로 바꾸지 않고 그대로 돌려준다 — 저장을 막는 판정이 아니다") {
+                available shouldBe false
             }
         }
     }

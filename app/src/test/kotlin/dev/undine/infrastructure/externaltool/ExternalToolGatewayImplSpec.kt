@@ -247,6 +247,13 @@ class ExternalToolGatewayImplSpec : FunSpec({
         runner.commands.single().drop(1).forEach { argument -> Files.exists(Path.of(argument)) shouldBe false }
     }
 
+    test("실행 파일 존재 확인은 실제 파일을 보고 답한다 — 없다고 저장을 막지는 않는다") {
+        val gateway = gateway(settings = settingsWith(), runner = ProcessExternalToolRunner())
+
+        gateway.isToolAvailable(ExternalToolTestProcess.javaExecutable()) shouldBe true
+        gateway.isToolAvailable(tempdir().resolve("undine-absent-tool").path) shouldBe false
+    }
+
     test("호출자 취소는 삼키지 않고 임시 파일을 정리한 뒤 전파한다") {
         val cancellation = CancellationException("cancel external tool")
         val runner = RecordingRunner { throw cancellation }
