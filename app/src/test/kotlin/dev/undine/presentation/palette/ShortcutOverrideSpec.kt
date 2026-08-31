@@ -81,15 +81,30 @@ class ShortcutOverrideSpec : FunSpec({
         registry.effectiveShortcutOf(registry.commands.single()) shouldBe primaryShortcut(Key.R)
     }
 
-    test("이미 쓰이는 단축키로 겹치는 오버라이드는 적용하지 않고 알린다") {
+    test("오버라이드는 다른 명령의 기본 단축키를 이기고 밀려난 쪽을 알린다") {
         val refresh = testCommand(REFRESH.value, shortcut = primaryShortcut(Key.R))
         val commit = testCommand(COMMIT.value, shortcut = primaryShortcut(Key.Enter))
         val registry = registryOf(refresh, commit)
 
         val rejected = registry.applyShortcutOverrides(mapOf(COMMIT to primaryShortcut(Key.R)))
 
+        // 사용자가 지정한 키가 기본값에 밀리면 같은 설정 파일이 등록 순서에 따라 다른 결과를 낸다.
+        rejected shouldContainExactly listOf(REFRESH)
+        registry.commandFor(primaryShortcut(Key.R)) shouldBe commit
+        registry.effectiveShortcutOf(refresh) shouldBe null
+    }
+
+    test("오버라이드끼리 겹치면 등록 순서가 앞선 명령이 이긴다") {
+        val refresh = testCommand(REFRESH.value)
+        val commit = testCommand(COMMIT.value)
+        val registry = registryOf(refresh, commit)
+
+        val rejected = registry.applyShortcutOverrides(
+            mapOf(COMMIT to Shortcut(Key.F5), REFRESH to Shortcut(Key.F5)),
+        )
+
         rejected shouldContainExactly listOf(COMMIT)
-        registry.commandFor(primaryShortcut(Key.R)) shouldBe refresh
+        registry.commandFor(Shortcut(Key.F5)) shouldBe refresh
         registry.effectiveShortcutOf(commit) shouldBe null
     }
 
