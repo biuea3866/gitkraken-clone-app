@@ -105,6 +105,21 @@ class IdentityGatewayImplSpec : FunSpec({
         localConfig(work).getString(USER, null, "email") shouldBe PERSONAL_EMAIL
     }
 
+    test("지정한 프로필이 다음 커밋의 author 가 된다") {
+        val work = tempdir().also(::seedRepository)
+
+        withIdentityGateway(work, settingsFile()) { gateway -> gateway.applyProfile(WORK) }
+        val author = Git.open(work).use { git ->
+            File(git.repository.workTree, CODE).appendText("적용 후 커밋\n")
+            git.add().addFilepattern(CODE).call()
+            // author 를 지정하지 않으면 JGit 이 저장소 설정에서 읽는다 — 그 경로가 이 계약의 소비처다.
+            git.commit().setMessage("적용 후 커밋").call().authorIdent
+        }
+
+        author.name shouldBe WORK_PROFILE
+        author.emailAddress shouldBe WORK_EMAIL
+    }
+
     test("로컬 identity 를 제거하면 전역 설정을 따른다") {
         val work = tempdir().also(::seedRepository)
 
