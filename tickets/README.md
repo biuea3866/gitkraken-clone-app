@@ -88,10 +88,13 @@ Undine 구현을 **60개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2
 | [UND-77](UND-77-monospace-font-enumeration.md) | 고정폭 서체 열거 | S | 9 | UND-68 | `domain/typography/` · `infrastructure/typography/` |
 | [UND-78](UND-78-log-directory-reveal.md) | 로그 디렉터리 노출 · 열기 | S | 9 | UND-70 | `domain/diagnostics/` · `infrastructure/diagnostics/` |
 | [UND-50](UND-50-accessibility-audit.md) | 접근성 감사 · 보강 | M | 10 | UND-40 · UND-65 · UND-66 · UND-67 · UND-68 · UND-69 · UND-70 · UND-41 · UND-42 · UND-43 · UND-44 · UND-45 · UND-46 · UND-47 · UND-51 | `presentation/**` (감사 결과 보강) |
-| [UND-51](UND-51-wiring-phase2.md) | 2차 통합 와이어업 | M | 9 | UND-22 · UND-26 · UND-38 · UND-40 · UND-65 · UND-66 · UND-67 · UND-68 · UND-69 · UND-70 · UND-41 · UND-42 · UND-43 · UND-44 · UND-45 · UND-46 · UND-47 · UND-48 | `presentation/App.kt` · `di/` · `presentation/palette/` (등록) |
+| [UND-51](UND-51-wiring-phase2.md) | 2차 통합 와이어업 | M | 9 | UND-22 · UND-26 · UND-38 · UND-40 · UND-65 · UND-66 · UND-67 · UND-68 · UND-69 · UND-70 · UND-41 · UND-42 · UND-43 · UND-44 · UND-45 · UND-46 | `presentation/App.kt` · `presentation/` 루트의 배선 전용 파일 · `di/` · `presentation/palette/` (등록) |
 | [UND-62](UND-62-submodule-remove-safety.md) | 서브모듈 제거 안전성 (파괴적 정리 재설계) | M | 8 | UND-32 | `domain/submodule/SubmoduleGateway.kt` · `infrastructure/git/submodule/` (제거 경로) |
 | [UND-63](UND-63-wave8-common-contract.md) | wave 8 공통 계약 확장 | M | 8 | UND-38 · UND-49 · UND-59 | `domain/Settings.kt` · `infrastructure/settings/SettingsCodec.kt` · `domain/undo/GitOperationKind.kt` · `presentation/i18n/` |
 | [UND-64](UND-64-release-publishing.md) | 릴리즈 발행 파이프라인 | S | 8 | UND-25 | `.github/workflows/` (릴리즈 워크플로) · `packaging/`(체크섬) |
+| [UND-79](UND-79-undo-recording-backfill.md) | Undo 기록을 wave 1~7 변경 연산에 채운다 | L | 9 | UND-38 · UND-51 | `application/staging/` · `application/cherrypick/` · `application/sidebar/` · `application/conflict/` · `application/rebase/` |
+| [UND-80](UND-80-session-bound-execution.md) | 변경 실행을 시작 시점 세션에 묶는다 | M | 9 | UND-44 · UND-51 | `infrastructure/git/repository/GitAccess.kt` · `RepositoryHolder.kt` · `application/session/` |
+| [UND-81](UND-81-tab-session-wiring.md) | 탭 세션 배선 — 다중 저장소와 Undo 범위 | L | 9 | UND-43 · UND-44 · UND-51 · UND-80 | `presentation/RepositorySessionDriver.kt` · `di/AppComponent.kt`(세션 범위) · `presentation/App.kt`(탭 슬롯) |
 | [UND-52](UND-52-e2e-scenario-phase2.md) | 2차 E2E 시나리오 테스트 | M | 10 | UND-51 | `app/src/test/kotlin/.../scenario2/` |
 | [UND-54](UND-54-merge-start-state-guard.md) | merge/rebase 시작 경로 상태 가드 완결 | S | 4 | UND-21 | `infrastructure/git/merge/` (가드 추가) |
 | [UND-56](UND-56-gitkraken-visual-tuning.md) | GitKraken 계열 시각 튜닝 · 렌더 확인 수단 | S | 5 | UND-26 · UND-10 | `presentation/design/` · `presentation/graph/`(그리기) · `presentation/shell/`(분할선) |
@@ -200,6 +203,8 @@ flowchart LR
 | 8b2 | UND-74 | 1 |
 | 8c | UND-65, UND-66, UND-67, UND-68, UND-69, UND-70 | 6 |
 | 9 | UND-51, UND-75, UND-76, UND-77, UND-78 | 5 |
+| 9b | UND-79, UND-80 | 2 |
+| 9c | UND-81 | 1 |
 | 10 | UND-50, UND-52 | 2 |
 
 - **너비 분포**: [1, 11, 11, 5, 3, 1, 8, 5, 3, 1, 9, 6, 1, 2]

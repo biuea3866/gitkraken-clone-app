@@ -1,7 +1,11 @@
 package dev.undine.presentation
 
 import androidx.compose.ui.input.key.Key
+import dev.undine.presentation.graph.GraphOperationCallbacks
+import dev.undine.presentation.graph.graphOperationCommands
+import dev.undine.domain.graphops.GraphOperation
 import dev.undine.presentation.palette.Command
+import dev.undine.presentation.palette.CommandAvailability
 import dev.undine.presentation.palette.CommandId
 import dev.undine.presentation.palette.CommandRegistry
 import dev.undine.presentation.palette.OPEN_COMMAND_PALETTE_SHORTCUT
@@ -63,6 +67,67 @@ fun registerAppCommands(registry: CommandRegistry, handlers: AppCommandHandlers)
         ),
     )
 }
+
+/**
+ * 2차 기능의 명령을 같은 레지스트리에 얹는다.
+ *
+ * **등록 지점을 늘리지 않는다** — 화면 티켓은 명령의 정의와 콜백만 만들고(결정 E4) 등록은 여기
+ * 한 곳에서 한다. 단축키 충돌은 등록 시점에 예외로 드러나므로, 등록을 흩으면 그 화면이 처음 열릴
+ * 때까지 충돌이 숨는다.
+ *
+ * 이동 명령은 [AppDestination] 목록에서 **유도한다**. 목록에 화면을 더하면 명령이 따라 생기고,
+ * 손으로 적은 목록이 뒤처져 생기는 "열 수 없는 화면" 이 없다.
+ *
+ * @param handlers 명령이 부를 동작. 저장소가 필요한 화면의 가용성 판정도 여기서 받는다.
+ * @param graphCallbacks 그래프 조작 명령이 실행할 콜백 (UND-42 가 정의한 다섯 명령).
+ * @param selectedGraphOperation 지금 선택으로 만들 수 있는 그래프 조작 하나. 없으면 다섯 명령 모두
+ *   막힌 상태로 보인다 — 목록에서 숨기지 않는 이유는 사용자가 왜 못 쓰는지 알아야 하기 때문이다.
+ */
+fun registerSecondaryCommands(
+    registry: CommandRegistry,
+    handlers: SecondaryCommandHandlers,
+    graphCallbacks: GraphOperationCallbacks,
+    selectedGraphOperation: () -> GraphOperation?,
+) {
+    AppDestination.entries.forEach { destination ->
+        registry.register(
+            Command(
+                id = CommandId("navigate.${destination.commandKey}"),
+                title = "${destination.label} 열기",
+                availability = { handlers.availabilityOf(destination) },
+                action = { handlers.onNavigate(destination) },
+            ),
+        )
+    }
+    registry.register(
+        Command(
+            id = CommandId("repository.open"),
+            title = "저장소 열기",
+            shortcut = Shortcut(Key.O, setOf(ShortcutModifier.PRIMARY)),
+            action = handlers.onOpenRepository,
+        ),
+    )
+    registry.register(
+        Command(
+            id = CommandId("undo.last"),
+            title = "되돌리기",
+            shortcut = Shortcut(Key.Z, setOf(ShortcutModifier.PRIMARY)),
+            action = handlers.onUndoLast,
+        ),
+    )
+    graphOperationCommands(graphCallbacks, selectedOperation = selectedGraphOperation).forEach(registry::register)
+}
+
+/**
+ * 2차 명령이 부를 동작. [AppCommandHandlers] 와 나누어 두는 이유는 소유가 다르기 때문이다 —
+ * 이쪽은 화면 이동과 세션 전체에 걸린 동작이고, 저쪽은 열린 저장소 화면 안의 동작이다.
+ */
+class SecondaryCommandHandlers(
+    val onNavigate: (AppDestination) -> Unit,
+    val onOpenRepository: () -> Unit,
+    val onUndoLast: () -> Unit,
+    val availabilityOf: (AppDestination) -> CommandAvailability,
+)
 
 /**
  * 저장소 디렉터리 선택 대화상자. 창 소유자의 몫이라 여기 둔다 (`WelcomeEvents` KDoc).
