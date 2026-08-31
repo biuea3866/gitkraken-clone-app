@@ -61,6 +61,14 @@ class StagingState(
     var failure: UndineException? by mutableStateOf(null)
         private set
 
+    /**
+     * 되돌리기 기록만 실패한 사유. null 이 아니면 **저장소 변경은 성공했고 Undo 항목만 남지 않았다.**
+     *
+     * 여기서는 값을 **전달만** 한다 — 문구를 그리는 일은 화면별 과제로 남겨 둔다 (결정 G30 3).
+     */
+    var undoRecordFailure: UndineException? by mutableStateOf(null)
+        private set
+
     /** 진행 중인 커밋. 연속 입력이 커밋을 두 번 만들지 않게 하는 근거다. */
     var committing: Boolean by mutableStateOf(false)
         private set
@@ -150,7 +158,7 @@ class StagingState(
         committing = true
         scope.launch {
             try {
-                actions.amendCommit.confirm(message, target)
+                undoRecordFailure = actions.amendCommit.confirm(message, target).undoRecordFailure
                 finishCommit()
             } catch (thrown: UndineException) {
                 handle(thrown)
@@ -167,13 +175,16 @@ class StagingState(
     }
 
     private suspend fun commitNew() {
-        actions.commitStaged.execute(message)
+        undoRecordFailure = actions.commitStaged.execute(message).undoRecordFailure
         finishCommit()
     }
 
     private suspend fun requestAmend() {
         when (val outcome = actions.amendCommit.request(message)) {
-            is AmendOutcome.Amended -> finishCommit()
+            is AmendOutcome.Amended -> {
+                undoRecordFailure = outcome.outcome.undoRecordFailure
+                finishCommit()
+            }
             is AmendOutcome.ConfirmationRequired -> amendConfirmation = outcome.target
         }
     }

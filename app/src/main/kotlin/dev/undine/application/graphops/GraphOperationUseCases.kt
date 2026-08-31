@@ -13,15 +13,10 @@ import dev.undine.domain.WorktreeOpsGateway
 import dev.undine.domain.graphops.GraphOperation
 import dev.undine.domain.undo.GitOperationKind
 import dev.undine.domain.undo.UndoStrategy
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
-import java.util.logging.Level
-import java.util.logging.Logger
-
-private val LOGGER: Logger = Logger.getLogger("dev.undine.application.graphops.ExecuteGraphOperationUseCase")
 
 /**
  * 그래프 조작 하나의 결과.
@@ -76,7 +71,8 @@ class ExecuteGraphOperationUseCase(
 
     suspend fun execute(operation: GraphOperation): GraphOperationOutcome {
         currentCoroutineContext().ensureActive()
-        return when (operation) {
+        return operationRecorder.recordingChange {
+            when (operation) {
             is GraphOperation.Merge -> runOnBranch(
                 on = operation.into,
                 // git 기본 동작과 같게 빨리 감기를 허용한다 — 금지하면 명령행 결과와 달라진다 (결정 G7).
@@ -102,7 +98,8 @@ class ExecuteGraphOperationUseCase(
 
             is GraphOperation.ResetBranch -> resetBranch(operation)
 
-            is GraphOperation.MoveTag -> moveTag(operation)
+                is GraphOperation.MoveTag -> moveTag(operation)
+            }
         }
     }
 
@@ -170,7 +167,7 @@ class ExecuteGraphOperationUseCase(
         currentCoroutineContext().ensureActive()
         return withContext(NonCancellable) {
             val baseline = refGateway.moveTag(operation.tag, to = operation.to, expected = expected)
-            val failure = recordQuietly(GitOperationKind.TAG_MOVE) {
+            val failure = operationRecorder.recordQuietly(GitOperationKind.TAG_MOVE) {
                 operationRecorder.record(
                     GitOperationKind.TAG_MOVE,
                     UndoStrategy.MoveTagTo(operation.tag, previous = expected, expected = operation.to),
@@ -200,29 +197,9 @@ class ExecuteGraphOperationUseCase(
         kind: GitOperationKind,
         targetLabel: String,
     ): GraphOperationOutcome.Completed {
-        val failure = recordQuietly(kind) {
+        val failure = operationRecorder.recordQuietly(kind) {
             operationRecorder.record(kind, strategy, baseline, targetLabel)
         }
         return GraphOperationOutcome.Completed(strategy.branch, strategy.expected, failure)
     }
-
-    /**
-     * 기록 실패를 저장소 변경 실패로 승격하지 않고 **사유를 호출자에게 돌려준다.**
-     *
-     * 여기 오는 시점에 Git 변경은 이미 적용돼 있다. 취소는 삼키지 않는다 —
-     * [NonCancellable] 구간이라 여기서 올라오는 취소는 기록 자체의 실패가 아니다.
-     */
-    private suspend fun recordQuietly(
-        operation: GitOperationKind,
-        record: suspend () -> Unit,
-    ): UndineException? =
-        try {
-            record()
-            null
-        } catch (cancellation: CancellationException) {
-            throw cancellation
-        } catch (failure: UndineException) {
-            LOGGER.log(Level.WARNING, "undo record failed after applied change: operation=$operation", failure)
-            failure
-        }
 }

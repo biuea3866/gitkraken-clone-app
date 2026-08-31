@@ -16,6 +16,7 @@ import dev.undine.domain.graphops.GraphOperation
 import dev.undine.domain.undo.GitOperationKind
 import dev.undine.domain.undo.UndoStack
 import dev.undine.domain.undo.UndoStrategy
+import dev.undine.testsupport.spyRecorderOf
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -129,7 +130,7 @@ private fun strategiesIn(stack: UndoStack): List<UndoStrategy> = stack.history()
  * 기준 상태를 조회하지 못하게 만드는 방식은 더 이상 쓸 수 없다. 기록은 변경 결과가 준 값을 그대로
  * 쓰고 `RefGateway` 를 읽지 않기 때문이다 (UND-73) — 기록 자체를 실패시켜야 이 경로에 닿는다.
  */
-private fun recorderFailingWith(failure: Throwable): OperationRecorder = mockk<OperationRecorder>().also {
+private fun recorderFailingWith(failure: Throwable): OperationRecorder = spyRecorderOf().also {
     coEvery { it.record(any(), any(), any(), any()) } throws failure
 }
 

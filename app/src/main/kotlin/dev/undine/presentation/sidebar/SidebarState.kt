@@ -94,6 +94,14 @@ class SidebarState(
         private set
 
     /**
+     * 되돌리기 기록만 실패한 사유. null 이 아니면 **저장소 변경은 성공했고 Undo 항목만 남지 않았다.**
+     *
+     * 여기서는 값을 **전달만** 한다 — 문구를 그리는 일은 화면별 과제로 남겨 둔다 (결정 G30 3).
+     */
+    var undoRecordFailure: UndineException? by mutableStateOf(null)
+        private set
+
+    /**
      * 삭제 요청이 Gateway 응답을 기다리는 중인지.
      *
      * 삭제는 reflog 로만 복구되므로 확인 입력이 연달아 들어와도 **한 번만** 나가야 한다.
@@ -148,7 +156,7 @@ class SidebarState(
     /** 강제 없이 체크아웃한다 — 워킹트리가 더러우면 덮어쓰지 않고 실패가 [actionFailure] 로 온다. */
     fun checkout(branch: Branch) {
         openMenu = null
-        runAction { checkoutBranch(branch.name) }
+        runAction { undoRecordFailure = checkoutBranch(branch.name).undoRecordFailure }
     }
 
     /**

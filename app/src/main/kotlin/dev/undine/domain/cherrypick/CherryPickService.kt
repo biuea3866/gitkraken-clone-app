@@ -38,16 +38,18 @@ class CherryPickService(
     suspend fun cherryPick(commits: List<CommitId>, recordOrigin: Boolean): CherryPickResult {
         if (commits.isEmpty()) throw UndineException.StateViolation(NOTHING_TO_PICK)
         requireCleanWorkingTree()
-        val created = mutableListOf<CommitId>()
+        // 단계마다 임계 구역이 다르므로 되돌리기 재료도 단계 결과에서 모은다 — 여기서 따로 읽으면
+        // 그 읽기와 적용 사이에 앱 내부의 다른 조작이 끼어든다 (UND-73).
+        val applied = mutableListOf<CherryPickStep.Created>()
         cherryPickGateway.orderOldestFirst(commits).forEach { commit ->
             when (val step = cherryPickGateway.apply(commit, recordOrigin)) {
-                is CherryPickStep.Created -> created += step.commit
+                is CherryPickStep.Created -> applied += step
                 CherryPickStep.Empty -> Unit
-                is CherryPickStep.Conflicted ->
-                    return CherryPickResult.Conflicted(step.paths, commit, created.toList())
+                // 멈추기 전에 만든 커밋은 중단해도 남는다 — 되돌릴 재료를 함께 실어 보낸다.
+                is CherryPickStep.Conflicted -> return applied.toConflicted(step.paths, stoppedAt = commit)
             }
         }
-        return if (created.isEmpty()) CherryPickResult.AlreadyApplied else CherryPickResult.Applied(created)
+        return applied.toResult()
     }
 
     /**
@@ -63,13 +65,12 @@ class CherryPickService(
         // 멈춘 커밋은 이어가기 **전에** 읽는다 — 성공하면 그 참조가 지워져 더 이상 알 수 없다.
         val stopped = cherryPickGateway.stoppedAt()
         return when (val step = cherryPickGateway.continueAfterResolve()) {
-            is CherryPickStep.Created -> CherryPickResult.Applied(listOf(step.commit))
+            is CherryPickStep.Created -> listOf(step).toResult()
             CherryPickStep.Empty -> CherryPickResult.AlreadyApplied
-            is CherryPickStep.Conflicted -> CherryPickResult.Conflicted(
+            // 이어가다 다시 충돌했다면 여전히 같은 커밋에서 멈춰 있고, 만든 커밋도 없다.
+            is CherryPickStep.Conflicted -> emptyList<CherryPickStep.Created>().toConflicted(
                 paths = step.paths,
-                // 이어가다 다시 충돌했다면 여전히 같은 커밋에서 멈춰 있다.
                 stoppedAt = stopped ?: throw UndineException.StateViolation(STOPPED_COMMIT_UNKNOWN),
-                created = emptyList(),
             )
         }
     }
@@ -108,6 +109,38 @@ class CherryPickService(
         }
     }
 }
+
+/**
+ * 적용된 단계들을 하나의 결과로 묶는다.
+ *
+ * 되돌리기는 이 묶음 **전체**를 한 번에 되돌리므로, 시작점은 첫 단계가 적용 직전에 캡처한 HEAD 이고
+ * 기준 상태는 마지막 단계가 적용 직후에 캡처한 값이다. 만들어진 커밋이 없으면 되돌릴 것도 없다.
+ */
+private fun List<CherryPickStep.Created>.toResult(): CherryPickResult =
+    firstOrNull()?.let { first ->
+        CherryPickResult.Applied(
+            created = map { it.commit },
+            previousHead = first.previousHead,
+            baseline = last().baseline,
+        )
+    } ?: CherryPickResult.AlreadyApplied
+
+/**
+ * 멈추기 전까지 적용된 단계들을 충돌 결과로 묶는다.
+ *
+ * 만들어진 커밋이 있으면 [toResult] 와 **같은 재료**를 싣는다 — 충돌로 멈춘 뒤에도 그 묶음은
+ * 저장소에 남아 있으므로 되돌릴 수 있어야 한다. 아무것도 만들지 않았으면 되돌릴 것이 없어 null 이다.
+ */
+private fun List<CherryPickStep.Created>.toConflicted(
+    paths: List<String>,
+    stoppedAt: CommitId,
+): CherryPickResult.Conflicted = CherryPickResult.Conflicted(
+    paths = paths,
+    stoppedAt = stoppedAt,
+    created = map { it.commit },
+    previousHead = firstOrNull()?.previousHead,
+    baseline = lastOrNull()?.baseline,
+)
 
 /** 화면이 "무엇 때문에 시작하지 못했는지" 를 보여줄 수 있도록 더티한 경로를 한 목록으로 모은다. */
 private fun WorkingTreeStatus.dirtyPaths(): List<String> =

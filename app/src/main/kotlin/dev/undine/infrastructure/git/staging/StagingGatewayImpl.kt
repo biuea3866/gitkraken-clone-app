@@ -7,6 +7,7 @@ import dev.undine.domain.CommitResult
 import dev.undine.domain.DiffHunk
 import dev.undine.domain.StagingGateway
 import dev.undine.domain.UndineException
+import dev.undine.infrastructure.git.ref.baselineHeld
 import dev.undine.infrastructure.git.repository.GitAccess
 import kotlinx.coroutines.CancellationException
 import org.eclipse.jgit.api.Git
@@ -152,10 +153,20 @@ private fun Repository.stageHunksOf(path: String, hunks: List<DiffHunk>) {
     writeIndexEntry(path, patched.toByteArray(), entry?.fileMode ?: FileMode.REGULAR_FILE)
 }
 
+/**
+ * 커밋 **직전** HEAD 를 같은 임계 구역에서 읽어 결과에 싣는다 — 되돌리기(soft reset)의 목적지이며,
+ * 호출자가 커밋 뒤에 읽으면 이미 새 커밋을 가리켜 되돌릴 지점을 잃는다 (UND-73).
+ */
 private fun Repository.createCommit(message: String): CommitResult =
     Git(this).use { git ->
         git.requireStagedChanges()
-        CommitResult(commitId = CommitId.of(git.commit().setMessage(message).call().name))
+        val previousHead = resolve(Constants.HEAD)?.let { CommitId.of(it.name) }
+        val created = git.commit().setMessage(message).call()
+        CommitResult(
+            commitId = CommitId.of(created.name),
+            previousHead = previousHead,
+            baseline = baselineHeld(),
+        )
     }
 
 private fun Git.removeFromIndex(paths: List<String>) {

@@ -92,8 +92,8 @@ Undine 구현을 **60개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2
 | [UND-62](UND-62-submodule-remove-safety.md) | 서브모듈 제거 안전성 (파괴적 정리 재설계) | M | 8 | UND-32 | `domain/submodule/SubmoduleGateway.kt` · `infrastructure/git/submodule/` (제거 경로) |
 | [UND-63](UND-63-wave8-common-contract.md) | wave 8 공통 계약 확장 | M | 8 | UND-38 · UND-49 · UND-59 | `domain/Settings.kt` · `infrastructure/settings/SettingsCodec.kt` · `domain/undo/GitOperationKind.kt` · `presentation/i18n/` |
 | [UND-64](UND-64-release-publishing.md) | 릴리즈 발행 파이프라인 | S | 8 | UND-25 | `.github/workflows/` (릴리즈 워크플로) · `packaging/`(체크섬) |
-| [UND-79](UND-79-undo-recording-backfill.md) | Undo 기록을 wave 1~7 변경 연산에 채운다 | L | 9 | UND-38 · UND-51 | `application/staging/` · `application/cherrypick/` · `application/sidebar/` · `application/conflict/` · `application/rebase/` |
-| [UND-80](UND-80-session-bound-execution.md) | 변경 실행을 시작 시점 세션에 묶는다 | M | 9 | UND-44 · UND-51 | `infrastructure/git/repository/GitAccess.kt` · `RepositoryHolder.kt` · `application/session/` |
+| [UND-79](UND-79-undo-recording-backfill.md) | Undo 기록을 wave 1~7 변경 연산에 채운다 | L | 9 | UND-38 · UND-51 | `application/{staging,cherrypick,sidebar,conflict,rebase,merge,toolbar}/` · `domain/{CommitResult,RefGateway,undo/}` · `infrastructure/git/{staging,ref,merge,rebase,cherrypick}/` · **`infrastructure/git/repository/GitAccess.kt`**(UND-80 과 겹침 — 아래) |
+| [UND-80](UND-80-session-bound-execution.md) | 변경 실행을 시작 시점 세션에 묶는다 | M | 9 | UND-44 · UND-51 · **UND-79**(같은 파일) | `infrastructure/git/repository/GitAccess.kt` · `RepositoryHolder.kt` · `application/session/` |
 | [UND-81](UND-81-tab-session-wiring.md) | 탭 세션 배선 — 다중 저장소와 Undo 범위 | L | 9 | UND-43 · UND-44 · UND-51 · UND-80 | `presentation/RepositorySessionDriver.kt` · `di/AppComponent.kt`(세션 범위) · `presentation/App.kt`(탭 슬롯) |
 | [UND-52](UND-52-e2e-scenario-phase2.md) | 2차 E2E 시나리오 테스트 | M | 10 | UND-51 | `app/src/test/kotlin/.../scenario2/` |
 | [UND-54](UND-54-merge-start-state-guard.md) | merge/rebase 시작 경로 상태 가드 완결 | S | 4 | UND-21 | `infrastructure/git/merge/` (가드 추가) |
@@ -203,12 +203,14 @@ flowchart LR
 | 8b2 | UND-74 | 1 |
 | 8c | UND-65, UND-66, UND-67, UND-68, UND-69, UND-70 | 6 |
 | 9 | UND-51, UND-75, UND-76, UND-77, UND-78 | 5 |
-| 9b | UND-79, UND-80 | 2 |
-| 9c | UND-81 | 1 |
+| 9b | UND-79 | 1 |
+| 9c | UND-80 | 1 |
+| 9d | UND-81 | 1 |
 | 10 | UND-50, UND-52 | 2 |
 
-- **너비 분포**: [1, 11, 11, 5, 3, 1, 8, 5, 3, 1, 9, 6, 1, 2]
-- **평균 wave 너비**: 4.79
+- **너비 분포**: [1, 11, 11, 5, 3, 1, 8, 5, 3, 1, 9, 6, 1, 1, 1, 2]
+- **평균 wave 너비**: 4.25
+- **wave 9b~9d 가 직렬인 이유**: 셋 다 `GitAccess.kt` 와 그 위의 세션 범위를 건드린다 — Single Writer per File 이 같은 wave 배치를 막는다. 나눌 수 있는 결합이 아니다.
 - **판정: 통과** — 모든 wave 너비가 1~2 인 직선형 DAG 가 아니다.
   wave 2·3·7a·8b·8c 에서 각각 11·11·8·9·6 개가 동시에 열린다.
 > UND-54·UND-56·UND-57 은 이 표에서 누락돼 있었다 — 티켓 헤더의 wave 값으로 채웠다.

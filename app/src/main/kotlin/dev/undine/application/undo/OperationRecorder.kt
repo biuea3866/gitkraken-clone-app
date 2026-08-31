@@ -1,12 +1,27 @@
 package dev.undine.application.undo
 
+import dev.undine.domain.CommitId
 import dev.undine.domain.RefGateway
 import dev.undine.domain.RepositoryBaseline
+import dev.undine.domain.UndineException
 import dev.undine.domain.undo.GitOperationKind
+import dev.undine.domain.undo.ChangeRecordingOrder
 import dev.undine.domain.undo.OperationEntry
 import dev.undine.domain.undo.UndoStack
 import dev.undine.domain.undo.UndoStrategy
+import kotlinx.coroutines.CancellationException
 import java.time.Clock
+import java.util.logging.Level
+import java.util.logging.Logger
+
+private val LOGGER: Logger = Logger.getLogger("dev.undine.application.undo.OperationRecorder")
+
+/**
+ * 되돌릴 지점을 확보하지 못했을 때 남기는 사유. 브랜치 위가 아니거나(detached HEAD) 변경 직전
+ * 지점이 없는(첫 커밋) 경우이며, 화면이 그대로 보여줄 수 있는 문장이다.
+ */
+private const val NO_UNDO_POINT_REASON =
+    "변경 직전 지점을 확보하지 못해 되돌릴 수 없습니다 — reflog 에서 이전 위치를 찾으세요."
 
 /**
  * 변경 연산이 끝난 직후 그 연산의 되돌리기 정보를 세션 스택에 남긴다.
@@ -21,7 +36,20 @@ class OperationRecorder(
     private val refGateway: RefGateway,
     private val undoStack: UndoStack,
     private val clock: Clock = Clock.systemDefaultZone(),
+    private val changeRecordingOrder: ChangeRecordingOrder? = null,
 ) {
+
+    /**
+     * Git 변경과 그 Undo 기록을 저장소가 소유한 같은 순서로 완료한다.
+     *
+     * application이 `GitAccess`를 직접 알면 레이어가 역전되므로, 그 구현이 제공하는 domain 계약만
+     * 받는다. 순번을 결과에 넣어 UndoStack에서 재정렬하는 방법은 이미 기록 중인 producer와 용량
+     * 축출까지 모두 바꿔야 하므로, 기록이 끝날 때까지 다음 변경을 들이지 않는 쪽을 택했다 (G32).
+     * `null`은 GitAccess가 없는 단위 테스트의 기존 조립만 위한 값이며, 앱 배선과 실제 저장소
+     * 시나리오는 반드시 이 계약을 주입한다.
+     */
+    suspend fun <T> recordingChange(block: suspend () -> T): T =
+        changeRecordingOrder?.withOrderedChange(block) ?: block()
 
     /**
      * 되돌릴 수 있는 연산과 **그 변경이 준 기준 상태**를 함께 기록한다.
@@ -65,6 +93,72 @@ class OperationRecorder(
         targetLabel: String = operation.label,
     ): OperationEntry =
         recordEntry(operation, UndoStrategy.Irreversible(reason), refGateway.currentBaseline(), targetLabel)
+
+    /**
+     * 기록 실패를 **저장소 변경 실패로 승격하지 않고** 사유를 호출자에게 돌려준다.
+     *
+     * 이 메서드가 여기 있는 이유는 계약의 소유자가 기록하는 객체이기 때문이다. 규칙 8
+     * (`.agent/rules/exception-handling.md`)이 "Git 변경은 성공으로 돌려주되 기록 실패 사유를 결과에
+     * 실어라" 를 요구하는데, 그 처리를 호출부마다 복제하면 여덟 벌이 되고 한 벌만 어긋나도 실패가
+     * 조용히 사라진다 (결정 G30 2).
+     *
+     * [CancellationException] 은 다시 던진다 — 호출부는 [kotlinx.coroutines.NonCancellable] 구간에서
+     * 이 경로를 지나므로, 여기까지 올라온 취소는 기록 자체의 실패가 아니다. 삼키면 취소가 동작하지 않는다.
+     */
+    suspend fun recordQuietly(
+        operation: GitOperationKind,
+        record: suspend () -> Unit,
+    ): UndineException? =
+        try {
+            record()
+            null
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: UndineException) {
+            LOGGER.log(Level.WARNING, "undo record failed after applied change: operation=$operation", failure)
+            failure
+        }
+
+    /**
+     * 변경 **직전** HEAD 로 soft reset 하는 되돌리기를 [recordQuietly] 경로로 남긴다.
+     *
+     * [previousHead] 나 [baseline] 이 되돌릴 지점을 주지 못하면(첫 커밋·detached HEAD) 기록을 건너뛰지
+     * 않고 사유와 함께 복구 불가로 남긴다 — 건너뛰면 사용자는 그 변경이 있었다는 사실조차 모른다.
+     */
+    suspend fun recordSoftReset(
+        operation: GitOperationKind,
+        previousHead: CommitId?,
+        baseline: RepositoryBaseline,
+        targetLabel: String = operation.label,
+    ): UndineException? = recordQuietly(operation) {
+        if (previousHead == null || !baseline.isOnBranch) {
+            recordIrreversible(operation, NO_UNDO_POINT_REASON, targetLabel)
+        } else {
+            record(operation, UndoStrategy.SoftResetTo(previousHead), baseline, targetLabel)
+        }
+    }
+
+    /**
+     * 변경 **직전** 지점으로 hard reset 하는 되돌리기를 [recordQuietly] 경로로 남긴다.
+     *
+     * `branch` 와 `expected` 는 [baseline] 이 준다 — 변경과 같은 임계 구역에서 캡처한 값이므로
+     * "이 연산이 만든 위치" 를 정확히 가리킨다. 되돌리기는 브랜치가 여전히 그 위치일 때만 수행하며,
+     * 그래서 `expected` 에 기본값을 두지 않는다 (결정 G5).
+     */
+    suspend fun recordHardReset(
+        operation: GitOperationKind,
+        previousHead: CommitId?,
+        baseline: RepositoryBaseline,
+        targetLabel: String = operation.label,
+    ): UndineException? = recordQuietly(operation) {
+        val branch = baseline.branch
+        val expected = baseline.head
+        if (previousHead == null || branch == null || expected == null) {
+            recordIrreversible(operation, NO_UNDO_POINT_REASON, targetLabel)
+        } else {
+            record(operation, UndoStrategy.HardResetTo(branch, previousHead, expected), baseline, targetLabel)
+        }
+    }
 
     private suspend fun recordEntry(
         operation: GitOperationKind,

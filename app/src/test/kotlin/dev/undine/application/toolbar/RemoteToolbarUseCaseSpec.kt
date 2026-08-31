@@ -7,6 +7,8 @@ import dev.undine.domain.RefName
 import dev.undine.domain.RemoteGateway
 import dev.undine.domain.RemoteRef
 import dev.undine.domain.UndineException
+import dev.undine.domain.undo.UndoStack
+import dev.undine.testsupport.recorderOf
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
@@ -101,8 +103,8 @@ class RemoteToolbarUseCaseSpec : BehaviorSpec({
                 val remoteGateway = mockk<RemoteGateway>()
                 coEvery { remoteGateway.push(BRANCH, false, any()) } returns PushResult.Accepted
 
-                PushRemoteUseCase(remoteGateway).execute(BRANCH, force = false) { } shouldBe
-                    PushResult.Accepted
+                PushRemoteUseCase(remoteGateway, recorderOf(UndoStack()))
+                    .execute(BRANCH, force = false) { }.result shouldBe PushResult.Accepted
             }
         }
 
@@ -111,7 +113,7 @@ class RemoteToolbarUseCaseSpec : BehaviorSpec({
                 val remoteGateway = mockk<RemoteGateway>()
                 coEvery { remoteGateway.push(BRANCH, true, any()) } returns PushResult.Accepted
 
-                PushRemoteUseCase(remoteGateway).execute(BRANCH, force = true) { }
+                PushRemoteUseCase(remoteGateway, recorderOf(UndoStack())).execute(BRANCH, force = true) { }
 
                 coVerify(exactly = 1) { remoteGateway.push(BRANCH, true, any()) }
             }
@@ -123,7 +125,8 @@ class RemoteToolbarUseCaseSpec : BehaviorSpec({
                 val rejected = PushResult.Rejected(PushResult.RejectReason.NON_FAST_FORWARD)
                 coEvery { remoteGateway.push(BRANCH, false, any()) } returns rejected
 
-                PushRemoteUseCase(remoteGateway).execute(BRANCH, force = false) { } shouldBe rejected
+                PushRemoteUseCase(remoteGateway, recorderOf(UndoStack()))
+                    .execute(BRANCH, force = false) { }.result shouldBe rejected
             }
         }
     }

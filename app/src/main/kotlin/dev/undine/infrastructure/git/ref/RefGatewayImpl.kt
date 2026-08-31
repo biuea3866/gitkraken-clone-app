@@ -1,6 +1,7 @@
 package dev.undine.infrastructure.git.ref
 
 import dev.undine.domain.Branch
+import dev.undine.domain.CheckoutResult
 import dev.undine.domain.CommitId
 import dev.undine.domain.DeleteBranchResult
 import dev.undine.domain.RefGateway
@@ -169,13 +170,13 @@ class RefGatewayImpl(private val gitAccess: GitAccess) : RefGateway {
      * 더티 워킹트리에서 [force] 가 false 면 [UndineException.DirtyWorkingTree] 로 거부한다 —
      * 강제 체크아웃은 사용자의 편집을 되돌릴 수 없이 지우므로 기본값이 될 수 없다.
      */
-    override suspend fun checkout(ref: RefName, force: Boolean) {
+    override suspend fun checkout(ref: RefName, force: Boolean): CheckoutResult =
         gitAccess.withRepository { repository ->
             translatingGitFailure("ref.checkout") {
+                // 이전 위치·기준 상태를 **체크아웃과 같은 구역**에서 캡처한다 (UND-73).
                 Git.wrap(repository).use { git -> git.checkoutHeld(ref, force) }
             }
         }
-    }
 
     /**
      * 조건부 갱신이라 **읽기와 쓰기가 한 임계 구역 안**에 있어야 한다 — 기대 위치를 밖에서 읽어

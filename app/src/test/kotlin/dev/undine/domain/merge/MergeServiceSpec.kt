@@ -10,12 +10,16 @@ import dev.undine.domain.RepositoryPath
 import dev.undine.domain.RepositoryState
 import dev.undine.domain.UndineException
 import dev.undine.domain.WorkingTreeStatus
+import dev.undine.testsupport.baselineOf
+import dev.undine.testsupport.commitId
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+
+private val PREVIOUS = commitId(1)
 
 private const val HEAD_HASH = "1111111111111111111111111111111111111111"
 private const val SKIPPED_HASH = "2222222222222222222222222222222222222222"
@@ -129,7 +133,7 @@ class MergeServiceSpec : BehaviorSpec({
 
         `when`("병합을 시작하면") {
             val gateway = RecordingMergeGateway(
-                mergeResult = MergeResult.Succeeded(CommitId.of(HEAD_HASH), fastForward = false),
+                mergeResult = merged(),
             )
             val result = serviceOf(gateway = gateway).merge(RefName(TARGET_BRANCH), allowFastForward = false)
 
@@ -137,7 +141,7 @@ class MergeServiceSpec : BehaviorSpec({
                 gateway.calls shouldContainExactly listOf("merge")
                 gateway.mergeTarget shouldBe RefName(TARGET_BRANCH)
                 gateway.mergeAllowedFastForward shouldBe false
-                result shouldBe MergeResult.Succeeded(CommitId.of(HEAD_HASH), fastForward = false)
+                result shouldBe merged()
             }
         }
 
@@ -152,14 +156,14 @@ class MergeServiceSpec : BehaviorSpec({
 
         `when`("리베이스를 시작하면") {
             val gateway = RecordingMergeGateway(
-                rebaseResult = RebaseResult.Succeeded(CommitId.of(HEAD_HASH)),
+                rebaseResult = rebased(),
             )
             val result = serviceOf(gateway = gateway).rebase(RefName(TARGET_BRANCH))
 
             then("대상이 그대로 전달되고 결과가 올라온다") {
                 gateway.calls shouldContainExactly listOf("rebase")
                 gateway.rebaseTarget shouldBe RefName(TARGET_BRANCH)
-                result shouldBe RebaseResult.Succeeded(CommitId.of(HEAD_HASH))
+                result shouldBe rebased()
             }
         }
 
@@ -215,13 +219,13 @@ class MergeServiceSpec : BehaviorSpec({
         }
 
         `when`("충돌을 해결하고 계속하면") {
-            val gateway = inProgress(MergeResult.Succeeded(CommitId.of(HEAD_HASH), fastForward = false))
+            val gateway = inProgress(merged())
             // 충돌을 해결한 워킹트리는 항상 더티하므로 계속·중단은 더티 검사를 하지 않는다.
             val result = MergeService(FakeRepositoryGateway(DIRTY_STATUS), gateway).continueMerge()
 
             then("더티 워킹트리와 무관하게 병합이 이어진다") {
                 gateway.calls shouldContainExactly listOf("continueMerge")
-                result shouldBe MergeResult.Succeeded(CommitId.of(HEAD_HASH), fastForward = false)
+                result shouldBe merged()
             }
         }
 
@@ -283,7 +287,7 @@ class MergeServiceSpec : BehaviorSpec({
     given("리베이스가 진행 중인 저장소") {
         val rebasing = RecordingMergeGateway(
             state = RepositoryState.REBASING,
-            rebaseResult = RebaseResult.Succeeded(CommitId.of(HEAD_HASH)),
+            rebaseResult = rebased(),
         )
 
         `when`("계속·건너뛰기·중단을 호출하면") {
@@ -301,7 +305,7 @@ class MergeServiceSpec : BehaviorSpec({
     given("리베이스가 다른 커밋에서 멈춰 있는 저장소") {
         val gateway = RecordingMergeGateway(
             state = RepositoryState.REBASING,
-            rebaseResult = RebaseResult.Succeeded(CommitId.of(HEAD_HASH)),
+            rebaseResult = rebased(),
             rebasingCommit = CommitId.of(OTHER_HASH),
         )
         val service = MergeService(FakeRepositoryGateway(DIRTY_STATUS), gateway)
@@ -320,7 +324,7 @@ class MergeServiceSpec : BehaviorSpec({
     given("리베이스 중이지만 멈춘 커밋을 읽을 수 없는 저장소") {
         val gateway = RecordingMergeGateway(
             state = RepositoryState.REBASING,
-            rebaseResult = RebaseResult.Succeeded(CommitId.of(HEAD_HASH)),
+            rebaseResult = rebased(),
             rebasingCommit = null,
         )
         val service = MergeService(FakeRepositoryGateway(DIRTY_STATUS), gateway)
@@ -376,3 +380,10 @@ class MergeServiceSpec : BehaviorSpec({
         }
     }
 })
+
+/** 병합·리베이스 결과가 결과에 싣는 되돌리기 재료 (UND-73). 이 스펙은 그 값을 통과시키는지만 본다. */
+private fun merged(): MergeResult.Succeeded =
+    MergeResult.Succeeded(CommitId.of(HEAD_HASH), fastForward = false, PREVIOUS, baselineOf(CommitId.of(HEAD_HASH)))
+
+private fun rebased(): RebaseResult.Succeeded =
+    RebaseResult.Succeeded(CommitId.of(HEAD_HASH), PREVIOUS, baselineOf(CommitId.of(HEAD_HASH)))

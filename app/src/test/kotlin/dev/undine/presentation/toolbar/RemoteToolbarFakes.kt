@@ -3,6 +3,7 @@ package dev.undine.presentation.toolbar
 import dev.undine.application.toolbar.FetchRemoteUseCase
 import dev.undine.application.toolbar.PullRemoteUseCase
 import dev.undine.application.toolbar.PushRemoteUseCase
+import dev.undine.application.undo.OperationRecorder
 import dev.undine.domain.Branch
 import dev.undine.domain.CommitId
 import dev.undine.domain.Progress
@@ -12,6 +13,8 @@ import dev.undine.domain.RemoteGateway
 import dev.undine.domain.RemoteRef
 import dev.undine.domain.RepositoryPath
 import dev.undine.domain.UndineException
+import dev.undine.domain.undo.UndoStack
+import dev.undine.testsupport.recorderOf
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -136,11 +139,12 @@ internal fun toolbarStateWith(
     remotes: List<String> = listOf(REMOTE),
     branch: Branch? = branchWith(ahead = 0, behind = 0),
     scope: CoroutineScope = CoroutineScope(Dispatchers.Unconfined),
+    recorder: OperationRecorder = recorderOf(UndoStack()),
 ): RemoteToolbarState = RemoteToolbarState(
     scope = scope,
     fetchRemote = FetchRemoteUseCase(remoteGateway),
     pullRemote = PullRemoteUseCase(remoteGateway),
-    pushRemote = PushRemoteUseCase(remoteGateway),
+    pushRemote = PushRemoteUseCase(remoteGateway, recorder),
     remotes = remotes,
     branch = branch,
 )

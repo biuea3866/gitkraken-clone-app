@@ -1,16 +1,5 @@
 package dev.undine.presentation.rebase
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.assertTextContains
-import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.test.runComposeUiTest
 import dev.undine.domain.ThemeMode
 import dev.undine.domain.rebase.InteractiveRebaseOutcome
 import dev.undine.domain.rebase.RebaseAction
@@ -22,10 +11,23 @@ import dev.undine.presentation.i18n.StringCatalog
 import dev.undine.presentation.i18n.commonTranslations
 import dev.undine.presentation.i18n.mergeTranslations
 import dev.undine.presentation.i18n.rebaseTranslations
+import dev.undine.testsupport.baselineOf
+import dev.undine.testsupport.commitId
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.runComposeUiTest
 
 /**
  * 계획 편집기 화면 — 재정렬·동작 지정·미리보기·검증 사유·경고·진행률·적용/취소.
@@ -176,7 +178,7 @@ class RebasePlanEditorSpec : FunSpec({
         runComposeUiTest {
             val gateway = RecordingRebaseGateway(
                 targets = targetsOf("첫", "둘"),
-                outcome = InteractiveRebaseOutcome.Completed,
+                outcome = completedOutcome(),
             )
             val state = loadedState(gateway)
             setContent { EditorUnderTest(state) }

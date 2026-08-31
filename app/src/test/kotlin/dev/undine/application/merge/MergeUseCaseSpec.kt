@@ -14,11 +14,17 @@ import dev.undine.domain.merge.MergeResult
 import dev.undine.domain.merge.MergeService
 import dev.undine.domain.merge.RebaseResult
 import dev.undine.domain.merge.SkipConfirmation
+import dev.undine.domain.undo.UndoStack
+import dev.undine.testsupport.baselineOf
+import dev.undine.testsupport.commitId
+import dev.undine.testsupport.recorderOf
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import java.io.File
+
+private val PREVIOUS = commitId(1)
 
 private const val HEAD_HASH = "2222222222222222222222222222222222222222"
 private const val TARGET_BRANCH = "refs/heads/feature"
@@ -102,14 +108,14 @@ private fun serviceOf(
 class MergeUseCaseSpec : BehaviorSpec({
 
     given("병합이 성공하는 도메인 서비스") {
-        val succeeded = MergeResult.Succeeded(CommitId.of(HEAD_HASH), fastForward = true)
+        val succeeded = merged(fastForward = true)
         val (service, _) = serviceOf(mergeResult = succeeded)
 
         `when`("MergeBranchUseCase 를 실행하면") {
-            val result = MergeBranchUseCase(service).execute(RefName(TARGET_BRANCH))
+            val result = MergeBranchUseCase(service, recorderOf(UndoStack())).execute(RefName(TARGET_BRANCH))
 
             then("도메인 결과를 그대로 돌려준다") {
-                result shouldBe succeeded
+                result.result shouldBe succeeded
             }
         }
     }
@@ -119,23 +125,23 @@ class MergeUseCaseSpec : BehaviorSpec({
         val (service, _) = serviceOf(mergeResult = conflicted)
 
         `when`("MergeBranchUseCase 를 실행하면") {
-            val result = MergeBranchUseCase(service).execute(RefName(TARGET_BRANCH))
+            val result = MergeBranchUseCase(service, recorderOf(UndoStack())).execute(RefName(TARGET_BRANCH))
 
             then("충돌을 예외로 바꾸지 않고 Conflicted 를 그대로 돌려준다") {
-                result shouldBe conflicted
+                result.result shouldBe conflicted
             }
         }
     }
 
     given("리베이스가 성공하는 도메인 서비스") {
-        val succeeded = RebaseResult.Succeeded(CommitId.of(HEAD_HASH))
+        val succeeded = rebased()
 
         `when`("RebaseBranchUseCase 를 실행하면") {
             val (service, _) = serviceOf(rebaseResult = succeeded)
-            val result = RebaseBranchUseCase(service).execute(RefName(TARGET_BRANCH))
+            val result = RebaseBranchUseCase(service, recorderOf(UndoStack())).execute(RefName(TARGET_BRANCH))
 
             then("도메인 결과를 그대로 돌려준다") {
-                result shouldBe succeeded
+                result.result shouldBe succeeded
             }
         }
 
@@ -150,7 +156,7 @@ class MergeUseCaseSpec : BehaviorSpec({
     }
 
     given("병합이 진행 중인 도메인 서비스") {
-        val succeeded = MergeResult.Succeeded(CommitId.of(HEAD_HASH), fastForward = false)
+        val succeeded = merged(fastForward = false)
 
         `when`("ContinueMergeUseCase 를 실행하면") {
             val (service, _) = serviceOf(state = RepositoryState.MERGING, mergeResult = succeeded)
@@ -179,7 +185,7 @@ class MergeUseCaseSpec : BehaviorSpec({
 
             then("DirtyWorkingTree 를 삼키지 않고 그대로 전파한다") {
                 val thrown = shouldThrow<UndineException.DirtyWorkingTree> {
-                    MergeBranchUseCase(service).execute(RefName(TARGET_BRANCH))
+                    MergeBranchUseCase(service, recorderOf(UndoStack())).execute(RefName(TARGET_BRANCH))
                 }
                 thrown.paths shouldBe listOf("new.txt")
             }
@@ -202,7 +208,7 @@ class MergeUseCaseSpec : BehaviorSpec({
 
             then("NotFound 를 그대로 전파한다") {
                 val thrown = shouldThrow<UndineException.NotFound> {
-                    MergeBranchUseCase(service).execute(RefName(TARGET_BRANCH))
+                    MergeBranchUseCase(service, recorderOf(UndoStack())).execute(RefName(TARGET_BRANCH))
                 }
                 thrown.kind shouldBe UndineException.NotFound.Kind.REF
                 thrown.name shouldBe TARGET_BRANCH
@@ -233,3 +239,10 @@ class MergeUseCaseSpec : BehaviorSpec({
         }
     }
 })
+
+/** 병합·리베이스 결과가 결과에 싣는 되돌리기 재료 (UND-73). UseCase 가 그 값을 바꾸지 않는지 본다. */
+private fun merged(fastForward: Boolean): MergeResult.Succeeded =
+    MergeResult.Succeeded(CommitId.of(HEAD_HASH), fastForward, PREVIOUS, baselineOf(CommitId.of(HEAD_HASH)))
+
+private fun rebased(): RebaseResult.Succeeded =
+    RebaseResult.Succeeded(CommitId.of(HEAD_HASH), PREVIOUS, baselineOf(CommitId.of(HEAD_HASH)))

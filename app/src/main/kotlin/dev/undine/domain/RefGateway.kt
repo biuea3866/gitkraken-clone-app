@@ -25,7 +25,14 @@ interface RefGateway {
 
     suspend fun deleteBranch(name: RefName, force: Boolean): DeleteBranchResult
 
-    suspend fun checkout(ref: RefName, force: Boolean)
+    /**
+     * [ref] 로 체크아웃하고 **옮기기 직전 위치**를 결과로 준다.
+     *
+     * 이전 위치를 결과에 싣는 이유는 되돌리기를 기록하는 호출자가 그것을 스스로 읽을 수 없기
+     * 때문이다 — 체크아웃 뒤에는 이미 사라졌고, 전에 읽으면 그 읽기와 체크아웃 사이의 다른 이동을
+     * 놓친다 (UND-73). 실패는 결과가 아니라 예외이므로 이 약속의 대상이 아니다.
+     */
+    suspend fun checkout(ref: RefName, force: Boolean): CheckoutResult
 
     /**
      * [branch] 가 **[expected] 를 가리키고 있을 때만** [to] 로 옮긴다 (조건부 갱신).

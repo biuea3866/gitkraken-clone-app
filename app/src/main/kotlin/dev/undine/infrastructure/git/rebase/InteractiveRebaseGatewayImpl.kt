@@ -10,6 +10,7 @@ import dev.undine.domain.rebase.RebasePlan
 import dev.undine.domain.rebase.RebaseRunProgress
 import dev.undine.domain.rebase.RebaseTarget
 import dev.undine.infrastructure.git.history.toCommit
+import dev.undine.infrastructure.git.ref.baselineHeld
 import dev.undine.infrastructure.git.repository.GitAccess
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.RebaseCommand
@@ -93,11 +94,14 @@ class InteractiveRebaseGatewayImpl(private val gitAccess: GitAccess) : Interacti
             // "아무것도 안 했다" 와 "빨리 감기로 옮겼다" 가 구분되지 않는다.
             if (plan.steps.isEmpty()) return@gitOperation InteractiveRebaseOutcome.NothingToDo
             val upstreamId = git.repository.requireCommit(upstream)
+            // 적용 **직전** HEAD 가 되돌리기 목적지다. 이 구역 안에서 읽어야 그 사이의 다른 조작이
+            // 섞이지 않는다 (UND-73) — 리베이스가 끝난 뒤에는 이미 새 커밋을 가리킨다.
+            val previousHead = git.repository.resolve(Constants.HEAD)?.let { CommitId.of(it.name) }
             git.rebase()
                 .setUpstream(upstreamId)
                 .runInteractively(PlanHandler(plan))
                 .call()
-                .toOutcome(git)
+                .toOutcome(git, previousHead)
         }
 
     override suspend fun progress(): RebaseRunProgress? =
@@ -176,8 +180,11 @@ private fun String.matchesRequested(requested: String): Boolean {
 private fun String.firstLine(): String = lineSequence().firstOrNull().orEmpty()
 
 /** 충돌·멈춤은 실패가 아니라 결과다 — 예외로 올리면 화면이 이어갈 수단을 잃는다. */
-private fun JGitRebaseResult.toOutcome(git: Git): InteractiveRebaseOutcome = when (status) {
-    JGitRebaseResult.Status.OK, JGitRebaseResult.Status.FAST_FORWARD -> InteractiveRebaseOutcome.Completed
+private fun JGitRebaseResult.toOutcome(git: Git, previousHead: CommitId?): InteractiveRebaseOutcome = when (status) {
+    JGitRebaseResult.Status.OK, JGitRebaseResult.Status.FAST_FORWARD -> InteractiveRebaseOutcome.Completed(
+        previousHead = previousHead,
+        baseline = git.repository.baselineHeld(),
+    )
     JGitRebaseResult.Status.UP_TO_DATE, JGitRebaseResult.Status.NOTHING_TO_COMMIT ->
         InteractiveRebaseOutcome.NothingToDo
 

@@ -6,6 +6,9 @@ import dev.undine.domain.CommitId
 import dev.undine.domain.CommitResult
 import dev.undine.domain.StagingGateway
 import dev.undine.domain.UndineException
+import dev.undine.domain.undo.UndoStack
+import dev.undine.testsupport.baselineOf
+import dev.undine.testsupport.recorderOf
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
@@ -22,7 +25,12 @@ private const val AMENDED_HASH = "3333333333333333333333333333333333333333"
 private const val MESSAGE = "커밋 메시지 고침"
 
 private val TARGET = CommitId.of(TARGET_HASH)
-private val AMENDED = CommitResult(CommitId.of(AMENDED_HASH))
+private val PREVIOUS = CommitId.of(TARGET_HASH)
+private val AMENDED = CommitResult(
+    commitId = CommitId.of(AMENDED_HASH),
+    previousHead = PREVIOUS,
+    baseline = baselineOf(CommitId.of(AMENDED_HASH)),
+)
 
 class AmendCommitUseCaseSpec : BehaviorSpec({
 
@@ -35,7 +43,7 @@ class AmendCommitUseCaseSpec : BehaviorSpec({
             val outcome = gateway.useCase().request(MESSAGE)
 
             Then("조회 뒤 확인 없이 곧바로 실행한다") {
-                outcome.shouldBeInstanceOf<AmendOutcome.Amended>().result shouldBe AMENDED
+                outcome.shouldBeInstanceOf<AmendOutcome.Amended>().outcome.result shouldBe AMENDED
                 coVerifyOrder {
                     gateway.inspectAmend()
                     gateway.amend(MESSAGE, AmendConfirmation.NotRequired)
@@ -63,7 +71,7 @@ class AmendCommitUseCaseSpec : BehaviorSpec({
             val result = useCase.confirm(MESSAGE, TARGET)
 
             Then("같은 대상에 대한 확인 값으로 실행한다") {
-                result shouldBe AMENDED
+                result.result shouldBe AMENDED
                 coVerify { gateway.amend(MESSAGE, AmendConfirmation.ConfirmedRemoteTarget(TARGET)) }
             }
         }
@@ -147,4 +155,5 @@ class AmendCommitUseCaseSpec : BehaviorSpec({
     }
 })
 
-private fun StagingGateway.useCase(): AmendCommitUseCase = AmendCommitUseCase(this)
+private fun StagingGateway.useCase(): AmendCommitUseCase =
+    AmendCommitUseCase(this, recorderOf(UndoStack()))

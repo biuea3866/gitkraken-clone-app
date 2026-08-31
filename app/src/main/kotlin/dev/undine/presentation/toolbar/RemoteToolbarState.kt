@@ -91,6 +91,13 @@ class RemoteToolbarState(
     var outcome: RemoteOperationOutcome? by mutableStateOf(null)
         private set
 
+    /**
+     * push 의 실행 이력 기록만 실패한 사유. null 이 아니면 **원격에는 올라갔고 이력 항목만 남지
+     * 않았다.** 여기서는 값을 **전달만** 한다 — 문구를 그리는 일은 화면별 과제로 남겨 둔다 (결정 G30 3).
+     */
+    var undoRecordFailure: UndineException? by mutableStateOf(null)
+        private set
+
     private var generation: Int = 0
     private var runningJob: Job? = null
 
@@ -161,7 +168,9 @@ class RemoteToolbarState(
         if (pushTargetRemote == null) return
         val ref = branch?.name ?: return
         start(RemoteOperation.PUSH, forcePush = force) { onProgress ->
-            when (val result = pushRemote.execute(ref, force, onProgress)) {
+            val pushed = pushRemote.execute(ref, force, onProgress)
+            undoRecordFailure = pushed.undoRecordFailure
+            when (val result = pushed.result) {
                 PushResult.Accepted -> RemoteOperationOutcome.Pushed(force)
                 is PushResult.Rejected -> RemoteOperationOutcome.PushRejected(result.reason)
             }

@@ -9,6 +9,7 @@ import dev.undine.domain.merge.MergeGateway
 import dev.undine.domain.merge.MergeResult
 import dev.undine.domain.merge.RebaseResult
 import dev.undine.domain.merge.SkipConfirmation
+import dev.undine.infrastructure.git.ref.baselineHeld
 import dev.undine.infrastructure.git.repository.GitAccess
 import dev.undine.infrastructure.git.repository.toOpenedRepository
 import dev.undine.infrastructure.git.repository.toWorkingTreeStatus
@@ -89,9 +90,12 @@ class MergeGatewayImpl(private val gitAccess: GitAccess) : MergeGateway {
             val unresolved = git.unresolvedPaths()
             when {
                 unresolved.isNotEmpty() -> MergeResult.Conflicted(unresolved)
+                // 되돌리기 재료는 **이 구역 안에서** 읽는다 — 시작 지점은 병합이 남긴 ORIG_HEAD 다.
                 else -> MergeResult.Succeeded(
                     head = git.commitMerge(),
                     fastForward = false,
+                    previousHead = git.repository.startPointHeld(),
+                    baseline = git.repository.baselineHeld(),
                 )
             }
         }

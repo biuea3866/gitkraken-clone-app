@@ -3,6 +3,7 @@ package dev.undine.presentation.rebase
 import dev.undine.application.rebase.ApplyRebasePlanUseCase
 import dev.undine.application.rebase.LoadRebaseProgressUseCase
 import dev.undine.application.rebase.LoadRebaseTargetsUseCase
+import dev.undine.application.undo.OperationRecorder
 import dev.undine.domain.RefName
 import dev.undine.domain.UndineException
 import dev.undine.domain.rebase.InteractiveRebaseGateway
@@ -10,7 +11,11 @@ import dev.undine.domain.rebase.InteractiveRebaseOutcome
 import dev.undine.domain.rebase.RebasePlan
 import dev.undine.domain.rebase.RebaseRunProgress
 import dev.undine.domain.rebase.RebaseTarget
+import dev.undine.domain.undo.UndoStack
+import dev.undine.testsupport.baselineOf
 import dev.undine.testsupport.commit
+import dev.undine.testsupport.commitId
+import dev.undine.testsupport.recorderOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 
@@ -19,7 +24,7 @@ internal val UPSTREAM = RefName("refs/heads/main")
 /** 대상 목록을 주고 적용 호출을 기록하는 대역. 편집이 저장소에 닿는지 여기서 본다. */
 internal class RecordingRebaseGateway(
     private val targets: List<RebaseTarget> = emptyList(),
-    private val outcome: InteractiveRebaseOutcome = InteractiveRebaseOutcome.Completed,
+    private val outcome: InteractiveRebaseOutcome = completedOutcome(),
     private val progress: RebaseRunProgress? = null,
     private val failOnApply: UndineException? = null,
 ) : InteractiveRebaseGateway {
@@ -44,15 +49,21 @@ internal class RecordingRebaseGateway(
     override suspend fun progress(): RebaseRunProgress? = progress
 }
 
-internal fun rebaseStateWith(gateway: InteractiveRebaseGateway): RebasePlanState = RebasePlanState(
-    actions = rebaseActionsOf(gateway),
+internal fun rebaseStateWith(
+    gateway: InteractiveRebaseGateway,
+    recorder: OperationRecorder = recorderOf(UndoStack()),
+): RebasePlanState = RebasePlanState(
+    actions = rebaseActionsOf(gateway, recorder),
     upstream = { UPSTREAM },
     scope = unconfinedScope(),
 )
 
-internal fun rebaseActionsOf(gateway: InteractiveRebaseGateway): RebaseActions = RebaseActions(
+internal fun rebaseActionsOf(
+    gateway: InteractiveRebaseGateway,
+    recorder: OperationRecorder = recorderOf(UndoStack()),
+): RebaseActions = RebaseActions(
     loadTargets = LoadRebaseTargetsUseCase(gateway),
-    applyPlan = ApplyRebasePlanUseCase(gateway),
+    applyPlan = ApplyRebasePlanUseCase(gateway, recorder),
     loadProgress = LoadRebaseProgressUseCase(gateway),
 )
 
@@ -76,3 +87,7 @@ internal fun targetsOf(vararg messages: String, pushed: Set<String> = emptySet()
     messages.mapIndexed { index, message ->
         RebaseTarget(commit(index + 1, message = message), isPushed = message in pushed)
     }
+
+/** 적용 완료 결과가 싣는 되돌리기 재료 (UND-73). */
+internal fun completedOutcome(): InteractiveRebaseOutcome.Completed =
+    InteractiveRebaseOutcome.Completed(previousHead = commitId(9), baseline = baselineOf(commitId(1)))
