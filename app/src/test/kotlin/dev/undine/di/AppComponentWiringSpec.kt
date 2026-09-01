@@ -4,8 +4,13 @@ import dev.undine.application.graphops.GraphOperationOutcome
 import dev.undine.domain.CommitId
 import dev.undine.domain.RefName
 import dev.undine.domain.RepositoryPath
+import dev.undine.domain.diagnostics.LogDirectoryLocation
+import dev.undine.domain.gitconfig.EffectiveValue
+import dev.undine.domain.gitconfig.GitConfigKey
+import dev.undine.domain.gitconfig.GitConfigSource
 import dev.undine.domain.graphops.GraphOperation
 import dev.undine.domain.reflog.RecoveryTarget
+import dev.undine.domain.typography.MonospaceFontListing
 import dev.undine.domain.undo.GitOperationKind
 import dev.undine.infrastructure.git.submodule.repositoryWithUninitializedSubmodule
 import io.kotest.core.spec.style.BehaviorSpec
@@ -13,6 +18,7 @@ import io.kotest.engine.spec.tempdir
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import org.eclipse.jgit.api.Git
 import java.io.File
@@ -115,6 +121,42 @@ class AppComponentWiringSpec : BehaviorSpec({
             }
         }
 
+        `when`("환경설정이 소비하는 네 계약을 조립에서 꺼내 실행하면") {
+            then("git 실효값·서체 목록·로그 위치가 실제로 답하고 신원 묶음이 원자적 수정을 담는다") {
+                val work = repositoryWithUninitializedSubmodule()
+                Git.open(work).use { git ->
+                    git.repository.config.apply {
+                        setString("init", null, "defaultBranch", "trunk")
+                        save()
+                    }
+                }
+                val directory = tempdir()
+                val component = componentIn(directory)
+
+                // 저장소가 열려 있지 않아도 실효값을 말할 수 있어야 한다 — 조회 전에 먼저 부른다.
+                component.readEffectiveConfig.execute(null)
+
+                val repositoryScoped =
+                    component.readEffectiveConfig.execute(RepositoryPath(work.path))
+                val fonts = component.loadMonospaceFonts.execute()
+                val logDirectory = component.diagnosticsUseCases.locateLogDirectory.execute()
+
+                repositoryScoped[GitConfigKey.INIT_DEFAULT_BRANCH] shouldBe
+                    EffectiveValue("trunk", GitConfigSource.REPOSITORY)
+                // 열거 결과는 기계마다 다르므로 **계약이 약속한 성질**만 본다 (오름차순·중복 없음).
+                when (fonts) {
+                    is MonospaceFontListing.Available ->
+                        fonts.families shouldBe fonts.families.distinct().sorted()
+
+                    is MonospaceFontListing.Unavailable -> fonts.cause.shouldNotBeNull()
+                }
+                // appDirectory 를 넘겼으므로 그 디렉터리가 그대로 로그 위치가 된다.
+                logDirectory shouldBe LogDirectoryLocation.Found(directory.toPath())
+                component.identityUseCases.updateProfile.shouldNotBeNull()
+                component.identityUseCases.profileUsage.shouldNotBeNull()
+            }
+        }
+
         `when`("아무 변경도 하지 않았으면") {
             then("Undo 이력이 비어 있고 되돌릴 대상도 없다") {
                 val work = repositoryWithUninitializedSubmodule()
@@ -130,6 +172,8 @@ class AppComponentWiringSpec : BehaviorSpec({
 
 })
 
-/** 설정 파일은 저장소 밖 임시 디렉터리에 둔다 — 워킹트리 안에 두면 상태 검증이 흔들린다. */
-private fun componentIn(directory: File): AppComponent =
-    AppComponent(File(directory, "settings.json").toPath())
+/** 설정 파일과 로그는 저장소 밖 임시 디렉터리에 둔다 — 워킹트리 안에 두면 상태 검증이 흔들린다. */
+private fun componentIn(directory: File): AppComponent = AppComponent(
+    settingsFile = File(directory, "settings.json").toPath(),
+    appDirectory = directory.toPath(),
+)

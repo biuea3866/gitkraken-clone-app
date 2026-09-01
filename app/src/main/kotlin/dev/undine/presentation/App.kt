@@ -582,7 +582,10 @@ fun main() {
 private fun ApplicationScope.UndineApplication() {
     val errors = remember { AppErrorState() }
     val appDirectory = remember { appDirectory() }
-    val component = remember { AppComponent(appDirectory.resolve("settings.json")) }
+    // 앱 디렉터리를 함께 넘긴다 — 설정 파일과 로그가 같은 곳에 있고, 경로 정책은 이 한 곳이 정한다.
+    val component = remember {
+        AppComponent(settingsFile = appDirectory.resolve("settings.json"), appDirectory = appDirectory)
+    }
 
     LaunchedEffect(Unit) { installGlobalExceptionHandler(errors, appDirectory) }
 

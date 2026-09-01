@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -15,8 +16,10 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import dev.undine.application.gitconfig.ReadEffectiveConfigUseCase
 import dev.undine.domain.AutomaticFetchSettings
 import dev.undine.domain.PullStrategy
+import dev.undine.domain.RepositoryPath
 import dev.undine.domain.Settings
 import dev.undine.domain.SettingsPreference
 import dev.undine.presentation.design.UndineTokens
@@ -34,8 +37,19 @@ private const val UNREADABLE_INTERVAL_MINUTES: Int = 0
 /**
  * Git 탭 — 기본 브랜치명·pull 방식·자동 fetch(켬·끔과 분 단위 주기), 그리고 커밋 서명 실효값.
  *
- * **앱 설정값의 편집·표시까지만 한다.** 저장소 `git config` 의 실효값·출처 표시는 그 계약이 아직
- * 없어 후속 티켓(UND-75) 몫이고, 저장된 값을 실제 fetch 스케줄에 연결하는 소비 경로도 별도 티켓이다.
+ * **git 설정과 앱 설정의 결합은 이 화면이 한다** (결정 G34 UND-75 1). `GitConfigGateway` 는 Git 만
+ * 알고 앱 `Settings` 를 모르므로, 어느 쪽이 실효값인지 정하는 자리는 여기뿐이다. git 세 범위 중
+ * 어디에든 값이 있으면 그 값과 **범위까지 드러낸 출처**를 보여 주고, 세 범위 모두에 없을 때만 앱
+ * 설정 값을 앱 출처로 보여 준다 — 전역을 고쳤는데 값이 안 바뀌는 이유를 말할 수 있어야 한다
+ * (결정 G35 UND-75 1).
+ *
+ * **편집기는 git 값이 이겨도 그대로 둔다.** 앱 설정 값은 여전히 사용자의 것이고 git 이 값을 지우면
+ * 다시 실효값이 된다. 고칠 수 없게 감추면 사용자가 되돌릴 방법을 잃는다.
+ *
+ * **git 설정을 읽지 못한 것도, 아직 읽지 않은 것도 "git 에 값 없음" 이 아니다.** 읽기에 실패하면
+ * 사유를 알리고 조회 중이면 진행 중임을 알리며, 값이 올라오지 않은 행의 출처를 그동안 앱이라고
+ * 말하지 않는다 — 앱 설정 값이 실효값 행세를 하면 사용자는 왜 값이 안 먹는지 알 수 없다
+ * (결정 G35 UND-75 2 · G39).
  *
  * **서명은 읽기 전용이다.** 앱이 서명 설정의 사본을 두면 사용자가 `git config` 로 바꾼 값과
  * 어긋나므로, 이 탭은 [signingPreferencesRows] 가 주는 실효값을 보여 주기만 하고 토글을 달지 않는다.
@@ -44,15 +58,19 @@ private const val UNREADABLE_INTERVAL_MINUTES: Int = 0
  * 일어나지 않고, [PreferencesState] 가 그 거부를 사유와 함께 화면에 내보낸다. 그래서 편집기는
  * 화면이 들고 있는 값만 그리고 **입력을 낙관적으로 보여 주지 않는다** — 거부된 값은 화면에 남지 않는다.
  *
- * 시그니처 고정 이유는 [GeneralPreferencesContent] 와 같다. Git 탭은 추가 의존이 없다.
+ * @param gitConfig git 설정 실효값 조회. 화면은 UseCase 만 부르고 Gateway 를 알지 못한다.
+ * @param repository 저장소 범위를 함께 볼 대상. 열린 저장소가 없으면 `null` 이다.
  */
 @Composable
 fun GitPreferencesContent(
     state: PreferencesState,
     texts: PreferencesStrings,
+    gitConfig: ReadEffectiveConfigUseCase,
+    repository: RepositoryPath?,
     modifier: Modifier = Modifier,
 ) {
     val settings = state.settings
+    val effective = rememberGitPreferencesEffectiveState(gitConfig, repository).effective
 
     Column(
         modifier = modifier
@@ -60,8 +78,24 @@ fun GitPreferencesContent(
             .testTag(GitPreferencesTags.ROOT),
         verticalArrangement = Arrangement.spacedBy(UndineTokens.spacing.small),
     ) {
+        when (effective) {
+            // 사유 자체는 도메인 예외라 화면 문구로 옮기지 않고, 무엇을 읽지 못했는지만 리소스가 말한다.
+            is GitEffectiveConfig.Failed -> BasicText(
+                text = texts.gitConfigLoadFailed,
+                style = UndineTokens.typography.caption.copy(color = UndineTokens.color.warning),
+                modifier = Modifier.testTag(GitPreferencesTags.LOAD_FAILURE),
+            )
+            // 읽는 중임을 알린다 — 값이 아직 안 나온 이유가 부재인지 진행 중인지 말할 수 있어야 한다.
+            is GitEffectiveConfig.Loading -> BasicText(
+                text = texts.gitConfigLoading,
+                style = UndineTokens.typography.caption.copy(color = UndineTokens.color.foregroundTertiary),
+                modifier = Modifier.testTag(GitPreferencesTags.LOADING),
+            )
+            // 아직 시작 전이면 알릴 진행도 없고, 다 읽었으면 각 행이 출처를 말한다.
+            GitEffectiveConfig.Unread, is GitEffectiveConfig.Loaded -> Unit
+        }
         // 빈 이름은 domain 이 거부하므로 탭은 입력을 그대로 넘긴다.
-        PreferencesRowItem(defaultBranchNameRow(settings, texts), state::restoreDefault) {
+        PreferencesRowItem(effectiveDefaultBranchNameRow(settings, effective, texts), state::restoreDefault) {
             GitTextEditor(
                 value = settings.defaultBranchName,
                 label = texts.defaultBranchName,
@@ -70,7 +104,7 @@ fun GitPreferencesContent(
             )
         }
         // 지금 고른 pull 방식은 행이 보여 주고, 두 버튼은 그 값을 바꾼다.
-        PreferencesRowItem(pullStrategyRow(settings, texts), state::restoreDefault) {
+        PreferencesRowItem(effectivePullStrategyRow(settings, effective, texts), state::restoreDefault) {
             Row(horizontalArrangement = Arrangement.spacedBy(UndineTokens.spacing.small)) {
                 UndineToolbarButton(
                     label = texts.pullStrategyMerge,
@@ -168,6 +202,8 @@ private fun GitTextEditor(
 /** Git 탭 편집기를 가리키는 테스트 태그. 탭마다 공용 태그 목록을 늘리지 않으려고 여기 둔다. */
 internal object GitPreferencesTags {
     const val ROOT: String = "preferences.git"
+    const val LOAD_FAILURE: String = "preferences.git.loadFailure"
+    const val LOADING: String = "preferences.git.loading"
     const val DEFAULT_BRANCH_NAME: String = "preferences.git.defaultBranchName"
     const val PULL_STRATEGY_MERGE: String = "preferences.git.pullStrategy.merge"
     const val PULL_STRATEGY_REBASE: String = "preferences.git.pullStrategy.rebase"

@@ -23,8 +23,8 @@ import java.io.IOException
 /**
  * 프로필 편집기가 열려 있는 대상. 닫혀 있으면 `null` 이다.
  *
- * 추가와 수정을 한 편집기로 다루되 **되돌릴 원본이 있는지**가 갈린다 — 수정은 같은 이름으로 다시
- * 저장할 수 없어 지운 뒤 넣는 경로를 쓰고, 그 경로가 실패하면 [Edit.original] 로 되살린다.
+ * 추가와 수정을 한 편집기로 다루되 **고칠 원본이 있는지**가 갈린다 — 수정은 [Edit.original] 의
+ * 이름을 원본 키로 삼아 원자적 수정 한 번으로 끝난다. 되돌릴 중간 상태가 생기지 않는다.
  */
 sealed interface AccountProfileEditor {
 
@@ -56,8 +56,9 @@ fun AccountProfileEditor.titleIn(texts: PreferencesStrings): String = when (this
  * 한 스택에 섞으면 Undo 를 눌렀을 때 무엇이 되돌아갈지 예측할 수 없다. 삭제의 되돌리기는 확인
  * 게이트([requestDelete] → [confirmDelete])가 대신한다.
  *
- * **사용 저장소 수 집계와 이메일 형식 검증은 이 화면의 몫이 아니다** — 세는 계약도 검증 계약도
- * domain 에 없어 화면이 만들면 검증이 presentation 에 생긴다 (후속 티켓 UND-76).
+ * **이메일 형식 검증과 이름 변경 거부는 이 화면의 몫이 아니다** — 둘 다 domain 계약이 사유와 함께
+ * 거부하고, 이 홀더는 그 거부를 [saveFailure] 로 옮기기만 한다. 화면이 자기 검증을 만들면 규칙이
+ * 두 벌이 되어 한쪽만 고쳐진다.
  */
 @Stable
 @Suppress("TooManyFunctions") // 목록·편집기·삭제 확인·저장소 매핑이 한 탭의 상태 전이다.
@@ -232,76 +233,18 @@ class AccountPreferencesState(
         )
     }
 
+    /**
+     * 편집 결과를 저장한다. 수정은 **원자적 갱신 한 번**이다 —
+     * [dev.undine.application.identity.UpdateProfileUseCase] 가 읽기-수정-쓰기를 한 임계구역 안에서
+     * 끝내므로, 지운 뒤 넣다 실패해 프로필을 잃는 경로도 그것을 되돌리는 보상 경로도 없다
+     * (결정 G34 UND-76 4).
+     *
+     * **이름 변경은 여기서 판정하지 않는다.** 원본 이름을 그대로 넘기고, 이름이 다르면 계약이
+     * 사유와 함께 거부한다 (결정 G38) — 화면이 자기 검증을 만들면 domain 과 두 벌이 된다.
+     */
     private suspend fun save(target: AccountProfileEditor, edited: IdentityProfile) = when (target) {
         AccountProfileEditor.Add -> identity.saveProfile.execute(edited)
-        is AccountProfileEditor.Edit -> replaceProfile(target.original, edited)
-    }
-
-    /**
-     * 저장된 프로필을 고친 값으로 바꾼다. 갱신 계약이 없어 **삭제와 저장 두 번**으로 이뤄지므로
-     * 순서로 유실을 막는다.
-     *
-     * 이름이 바뀌면 새 이름을 **먼저 저장**한다 — 이름이 겹쳐 거부되면 원본이 그대로 남는다.
-     * 이름이 그대로면 같은 이름이 거부되므로 지운 뒤 넣고, 넣지 못하면 원본을 되살린다.
-     */
-    private suspend fun replaceProfile(original: IdentityProfile, edited: IdentityProfile) {
-        if (original.name != edited.name) {
-            identity.saveProfile.execute(edited)
-            deleteOriginalOrRemoveNewProfile(original.name, edited)
-            return
-        }
-        identity.deleteProfile.execute(original.name)
-        try {
-            identity.saveProfile.execute(edited)
-        } catch (failure: UndineException) {
-            restore(original, failure)
-            throw failure
-        } catch (failure: IOException) {
-            restore(original, failure)
-            throw failure
-        }
-    }
-
-    private suspend fun deleteOriginalOrRemoveNewProfile(originalName: String, edited: IdentityProfile) {
-        try {
-            identity.deleteProfile.execute(originalName)
-        } catch (failure: UndineException) {
-            removeNewProfile(edited, failure)
-            throw failure
-        } catch (failure: IOException) {
-            removeNewProfile(edited, failure)
-            throw failure
-        }
-    }
-
-    /**
-     * 지웠지만 새 값을 넣지 못한 프로필을 되살린다. 되살리기까지 실패하면 원인을 [failure] 에
-     * 매달아 둔다 — 복원 실패로 원래 실패를 덮으면 무엇 때문에 실패했는지 말할 수 없다.
-     */
-    private suspend fun restore(original: IdentityProfile, failure: Exception) {
-        try {
-            identity.saveProfile.execute(original)
-        } catch (restoreFailure: UndineException) {
-            failure.addSuppressed(restoreFailure)
-        } catch (restoreFailure: IOException) {
-            failure.addSuppressed(restoreFailure)
-        }
-    }
-
-    /**
-     * 이름을 바꾼 수정에서 원본 삭제가 실패하면, 먼저 저장한 새 프로필을 다시 지운다.
-     *
-     * 새 이름을 저장한 뒤 원본을 지우는 순서는 이름 충돌에서 원본을 지키지만, 두 번째 단계가 실패하면
-     * 둘 다 남는다. 보정 실패는 원래 실패에 붙여 화면이 저장 전체가 성공한 것처럼 보이지 않게 한다.
-     */
-    private suspend fun removeNewProfile(edited: IdentityProfile, failure: Exception) {
-        try {
-            identity.deleteProfile.execute(edited.name)
-        } catch (rollbackFailure: UndineException) {
-            failure.addSuppressed(rollbackFailure)
-        } catch (rollbackFailure: IOException) {
-            failure.addSuppressed(rollbackFailure)
-        }
+        is AccountProfileEditor.Edit -> identity.updateProfile.execute(target.original.name, edited)
     }
 
     /**

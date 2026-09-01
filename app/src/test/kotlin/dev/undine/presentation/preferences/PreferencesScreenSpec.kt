@@ -23,7 +23,9 @@ import dev.undine.application.identity.ClearLocalIdentityUseCase
 import dev.undine.application.identity.DeleteProfileUseCase
 import dev.undine.application.identity.IdentityUseCases
 import dev.undine.application.identity.LoadProfilesUseCase
+import dev.undine.application.identity.ProfileUsageUseCase
 import dev.undine.application.identity.SaveProfileUseCase
+import dev.undine.application.identity.UpdateProfileUseCase
 import dev.undine.application.preferences.LoadPreferencesUseCase
 import dev.undine.application.preferences.UpdatePreferencesUseCase
 import dev.undine.domain.Settings
@@ -69,7 +71,9 @@ private fun tabDependencies(): PreferencesTabDependencies {
         identity = IdentityUseCases(
             loadProfiles = LoadProfilesUseCase(identityService),
             saveProfile = SaveProfileUseCase(identityService),
+            updateProfile = UpdateProfileUseCase(identityService),
             deleteProfile = DeleteProfileUseCase(identityService),
+            profileUsage = ProfileUsageUseCase(mockk(relaxed = true)),
             applyProfile = ApplyProfileUseCase(identityService),
             clearLocalIdentity = ClearLocalIdentityUseCase(identityService),
             assignedProfileName = AssignedProfileNameUseCase(mockk(relaxed = true)),
@@ -80,6 +84,10 @@ private fun tabDependencies(): PreferencesTabDependencies {
             checkAvailability = CheckToolAvailabilityUseCase(externalToolGateway),
         ),
         commands = CommandRegistry(),
+        gitConfig = mockk(relaxed = true),
+        monospaceFonts = mockk(relaxed = true),
+        diagnostics = mockk(relaxed = true),
+        repository = null,
     )
 }
 

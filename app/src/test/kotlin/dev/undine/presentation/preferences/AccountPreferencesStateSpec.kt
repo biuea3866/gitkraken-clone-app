@@ -6,7 +6,9 @@ import dev.undine.application.identity.ClearLocalIdentityUseCase
 import dev.undine.application.identity.DeleteProfileUseCase
 import dev.undine.application.identity.IdentityUseCases
 import dev.undine.application.identity.LoadProfilesUseCase
+import dev.undine.application.identity.ProfileUsageUseCase
 import dev.undine.application.identity.SaveProfileUseCase
+import dev.undine.application.identity.UpdateProfileUseCase
 import dev.undine.domain.AuthenticationMethod
 import dev.undine.domain.Commit
 import dev.undine.domain.HistoryGateway
@@ -76,8 +78,11 @@ private class FakeIdentityGateway(
     /** 다음 저장 **한 번만** 실패시킨다 — 실패 뒤의 되돌리기가 성공할 수 있어야 그 경로를 볼 수 있다. */
     var nextSaveFailure: Exception? = null
 
-    /** 다음 삭제 **한 번만** 실패시킨다 — 이름 변경 뒤의 보정 삭제가 성공하는지를 검증한다. */
+    /** 다음 삭제 **한 번만** 실패시킨다. */
     var nextDeleteFailure: Exception? = null
+
+    /** 다음 수정 **한 번만** 실패시킨다 — 실패 뒤에도 저장된 원본이 그대로인지 본다. */
+    var nextUpdateFailure: Exception? = null
 
     /** 시작된 순서대로 쌓이는 호출 이름. 확인 전 삭제·중복 호출을 이 목록으로 판정한다. */
     val calls = mutableListOf<String>()
@@ -101,17 +106,27 @@ private class FakeIdentityGateway(
     }
 
     /**
-     * UND-76 이 계약에 더한 원자적 수정. 이 화면은 아직 쓰지 않는다 — 전환은 UND-82 가 한다
-     * (결정 G34). 여기서는 계약을 만족시키되 **호출되면 드러나도록** [calls] 에 남긴다.
+     * 원자적 수정. **계약 그대로 이름 변경을 거부한다** (결정 G38) — 대역이 계약보다 너그러우면
+     * 화면이 거부를 다루는지 이 테스트로는 알 수 없다.
+     *
+     * 실패해도 [stored] 를 건드리지 않는다. 읽기-수정-쓰기가 한 임계구역 안에서 끝난다는 것이
+     * 이 계약의 요점이라, 중간 상태가 남는 대역은 계약을 잘못 흉내 내는 것이다.
      */
     override suspend fun updateProfile(originalName: String, profile: IdentityProfile) {
         calls += "updateProfile:$originalName"
+        nextUpdateFailure?.let { failure ->
+            nextUpdateFailure = null
+            throw failure
+        }
+        if (profile.name != originalName) {
+            throw UndineException.StateViolation("신원 프로필 이름은 바꿀 수 없습니다: '$originalName'")
+        }
         val index = stored.indexOfFirst { saved -> saved.name == originalName }
         if (index < 0) throw UndineException.StateViolation("고칠 신원 프로필이 없습니다: '$originalName'")
         stored = stored.mapIndexed { position, saved -> if (position == index) profile else saved }
     }
 
-    /** 사용 집계도 UND-82 가 쓴다. 이 화면은 부르지 않으므로 후보 없음과 같은 결과를 돌려준다. */
+    /** 사용 집계는 삭제 확인 표시가 쓴다. 이 화면의 상태 전이는 부르지 않는다. */
     override suspend fun profileUsage(name: String): IdentityProfileUsage {
         calls += "profileUsage:$name"
         return IdentityProfileUsage(
@@ -178,7 +193,9 @@ private class AccountFixture(
             identity = IdentityUseCases(
                 loadProfiles = LoadProfilesUseCase(service),
                 saveProfile = SaveProfileUseCase(service),
+                updateProfile = UpdateProfileUseCase(service),
                 deleteProfile = DeleteProfileUseCase(service),
+                profileUsage = ProfileUsageUseCase(gateway),
                 applyProfile = ApplyProfileUseCase(service),
                 clearLocalIdentity = ClearLocalIdentityUseCase(service),
                 assignedProfileName = AssignedProfileNameUseCase(gateway),
@@ -260,9 +277,10 @@ class AccountPreferencesStateSpec : FunSpec({
         state.saveFailure.shouldNotBeNull()
     }
 
-    test("같은 이름으로 프로필을 수정하면 새 값이 목록에 반영된다") {
+    test("같은 이름으로 이메일을 고치면 원자적 수정만 부르고 삭제·저장 경로를 타지 않는다") {
         val fixture = AccountFixture(listOf(WORK))
         val state = fixture.state()
+        fixture.gateway.calls.clear()
 
         state.startEdit(WORK)
         state.fillEditor(name = WORK_PROFILE, email = PERSONAL_EMAIL, signingKeyId = "")
@@ -272,50 +290,60 @@ class AccountPreferencesStateSpec : FunSpec({
             WORK.copy(email = PERSONAL_EMAIL, signingKeyId = null),
         )
         state.editor shouldBe null
+        fixture.gateway.calls.count { call -> call == "updateProfile:$WORK_PROFILE" } shouldBe 1
+        // 지운 뒤 넣는 옛 경로는 그 사이 실패가 곧 유실이라 다시 살아나면 안 된다.
+        fixture.gateway.calls.none { call -> call.startsWith("deleteProfile") } shouldBe true
+        fixture.gateway.calls.none { call -> call.startsWith("saveProfile") } shouldBe true
     }
 
-    test("이름을 바꿔 수정하면 새 이름만 남는다") {
+    test("서명 키만 고쳐도 같은 원자적 경로로 반영된다") {
+        val fixture = AccountFixture(listOf(PERSONAL))
+        val state = fixture.state()
+        fixture.gateway.calls.clear()
+
+        state.startEdit(PERSONAL)
+        state.fillEditor(name = PERSONAL_PROFILE, email = PERSONAL_EMAIL, signingKeyId = SIGNING_KEY)
+        state.submitEditor()
+
+        state.profiles shouldContainExactly listOf(PERSONAL.copy(signingKeyId = SIGNING_KEY))
+        fixture.gateway.calls.count { call -> call == "updateProfile:$PERSONAL_PROFILE" } shouldBe 1
+        fixture.gateway.calls.none { call -> call.startsWith("deleteProfile") } shouldBe true
+    }
+
+    test("이름을 바꾸려 하면 사유와 함께 거부되고 저장된 프로필이 그대로 남는다") {
         val fixture = AccountFixture(listOf(WORK))
         val state = fixture.state()
+        fixture.gateway.calls.clear()
 
         state.startEdit(WORK)
         state.fillEditor(name = PERSONAL_PROFILE, email = WORK_EMAIL, signingKeyId = SIGNING_KEY)
         state.submitEditor()
 
-        state.profiles.map(IdentityProfile::name) shouldContainExactly listOf(PERSONAL_PROFILE)
-    }
-
-    test("이름 변경 중 원본 삭제가 실패하면 새 프로필을 보정 삭제한다") {
-        val fixture = AccountFixture(listOf(WORK))
-        val state = fixture.state()
-        fixture.gateway.nextDeleteFailure = IOException("원본 프로필을 지우지 못했습니다")
-
-        state.startEdit(WORK)
-        state.fillEditor(name = PERSONAL_PROFILE, email = PERSONAL_EMAIL)
-        state.submitEditor()
-
+        // 이름이 바뀌면 저장소들의 프로필 참조가 끊긴다 — 계약이 거부하고 화면은 사유만 옮긴다.
         fixture.gateway.stored shouldContainExactly listOf(WORK)
-        fixture.gateway.calls.takeLast(3) shouldContainExactly listOf(
-            "saveProfile:$PERSONAL_PROFILE",
-            "deleteProfile:$WORK_PROFILE",
-            "deleteProfile:$PERSONAL_PROFILE",
-        )
-        state.editor.shouldNotBeNull()
+        state.profiles shouldContainExactly listOf(WORK)
         state.saveFailure.shouldNotBeNull()
+        state.editor.shouldNotBeNull()
+        state.draftName shouldBe PERSONAL_PROFILE
+        // 거부는 삭제·저장 경로를 **시작조차 하지 않는다.**
+        fixture.gateway.calls.none { call -> call.startsWith("deleteProfile") } shouldBe true
+        fixture.gateway.calls.none { call -> call.startsWith("saveProfile") } shouldBe true
     }
 
-    test("수정 저장이 실패해도 지웠던 원본이 되살아난다") {
+    test("수정이 실패해도 저장된 기존 프로필이 그대로 남는다") {
         val fixture = AccountFixture(listOf(WORK))
         val state = fixture.state()
 
         state.startEdit(WORK)
         state.fillEditor(name = WORK_PROFILE, email = PERSONAL_EMAIL)
-        fixture.gateway.nextSaveFailure = IOException("설정 파일을 쓰지 못했습니다")
+        fixture.gateway.nextUpdateFailure = IOException("설정 파일을 쓰지 못했습니다")
         state.submitEditor()
 
-        // 지운 뒤 넣지 못했는데 그대로 두면 사용자는 프로필을 잃는다.
+        // 되돌릴 중간 상태가 없다 — 원자적 수정은 실패해도 저장된 값을 건드리지 않는다.
         fixture.gateway.stored shouldContainExactly listOf(WORK)
+        state.profiles shouldContainExactly listOf(WORK)
         state.saveFailure.shouldNotBeNull()
+        state.editor.shouldNotBeNull()
     }
 
     test("삭제는 확인 요청만으로 실행되지 않는다") {

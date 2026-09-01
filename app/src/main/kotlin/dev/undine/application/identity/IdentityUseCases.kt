@@ -95,20 +95,21 @@ class CheckIdentityBeforeCommitUseCase(private val identityService: IdentityServ
 }
 
 /**
- * 신원 UseCase 묶음. 환경설정 계정 탭이 필요한 다섯 동작을 **한 의존성으로** 전달한다.
+ * 신원 UseCase 묶음. 환경설정 계정 탭이 필요한 동작을 **한 의존성으로** 전달한다.
  *
  * 묶는 이유는 시그니처를 고정하기 위해서다 — 탭이 쓰는 동작이 늘 때마다 `PreferencesScreen` 의
  * 호출부까지 바뀌면, 그 파일을 수정할 수 없는 탭 티켓이 자기 일을 할 수 없다. 묶음 안을 늘리는 것은
  * 계정 탭 티켓의 자기 파일 변경으로 끝난다. 형태는 `RecoveryBisectUseCases` 와 같다.
  *
- * [UpdateProfileUseCase]·[ProfileUsageUseCase] 는 아직 이 묶음에 들어 있지 않다 — 묶음을 넓히면
- * `di/AppComponent.kt` 를 함께 고쳐야 하는데, 그 파일은 wave 9 통합 티켓(UND-82)이 넷을 한 번에
- * 잇는 자리다 (결정 G34). UND-82 가 여기에 두 필드를 더하고 화면 배선을 끝낸다.
+ * [updateProfile] 은 **수정의 유일한 경로**다 — 계정 탭이 `deleteProfile` + `saveProfile` 조합으로
+ * 고치던 유실 경로를 이 묶음이 닫는다 (결정 G34 UND-76 4).
  */
 data class IdentityUseCases(
     val loadProfiles: LoadProfilesUseCase,
     val saveProfile: SaveProfileUseCase,
+    val updateProfile: UpdateProfileUseCase,
     val deleteProfile: DeleteProfileUseCase,
+    val profileUsage: ProfileUsageUseCase,
     val applyProfile: ApplyProfileUseCase,
     val clearLocalIdentity: ClearLocalIdentityUseCase,
     val assignedProfileName: AssignedProfileNameUseCase,

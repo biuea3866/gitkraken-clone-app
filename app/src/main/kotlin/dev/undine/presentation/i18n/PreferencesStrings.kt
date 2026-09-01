@@ -27,6 +27,13 @@ object PreferencesKeys {
     val comingSoon = StringKey("$PREFERENCES_NAMESPACE.comingSoon")
     val sourceApp = StringKey("$PREFERENCES_NAMESPACE.sourceApp")
     val sourceGit = StringKey("$PREFERENCES_NAMESPACE.sourceGit")
+    val sourceGitRepository = StringKey("$PREFERENCES_NAMESPACE.sourceGitRepository")
+    val sourceGitGlobal = StringKey("$PREFERENCES_NAMESPACE.sourceGitGlobal")
+    val sourceGitSystem = StringKey("$PREFERENCES_NAMESPACE.sourceGitSystem")
+    val sourcePending = StringKey("$PREFERENCES_NAMESPACE.sourcePending")
+    val sourceUnverified = StringKey("$PREFERENCES_NAMESPACE.sourceUnverified")
+    val gitConfigLoadFailed = StringKey("$PREFERENCES_NAMESPACE.gitConfigLoadFailed")
+    val gitConfigLoading = StringKey("$PREFERENCES_NAMESPACE.gitConfigLoading")
     val restoreDefault = StringKey("$PREFERENCES_NAMESPACE.restoreDefault")
     val resetAll = StringKey("$PREFERENCES_NAMESPACE.resetAll")
     val resetAllWarning = StringKey("$PREFERENCES_NAMESPACE.resetAllWarning")
@@ -86,6 +93,8 @@ object PreferencesKeys {
     val largeFileThreshold = StringKey("$PREFERENCES_NAMESPACE.largeFileThreshold")
     val commitPageSize = StringKey("$PREFERENCES_NAMESPACE.commitPageSize")
     val logLocation = StringKey("$PREFERENCES_NAMESPACE.logLocation")
+    val logLocationMissing = StringKey("$PREFERENCES_NAMESPACE.logLocationMissing")
+    val openFolderFailed = StringKey("$PREFERENCES_NAMESPACE.openFolderFailed")
     val openFolder = StringKey("$PREFERENCES_NAMESPACE.openFolder")
 }
 
@@ -102,6 +111,13 @@ value class PreferencesStrings internal constructor(private val strings: Strings
     val comingSoon: String get() = strings.text(PreferencesKeys.comingSoon)
     val sourceApp: String get() = strings.text(PreferencesKeys.sourceApp)
     val sourceGit: String get() = strings.text(PreferencesKeys.sourceGit)
+    val sourceGitRepository: String get() = strings.text(PreferencesKeys.sourceGitRepository)
+    val sourceGitGlobal: String get() = strings.text(PreferencesKeys.sourceGitGlobal)
+    val sourceGitSystem: String get() = strings.text(PreferencesKeys.sourceGitSystem)
+    val sourcePending: String get() = strings.text(PreferencesKeys.sourcePending)
+    val sourceUnverified: String get() = strings.text(PreferencesKeys.sourceUnverified)
+    val gitConfigLoadFailed: String get() = strings.text(PreferencesKeys.gitConfigLoadFailed)
+    val gitConfigLoading: String get() = strings.text(PreferencesKeys.gitConfigLoading)
     val restoreDefault: String get() = strings.text(PreferencesKeys.restoreDefault)
     val resetAll: String get() = strings.text(PreferencesKeys.resetAll)
     val resetAllWarning: String get() = strings.text(PreferencesKeys.resetAllWarning)
@@ -161,6 +177,8 @@ value class PreferencesStrings internal constructor(private val strings: Strings
     val largeFileThreshold: String get() = strings.text(PreferencesKeys.largeFileThreshold)
     val commitPageSize: String get() = strings.text(PreferencesKeys.commitPageSize)
     val logLocation: String get() = strings.text(PreferencesKeys.logLocation)
+    val logLocationMissing: String get() = strings.text(PreferencesKeys.logLocationMissing)
+    val openFolderFailed: String get() = strings.text(PreferencesKeys.openFolderFailed)
     val openFolder: String get() = strings.text(PreferencesKeys.openFolder)
 }
 
@@ -179,6 +197,14 @@ internal val preferencesTranslations: Map<Locale, Map<StringKey, String>> = mapO
         PreferencesKeys.comingSoon to "준비 중입니다",
         PreferencesKeys.sourceApp to "앱 설정",
         PreferencesKeys.sourceGit to "git 설정",
+        PreferencesKeys.sourceGitRepository to "git 설정 — 이 저장소",
+        PreferencesKeys.sourceGitGlobal to "git 설정 — 전역(~/.gitconfig)",
+        PreferencesKeys.sourceGitSystem to "git 설정 — 시스템(/etc/gitconfig)",
+        PreferencesKeys.sourcePending to "실효값 확인 전",
+        PreferencesKeys.sourceUnverified to "실효값 확인 못 함",
+        PreferencesKeys.gitConfigLoadFailed to
+            "git 설정을 읽지 못했습니다 — 아래 값이 실제로 적용되는 값인지 확인할 수 없습니다",
+        PreferencesKeys.gitConfigLoading to "git 설정을 읽는 중입니다",
         PreferencesKeys.restoreDefault to "기본값으로",
         PreferencesKeys.resetAll to "전체 초기화",
         PreferencesKeys.resetAllWarning to
@@ -241,6 +267,8 @@ internal val preferencesTranslations: Map<Locale, Map<StringKey, String>> = mapO
         PreferencesKeys.largeFileThreshold to "대용량 파일 임계치(바이트)",
         PreferencesKeys.commitPageSize to "이력을 한 번에 읽을 개수",
         PreferencesKeys.logLocation to "로그 위치",
+        PreferencesKeys.logLocationMissing to "아직 만들어지지 않았습니다",
+        PreferencesKeys.openFolderFailed to "폴더를 열지 못했습니다",
         PreferencesKeys.openFolder to "폴더 열기",
     ),
     Locale.ENGLISH to mapOf(
@@ -254,6 +282,14 @@ internal val preferencesTranslations: Map<Locale, Map<StringKey, String>> = mapO
         PreferencesKeys.comingSoon to "Coming soon",
         PreferencesKeys.sourceApp to "App settings",
         PreferencesKeys.sourceGit to "git config",
+        PreferencesKeys.sourceGitRepository to "git config — this repository",
+        PreferencesKeys.sourceGitGlobal to "git config — global (~/.gitconfig)",
+        PreferencesKeys.sourceGitSystem to "git config — system (/etc/gitconfig)",
+        PreferencesKeys.sourcePending to "Effective value not read yet",
+        PreferencesKeys.sourceUnverified to "Effective value unconfirmed",
+        PreferencesKeys.gitConfigLoadFailed to
+            "Could not read git config — cannot confirm which values actually apply",
+        PreferencesKeys.gitConfigLoading to "Reading git config…",
         PreferencesKeys.restoreDefault to "Restore default",
         PreferencesKeys.resetAll to "Reset all",
         PreferencesKeys.resetAllWarning to
@@ -317,6 +353,8 @@ internal val preferencesTranslations: Map<Locale, Map<StringKey, String>> = mapO
         PreferencesKeys.largeFileThreshold to "Large file threshold (bytes)",
         PreferencesKeys.commitPageSize to "Commits loaded per page",
         PreferencesKeys.logLocation to "Log location",
+        PreferencesKeys.logLocationMissing to "Not created yet",
+        PreferencesKeys.openFolderFailed to "Could not open the folder",
         PreferencesKeys.openFolder to "Open folder",
     ),
 )

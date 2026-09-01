@@ -20,10 +20,19 @@ import dev.undine.presentation.i18n.PreferencesStrings
 import dev.undine.presentation.i18n.preferences
 import dev.undine.presentation.i18n.strings
 
-/** 지금 화면에 보이는 값이 어디서 온 것인지. 앱 설정과 git 설정 중 무엇이 이기고 있는지를 가른다. */
+/**
+ * 지금 화면에 보이는 값이 어디서 온 것인지. 앱 설정과 git 설정 중 무엇이 이기고 있는지를 가른다.
+ *
+ * [PENDING] 과 [UNVERIFIED] 는 **모른다는 답**이다 — 아직 읽지 않았거나(PENDING) 읽지 못한
+ * (UNVERIFIED) git 설정은 앱 설정을 이기는지 알 수 없으므로, 그것을 "git 에 값 없음" 으로 접어
+ * 앱 출처라고 말하지 않는다 (결정 G35 UND-75 2 · G39). 둘을 가르는 이유는 사용자가 할 일이
+ * 다르기 때문이다 — 하나는 기다리면 되고, 하나는 설정 파일을 봐야 한다.
+ */
 enum class PreferenceValueSource {
     APP_SETTINGS,
     GIT_CONFIG,
+    PENDING,
+    UNVERIFIED,
 }
 
 /**

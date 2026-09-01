@@ -71,7 +71,7 @@ class AppAssemblySpec : FunSpec({
         val settingsFile = File(tempdir(), "settings.json").toPath()
         val work = seedRepository("첫.txt")
         rememberAsRecent(settingsFile, work)
-        AppComponent(settingsFile).updatePreferences.execute { stored ->
+        AppComponent(settingsFile, settingsFile.parent).updatePreferences.execute { stored ->
             stored.copy(shortcutOverrides = mapOf(REFRESH_COMMAND.value to OVERRIDE_SHORTCUT.toBinding()))
         }
 
@@ -225,7 +225,7 @@ class AppAssemblySpec : FunSpec({
 @OptIn(ExperimentalTestApi::class)
 private fun ComposeUiTest.startApp(settingsFile: Path): AppWiring {
     var assembled: AppWiring? = null
-    val component = AppComponent(settingsFile)
+    val component = AppComponent(settingsFile, settingsFile.parent)
     setContent {
         AppRoot(component = component, errors = AppErrorState(), onAssembled = { assembled = it })
     }
@@ -251,7 +251,7 @@ private fun ComposeUiTest.openRecent(wiring: AppWiring, repository: File) {
 
 /** 앱이 쓰는 그 경로로 저장소를 열어 최근 목록에 남긴다 — 시작 화면이 이 목록을 그린다. */
 private suspend fun rememberAsRecent(settingsFile: Path, vararg repositories: File) {
-    val setup = AppComponent(settingsFile)
+    val setup = AppComponent(settingsFile, settingsFile.parent)
     repositories.forEach { repository ->
         setup.welcomeActions.openRepository.execute(RepositoryPath(repository.path))
     }

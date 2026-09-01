@@ -15,16 +15,26 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
+import dev.undine.application.diagnostics.DiagnosticsUseCases
+import dev.undine.application.diagnostics.LocateLogDirectoryUseCase
+import dev.undine.application.diagnostics.OpenLogDirectoryUseCase
 import dev.undine.application.preferences.LoadPreferencesUseCase
 import dev.undine.application.preferences.UpdatePreferencesUseCase
 import dev.undine.domain.Settings
 import dev.undine.domain.SettingsGateway
+import dev.undine.domain.diagnostics.DiagnosticsGateway
+import dev.undine.domain.diagnostics.LogDirectoryLocation
+import dev.undine.domain.diagnostics.LogDirectoryMissing
+import dev.undine.domain.diagnostics.OpenLogDirectoryResult
 import dev.undine.presentation.design.UndineTheme
 import dev.undine.presentation.i18n.DEFAULT_LOCALE
 import dev.undine.presentation.i18n.LocalStrings
 import dev.undine.presentation.i18n.builtInStringCatalog
 import dev.undine.presentation.palette.CommandRegistry
 import io.kotest.core.spec.style.FunSpec
+import io.kotest.engine.spec.tempdir
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.mockk.mockk
@@ -32,6 +42,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import java.io.IOException
+import java.nio.file.Path
 
 private val TAB_WIDTH = 900.dp
 private val TAB_HEIGHT = 700.dp
@@ -92,13 +103,50 @@ private class AdvancedFixture(
     ).also(PreferencesState::refresh)
 }
 
+/**
+ * 조회·열기 결과를 미리 정해 두는 진단 Gateway. 실제 파일 관리자에 기대면 CI 에서 창이 뜬다 —
+ * 실행 경계는 `DiagnosticsGatewayImplSpec` 이 검증한다.
+ *
+ * 호출을 [calls] 에 남기는 이유는 **부르지 않아야 할 때 부르지 않는가**를 보기 위해서다. 결과값
+ * 비교만으로는 없는 디렉터리에 열기를 부르는 회귀를 잡을 수 없다.
+ */
+private class FakeDiagnosticsGateway(
+    private val location: LogDirectoryLocation,
+    private val openResult: OpenLogDirectoryResult = OpenLogDirectoryResult.Opened,
+) : DiagnosticsGateway {
+
+    val calls = mutableListOf<String>()
+
+    override suspend fun locateLogDirectory(): LogDirectoryLocation {
+        calls += "locate"
+        return location
+    }
+
+    override suspend fun openLogDirectory(): OpenLogDirectoryResult {
+        calls += "open"
+        return openResult
+    }
+}
+
+private fun diagnosticsOf(gateway: FakeDiagnosticsGateway): DiagnosticsUseCases = DiagnosticsUseCases(
+    locateLogDirectory = LocateLogDirectoryUseCase(gateway),
+    openLogDirectory = OpenLogDirectoryUseCase(gateway),
+)
+
+private fun missingLogDirectory(): DiagnosticsUseCases =
+    diagnosticsOf(FakeDiagnosticsGateway(LogDirectoryMissing))
+
 @Composable
-private fun AdvancedTabHost(state: PreferencesState) {
+private fun AdvancedTabHost(
+    state: PreferencesState,
+    diagnostics: DiagnosticsUseCases = missingLogDirectory(),
+) {
     CompositionLocalProvider(LocalStrings provides CATALOG.stringsFor(DEFAULT_LOCALE, devBuild = false)) {
         UndineTheme {
             AdvancedPreferencesContent(
                 state = state,
                 texts = TEXTS,
+                diagnostics = diagnostics,
                 modifier = Modifier.size(TAB_WIDTH, TAB_HEIGHT),
             )
         }
@@ -122,6 +170,10 @@ private fun AdvancedScreenHost(state: PreferencesState) {
                     identity = mockk(relaxed = true),
                     externalTools = mockk(relaxed = true),
                     commands = CommandRegistry(),
+                    gitConfig = mockk(relaxed = true),
+                    monospaceFonts = mockk(relaxed = true),
+                    diagnostics = missingLogDirectory(),
+                    repository = null,
                 ),
                 modifier = Modifier.size(TAB_WIDTH, TAB_HEIGHT),
             )
@@ -177,16 +229,17 @@ class AdvancedPreferencesContentSpec : FunSpec({
             val state = AdvancedFixture().state()
             setContent { AdvancedTabHost(state) }
 
-            onAllNodesWithTag(PreferencesTags.ROW).fetchSemanticsNodes().size shouldBe 2
+            // 숫자 두 행 + 로그 위치 한 행.
+            onAllNodesWithTag(PreferencesTags.ROW).fetchSemanticsNodes().size shouldBe 3
             onAllNodesWithText(TEXTS.largeFileThreshold).fetchSemanticsNodes().size shouldBe 1
             onAllNodesWithText(TEXTS.commitPageSize).fetchSemanticsNodes().size shouldBe 1
             onNodeWithTag(AdvancedPreferencesTags.LARGE_FILE_THRESHOLD)
                 .assertTextEquals(STORED_THRESHOLD_BYTES.toString())
             onNodeWithTag(AdvancedPreferencesTags.COMMIT_PAGE_SIZE)
                 .assertTextEquals(STORED_PAGE_SIZE.toString())
-            // 두 행 모두 앱 설정이 실효값이라 출처 표시와 항목별 기본값 복원을 내준다.
+            // 숫자 두 행만 앱이 값을 소유해 항목별 기본값 복원을 내준다 — 로그 위치는 읽기 전용이다.
             onAllNodesWithTag(PreferencesTags.ROW_RESTORE_DEFAULT).fetchSemanticsNodes().size shouldBe 2
-            onAllNodesWithText(TEXTS.sourceApp).fetchSemanticsNodes().size shouldBe 2
+            onAllNodesWithText(TEXTS.sourceApp).fetchSemanticsNodes().size shouldBe 3
         }
     }
 
@@ -391,6 +444,57 @@ class AdvancedPreferencesContentSpec : FunSpec({
                 .assertTextEquals(Settings.DEFAULT_LARGE_FILE_THRESHOLD_BYTES.toString())
             onNodeWithTag(AdvancedPreferencesTags.COMMIT_PAGE_SIZE)
                 .assertTextEquals(Settings.DEFAULT_COMMIT_PAGE_SIZE.toString())
+        }
+    }
+
+    test("로그 디렉터리가 있으면 경로를 보여 주고 폴더 열기를 내준다") {
+        runComposeUiTest {
+            val directory: Path = tempdir().toPath()
+            val gateway = FakeDiagnosticsGateway(LogDirectoryLocation.Found(directory))
+            setContent { AdvancedTabHost(AdvancedFixture().state(), diagnosticsOf(gateway)) }
+            waitForIdle()
+
+            onNodeWithText(TEXTS.logLocation).assertIsDisplayed()
+            onNodeWithText(directory.toString()).assertIsDisplayed()
+
+            onNodeWithTag(AdvancedPreferencesTags.OPEN_LOG_DIRECTORY).performClick()
+            waitForIdle()
+
+            gateway.calls shouldContainExactly listOf("locate", "open")
+            onAllNodesWithTag(AdvancedPreferencesTags.OPEN_LOG_DIRECTORY_FAILURE)
+                .fetchSemanticsNodes().size shouldBe 0
+        }
+    }
+
+    test("로그 디렉터리가 아직 없으면 열기를 눌러도 UseCase 가 불리지 않는다") {
+        runComposeUiTest {
+            val gateway = FakeDiagnosticsGateway(LogDirectoryMissing)
+            setContent { AdvancedTabHost(AdvancedFixture().state(), diagnosticsOf(gateway)) }
+            waitForIdle()
+
+            // 값 자리가 비지 않는다 — 빈 칸은 못 읽은 것인지 없는 것인지 구분되지 않는다.
+            onNodeWithText(TEXTS.logLocationMissing).assertIsDisplayed()
+
+            onNodeWithTag(AdvancedPreferencesTags.OPEN_LOG_DIRECTORY).performClick()
+            waitForIdle()
+
+            gateway.calls shouldContainExactly listOf("locate")
+        }
+    }
+
+    test("파일 관리자를 띄우지 못하면 사유가 화면에 남는다 — 조용한 성공이 되지 않는다") {
+        runComposeUiTest {
+            val gateway = FakeDiagnosticsGateway(
+                location = LogDirectoryLocation.Found(tempdir().toPath()),
+                openResult = OpenLogDirectoryResult.OpenFailed("파일 관리자를 찾을 수 없습니다"),
+            )
+            setContent { AdvancedTabHost(AdvancedFixture().state(), diagnosticsOf(gateway)) }
+            waitForIdle()
+
+            onNodeWithTag(AdvancedPreferencesTags.OPEN_LOG_DIRECTORY).performClick()
+            waitForIdle()
+
+            onNodeWithTag(AdvancedPreferencesTags.OPEN_LOG_DIRECTORY_FAILURE).assertIsDisplayed()
         }
     }
 
