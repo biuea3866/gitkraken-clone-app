@@ -202,12 +202,12 @@ class AppCommandRegistrationSpec : BehaviorSpec({
         `when`("앱을 다시 켜 설정 파일에서 읽어 얹으면") {
             then("저장해 둔 단축키가 그대로 실효값이 된다") {
                 val settingsFile = File(tempdir(), "settings.json").toPath()
-                AppComponent(settingsFile).updatePreferences.execute { stored ->
+                AppComponent(settingsFile, settingsFile.parent).updatePreferences.execute { stored ->
                     stored.copy(shortcutOverrides = mapOf("refs.refresh" to bindingOf(Key.F8)))
                 }
 
                 val fixture = RegistrationFixture()
-                val stored = AppComponent(settingsFile).loadPreferences.execute().shortcutOverrides
+                val stored = AppComponent(settingsFile, settingsFile.parent).loadPreferences.execute().shortcutOverrides
 
                 fixture.registry.applyShortcutOverrides(stored.toShortcutOverrides()).shouldBeEmpty()
                 fixture.registry.commandFor(

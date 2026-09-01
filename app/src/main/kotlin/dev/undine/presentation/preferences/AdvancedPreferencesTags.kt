@@ -14,6 +14,12 @@ object AdvancedPreferencesTags {
     /** 이력을 한 번에 읽을 개수 입력칸. */
     const val COMMIT_PAGE_SIZE: String = "preferences.advanced.commitPageSize"
 
+    /** 로그 디렉터리를 파일 관리자로 여는 버튼. 디렉터리가 없으면 비활성이다. */
+    const val OPEN_LOG_DIRECTORY: String = "preferences.advanced.openLogDirectory"
+
+    /** 파일 관리자를 띄우지 못한 사유. 조용한 성공으로 접지 않으므로 자리가 따로 있다. */
+    const val OPEN_LOG_DIRECTORY_FAILURE: String = "preferences.advanced.openLogDirectory.failure"
+
     /**
      * 숫자로 읽을 수 없는 입력을 알리는 자리.
      *

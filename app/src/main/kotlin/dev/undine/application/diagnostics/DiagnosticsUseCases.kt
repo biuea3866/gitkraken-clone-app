@@ -23,3 +23,14 @@ class OpenLogDirectoryUseCase(private val diagnosticsGateway: DiagnosticsGateway
 
     suspend fun execute(): OpenLogDirectoryResult = diagnosticsGateway.openLogDirectory()
 }
+
+/**
+ * 진단 UseCase 묶음. 고급 탭이 쓰는 두 동작을 **한 의존성으로** 전달한다.
+ *
+ * 묶는 이유는 [dev.undine.application.identity.IdentityUseCases] 와 같다 — 탭이 쓰는 동작이 늘어도
+ * `PreferencesScreen` 의 호출부가 바뀌지 않아야 한다.
+ */
+data class DiagnosticsUseCases(
+    val locateLogDirectory: LocateLogDirectoryUseCase,
+    val openLogDirectory: OpenLogDirectoryUseCase,
+)

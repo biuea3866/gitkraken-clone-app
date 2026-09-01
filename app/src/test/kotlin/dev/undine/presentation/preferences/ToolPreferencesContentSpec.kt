@@ -6,7 +6,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
@@ -21,6 +23,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import dev.undine.application.externaltool.CheckToolAvailabilityUseCase
 import dev.undine.application.preferences.LoadPreferencesUseCase
+import dev.undine.application.typography.LoadMonospaceFontsUseCase
 import dev.undine.application.preferences.UpdatePreferencesUseCase
 import dev.undine.domain.ExternalTool
 import dev.undine.domain.ExternalToolSettings
@@ -32,6 +35,8 @@ import dev.undine.domain.externaltool.DiffToolResult
 import dev.undine.domain.externaltool.ExternalToolGateway
 import dev.undine.domain.externaltool.MergeToolInput
 import dev.undine.domain.externaltool.MergeToolResult
+import dev.undine.domain.typography.MonospaceFontGateway
+import dev.undine.domain.typography.MonospaceFontListing
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
@@ -92,21 +97,48 @@ private class ToolFixture(initial: Settings = Settings.DEFAULTS) {
         loadPreferences = LoadPreferencesUseCase(gateway),
         updatePreferences = UpdatePreferencesUseCase(gateway),
     ).also(PreferencesState::refresh)
+
+    /** 서체 경로를 보는 테스트가 쓰는 도구 묶음. 이 경로에서는 도구 판정이 관심 밖이다. */
+    fun tools(): ExternalToolUseCases = ExternalToolUseCases(
+        openDiff = OpenDiffToolUseCase(FakeExternalToolGateway(emptySet())),
+        openMerge = OpenMergeToolUseCase(FakeExternalToolGateway(emptySet())),
+        checkAvailability = availability(),
+    )
 }
 
 private val TAB_WIDTH = 900.dp
 private val TAB_HEIGHT = 700.dp
 private val CATALOG = builtInStringCatalog()
 
+/**
+ * 미리 정해 둔 열거 결과만 돌려주는 서체 Gateway. 실제 설치 서체에 기대면 기계마다 결과가 달라진다 —
+ * 측정 경계는 `MonospaceFontGatewayImplSpec` 이 검증한다.
+ */
+private class FakeMonospaceFontGateway(private val listing: MonospaceFontListing) : MonospaceFontGateway {
+
+    override suspend fun monospaceFamilies(): MonospaceFontListing = listing
+}
+
+private fun fonts(listing: MonospaceFontListing): LoadMonospaceFontsUseCase =
+    LoadMonospaceFontsUseCase(FakeMonospaceFontGateway(listing))
+
+private fun availableFonts(vararg families: String): LoadMonospaceFontsUseCase =
+    fonts(MonospaceFontListing.Available(families.toList()))
+
 /** 다른 탭 테스트와 같은 형태로 실제 조립을 그린다 — 상태 홀더만 보면 조립 회귀를 놓친다. */
 @Composable
-private fun ToolTabHost(state: PreferencesState, tools: ExternalToolUseCases) {
+private fun ToolTabHost(
+    state: PreferencesState,
+    tools: ExternalToolUseCases,
+    monospaceFonts: LoadMonospaceFontsUseCase = availableFonts(),
+) {
     CompositionLocalProvider(LocalStrings provides CATALOG.stringsFor(DEFAULT_LOCALE, devBuild = false)) {
         UndineTheme {
             ToolPreferencesContent(
                 state = state,
                 texts = TEXTS,
                 externalTools = tools,
+                monospaceFonts = monospaceFonts,
                 modifier = Modifier.size(TAB_WIDTH, TAB_HEIGHT),
             )
         }
@@ -333,6 +365,53 @@ class ToolPreferencesContentSpec : FunSpec({
 
     test("설정되지 않은 도구는 존재 확인 대상이 아니다") {
         missingToolExecutables(Settings.DEFAULTS, availability()) shouldBe emptySet()
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    test("후보 서체를 고르면 그 이름이 저장되고 직접 입력 칸도 함께 남는다") {
+        runComposeUiTest {
+            val fixture = ToolFixture()
+            val state = fixture.state()
+            setContent { ToolTabHost(state, fixture.tools(), availableFonts("D2Coding", "Menlo")) }
+            waitForIdle()
+
+            onAllNodesWithTag(ToolPreferencesTags.MONOSPACE_FONT_CHOICE)[1].performClick()
+            waitForIdle()
+
+            fixture.gateway.stored.monospaceFontFamily shouldBe "Menlo"
+            // 후보는 고르기를 돕는 것일 뿐이라 직접 입력 칸이 사라지지 않는다.
+            onNodeWithTag(ToolPreferencesTags.MONOSPACE_FONT).assertIsDisplayed()
+        }
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    test("서체 열거가 실패해도 직접 입력한 이름을 저장할 수 있다") {
+        runComposeUiTest {
+            val fixture = ToolFixture()
+            val state = fixture.state()
+            val unavailable = fonts(MonospaceFontListing.Unavailable(IllegalStateException("헤드리스")))
+            setContent { ToolTabHost(state, fixture.tools(), unavailable) }
+            waitForIdle()
+
+            onNodeWithTag(ToolPreferencesTags.MONOSPACE_FONT).performTextReplacement("사내 고정폭")
+            onNodeWithTag(ToolPreferencesTags.TAB_WIDTH).performClick()
+            waitForIdle()
+
+            fixture.gateway.stored.monospaceFontFamily shouldBe "사내 고정폭"
+        }
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    test("후보에 없는 저장 서체도 선택지에 남는다 — 적어 둔 이름을 지우지 않는다") {
+        runComposeUiTest {
+            val fixture = ToolFixture(Settings.DEFAULTS.copy(monospaceFontFamily = "사내 고정폭"))
+            val state = fixture.state()
+            setContent { ToolTabHost(state, fixture.tools(), availableFonts("D2Coding")) }
+            waitForIdle()
+
+            onAllNodesWithTag(ToolPreferencesTags.MONOSPACE_FONT_CHOICE).fetchSemanticsNodes().size shouldBe 2
+            fixture.gateway.stored.monospaceFontFamily shouldBe "사내 고정폭"
+        }
     }
 
     test("Enter 는 포커스 이탈과 같은 확정 경로다") {

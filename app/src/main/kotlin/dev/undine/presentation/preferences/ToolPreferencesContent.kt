@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import dev.undine.application.externaltool.CheckToolAvailabilityUseCase
 import dev.undine.application.externaltool.ExternalToolUseCases
+import dev.undine.application.typography.LoadMonospaceFontsUseCase
 import dev.undine.domain.Settings
 import dev.undine.presentation.design.UndineTokens
 import dev.undine.presentation.design.component.UndineToolbarButton
@@ -48,6 +50,9 @@ object ToolPreferencesTags {
     const val TOOL_RESTORE_DEFAULT: String = "preferences.tools.restoreDefault"
     const val TAB_WIDTH: String = "preferences.tools.tabWidth"
     const val MONOSPACE_FONT: String = "preferences.tools.monospaceFont"
+
+    /** 고정폭 서체 후보 하나를 고르는 버튼. 후보가 없으면 이 태그의 요소도 없다. */
+    const val MONOSPACE_FONT_CHOICE: String = "preferences.tools.monospaceFont.choice"
 }
 
 /**
@@ -63,16 +68,24 @@ object ToolPreferencesTags {
  *
  * **실행 파일을 찾지 못해도 저장을 막지 않는다** — 아직 설치 전인 도구를 미리 설정해 둘 수 있어야
  * 한다. 찾을 수 없다는 사실은 사용자가 고칠 수 있는 자리, 곧 **앱 설정 명령 값 옆**에 붙인다.
+ *
+ * **고정폭 서체는 후보에서 고를 수도, 직접 적을 수도 있다.** 후보는 고르기를 돕는 것일 뿐이라
+ * 열거가 실패해도 입력 칸이 사라지지 않고, 후보에 없는 저장값도 선택지에 남는다
+ * ([monospaceFontChoices]).
+ *
+ * @param monospaceFonts 설치된 고정폭 서체 열거. 화면은 UseCase 만 부르고 Gateway 를 알지 못한다.
  */
 @Composable
 fun ToolPreferencesContent(
     state: PreferencesState,
     texts: PreferencesStrings,
     externalTools: ExternalToolUseCases,
+    monospaceFonts: LoadMonospaceFontsUseCase,
     modifier: Modifier = Modifier,
 ) {
     val settings = state.settings
     val missing = rememberMissingToolExecutables(settings, externalTools.checkAvailability)
+    val fonts = rememberMonospaceFontState(monospaceFonts)
 
     Column(
         modifier = modifier,
@@ -93,11 +106,32 @@ fun ToolPreferencesContent(
             )
         }
         PreferencesRowItem(row = monospaceFontRow(settings, texts), onRestoreDefault = state::restoreDefault) {
+            // 직접 입력은 후보가 있든 없든 그대로 남는다 — 후보는 고르기를 돕는 것일 뿐이다.
             PreferenceTextEditor(
                 value = settings.monospaceFontFamily.orEmpty(),
                 label = texts.monospaceFont,
                 tag = ToolPreferencesTags.MONOSPACE_FONT,
                 onCommit = state::applyMonospaceFont,
+            )
+            MonospaceFontChoices(
+                choices = monospaceFontChoices(fonts.candidates, settings.monospaceFontFamily),
+                onChoose = state::applyMonospaceFont,
+            )
+        }
+    }
+}
+
+/** 후보 서체를 고르는 자리. 후보가 하나도 없으면 아무것도 그리지 않는다 — 빈 틀을 두지 않는다. */
+@Composable
+private fun MonospaceFontChoices(choices: List<String>, onChoose: (String) -> Unit) {
+    if (choices.isEmpty()) return
+
+    Row(horizontalArrangement = Arrangement.spacedBy(UndineTokens.spacing.extraSmall)) {
+        choices.forEach { family ->
+            UndineToolbarButton(
+                label = family,
+                onClick = { onChoose(family) },
+                modifier = Modifier.testTag(ToolPreferencesTags.MONOSPACE_FONT_CHOICE),
             )
         }
     }

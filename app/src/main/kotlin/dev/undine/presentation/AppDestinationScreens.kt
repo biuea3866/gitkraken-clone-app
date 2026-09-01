@@ -118,7 +118,11 @@ internal fun DestinationArea(
             )
 
             AppDestination.PREFERENCES -> SecondaryScreen(navigation) {
-                PreferencesArea(component = component, registry = registry)
+                PreferencesArea(
+                    component = component,
+                    registry = registry,
+                    repository = shellState.selection.repository,
+                )
             }
 
             AppDestination.BLAME -> SecondaryScreen(navigation) {
@@ -192,9 +196,16 @@ private fun WelcomeArea(state: WelcomeState) {
  *
  * 단축키 탭이 쓰는 레지스트리는 **팔레트가 쓰는 그것과 같은 인스턴스**다 — 다른 것을 주면 탭에서
  * 바꾼 단축키가 실제 실행 경로에 닿지 않는다.
+ *
+ * @param repository git 실효값의 저장소 범위. 저장소 없이도 설정 창을 열 수 있으므로 `null` 은
+ *   실패가 아니라 전역·시스템만 본다는 뜻이다.
  */
 @Composable
-private fun PreferencesArea(component: AppComponent, registry: CommandRegistry) {
+private fun PreferencesArea(
+    component: AppComponent,
+    registry: CommandRegistry,
+    repository: RepositoryPath?,
+) {
     val scope = rememberCoroutineScope()
     val state = remember(component, scope) {
         PreferencesState(
@@ -204,11 +215,16 @@ private fun PreferencesArea(component: AppComponent, registry: CommandRegistry) 
             loadSigningPreferences = component.loadSigningPreferences,
         )
     }
-    val dependencies = remember(component, registry) {
+    // 저장소가 바뀌면 묶음을 새로 만든다 — 이전 저장소 범위의 git 실효값을 그대로 두지 않는다.
+    val dependencies = remember(component, registry, repository) {
         PreferencesTabDependencies(
             identity = component.identityUseCases,
             externalTools = component.externalToolUseCases,
             commands = registry,
+            gitConfig = component.readEffectiveConfig,
+            monospaceFonts = component.loadMonospaceFonts,
+            diagnostics = component.diagnosticsUseCases,
+            repository = repository,
         )
     }
     LaunchedEffect(state) { state.refresh() }

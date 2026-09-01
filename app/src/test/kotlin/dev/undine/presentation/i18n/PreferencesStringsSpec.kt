@@ -55,7 +55,7 @@ private fun allPreferencesTexts(texts: PreferencesStrings): List<String> = listO
 ) + gitTabTexts(texts) + accountTabTexts(texts) + toolTabTexts(texts) +
     shortcutTabTexts(texts) + advancedTabTexts(texts)
 
-/** Git 탭(UND-66) 항목 표의 문구. */
+/** Git 탭(UND-66) 항목 표의 문구 + git 실효값 출처 셋(UND-82). */
 private fun gitTabTexts(texts: PreferencesStrings): List<String> = listOf(
     texts.defaultBranchName,
     texts.pullStrategy,
@@ -63,6 +63,13 @@ private fun gitTabTexts(texts: PreferencesStrings): List<String> = listOf(
     texts.pullStrategyRebase,
     texts.automaticFetch,
     texts.automaticFetchInterval,
+    texts.sourceGitRepository,
+    texts.sourceGitGlobal,
+    texts.sourceGitSystem,
+    texts.sourcePending,
+    texts.sourceUnverified,
+    texts.gitConfigLoadFailed,
+    texts.gitConfigLoading,
 )
 
 /** 계정 탭(UND-67) 항목 표의 문구 — 프로필 CRUD·삭제 확인·저장소 매핑·이메일 오류. */
@@ -93,12 +100,14 @@ private fun shortcutTabTexts(texts: PreferencesStrings): List<String> = listOf(
     texts.shortcutApplyFailed,
 )
 
-/** 고급 탭(UND-70) 항목 표의 문구 — 임계치·페이지 크기·로그 위치·폴더 열기. */
+/** 고급 탭(UND-70) 항목 표의 문구 — 임계치·페이지 크기·로그 위치·폴더 열기와 그 두 상태(UND-82). */
 private fun advancedTabTexts(texts: PreferencesStrings): List<String> = listOf(
     texts.largeFileThreshold,
     texts.commitPageSize,
     texts.logLocation,
+    texts.logLocationMissing,
     texts.openFolder,
+    texts.openFolderFailed,
 )
 
 class PreferencesStringsSpec : FunSpec({
@@ -165,6 +174,16 @@ class PreferencesStringsSpec : FunSpec({
             .stringsFor(DEFAULT_LOCALE, devBuild = false).preferences
 
         texts.invalidValue shouldNotBe texts.saveFailed
+    }
+
+    test("git 실효값 출처 셋은 서로 다른 문구다 — 어느 파일을 고쳐야 하는지 갈린다") {
+        val catalog = StringCatalog(preferencesTranslations, DEFAULT_LOCALE)
+
+        catalog.supportedLocales.forEach { locale ->
+            val texts = catalog.stringsFor(locale, devBuild = false).preferences
+            listOf(texts.sourceGitRepository, texts.sourceGitGlobal, texts.sourceGitSystem)
+                .distinct().size shouldBe 3
+        }
     }
 
     test("탭 스텁 문구에는 티켓 번호가 드러나지 않는다") {

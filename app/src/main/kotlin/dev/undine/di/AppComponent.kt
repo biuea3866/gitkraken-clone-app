@@ -13,11 +13,15 @@ import dev.undine.application.conflict.ContinueAfterResolveUseCase
 import dev.undine.application.conflict.LoadConflictContentUseCase
 import dev.undine.application.conflict.LoadConflictedFilesUseCase
 import dev.undine.application.conflict.ResolveConflictUseCase
+import dev.undine.application.diagnostics.DiagnosticsUseCases
+import dev.undine.application.diagnostics.LocateLogDirectoryUseCase
+import dev.undine.application.diagnostics.OpenLogDirectoryUseCase
 import dev.undine.application.diff.LoadFileDiffUseCase
 import dev.undine.application.externaltool.CheckToolAvailabilityUseCase
 import dev.undine.application.externaltool.ExternalToolUseCases
 import dev.undine.application.externaltool.OpenDiffToolUseCase
 import dev.undine.application.externaltool.OpenMergeToolUseCase
+import dev.undine.application.gitconfig.ReadEffectiveConfigUseCase
 import dev.undine.application.graphops.ExecuteGraphOperationUseCase
 import dev.undine.application.graph.LoadCommitHistoryUseCase
 import dev.undine.application.identity.ApplyProfileUseCase
@@ -26,7 +30,9 @@ import dev.undine.application.identity.ClearLocalIdentityUseCase
 import dev.undine.application.identity.DeleteProfileUseCase
 import dev.undine.application.identity.IdentityUseCases
 import dev.undine.application.identity.LoadProfilesUseCase
+import dev.undine.application.identity.ProfileUsageUseCase
 import dev.undine.application.identity.SaveProfileUseCase
+import dev.undine.application.identity.UpdateProfileUseCase
 import dev.undine.application.preferences.LoadPreferencesUseCase
 import dev.undine.application.preferences.LoadSigningPreferencesUseCase
 import dev.undine.application.preferences.UpdatePreferencesUseCase
@@ -54,6 +60,7 @@ import dev.undine.application.sidebar.RenameBranchUseCase
 import dev.undine.application.toolbar.FetchRemoteUseCase
 import dev.undine.application.toolbar.PullRemoteUseCase
 import dev.undine.application.toolbar.PushRemoteUseCase
+import dev.undine.application.typography.LoadMonospaceFontsUseCase
 import dev.undine.application.undo.DiscardBlockedUndoEntryUseCase
 import dev.undine.application.undo.LoadUndoHistoryUseCase
 import dev.undine.application.undo.OperationRecorder
@@ -75,7 +82,9 @@ import dev.undine.domain.bisect.BisectGateway
 import dev.undine.domain.bisect.BisectService
 import dev.undine.domain.blame.BlameGateway
 import dev.undine.domain.conflict.ConflictGateway
+import dev.undine.domain.diagnostics.DiagnosticsGateway
 import dev.undine.domain.externaltool.ExternalToolGateway
+import dev.undine.domain.gitconfig.GitConfigGateway
 import dev.undine.domain.identity.IdentityGateway
 import dev.undine.domain.identity.IdentityService
 import dev.undine.domain.merge.MergeGateway
@@ -84,12 +93,15 @@ import dev.undine.domain.rebase.InteractiveRebaseGateway
 import dev.undine.domain.reflog.ReflogGateway
 import dev.undine.domain.signing.SigningGateway
 import dev.undine.domain.submodule.SubmoduleGateway
+import dev.undine.domain.typography.MonospaceFontGateway
 import dev.undine.domain.undo.UndoStack
 import dev.undine.domain.worktree.WorktreeGateway
+import dev.undine.infrastructure.diagnostics.DiagnosticsGatewayImpl
 import dev.undine.infrastructure.externaltool.ExternalToolGatewayImpl
 import dev.undine.infrastructure.git.bisect.BisectGatewayImpl
 import dev.undine.infrastructure.git.blame.BlameGatewayImpl
 import dev.undine.infrastructure.git.conflict.ConflictGatewayImpl
+import dev.undine.infrastructure.git.config.GitConfigGatewayImpl
 import dev.undine.infrastructure.git.merge.MergeGatewayImpl
 import dev.undine.infrastructure.git.rebase.InteractiveRebaseGatewayImpl
 import dev.undine.infrastructure.git.diff.DiffGatewayImpl
@@ -107,6 +119,7 @@ import dev.undine.infrastructure.git.worktree.WorktreeGatewayImpl
 import dev.undine.infrastructure.git.worktreeops.WorktreeOpsGatewayImpl
 import dev.undine.infrastructure.identity.IdentityGatewayImpl
 import dev.undine.infrastructure.settings.SettingsGatewayImpl
+import dev.undine.infrastructure.typography.MonospaceFontGatewayImpl
 import dev.undine.presentation.conflict.ConflictActions
 import dev.undine.presentation.rebase.RebaseActions
 import dev.undine.presentation.submodule.SubmodulePanelActions
@@ -128,8 +141,10 @@ import java.nio.file.Path
  * 저장소 핸들은 세션 단위로 열어 두고 저장소를 바꿀 때만 닫는다 ([closeRepository]).
  *
  * @param settingsFile 설정 영속화 위치. 창 소유자가 정한다 — 컴포넌트가 경로 정책을 만들지 않는다.
+ * @param appDirectory 로그·설정이 함께 놓이는 앱 디렉터리. [settingsFile] 에서 되짚어 계산하지
+ *   않는다 — 경로 정책은 창 소유자 한 곳에만 둔다 (결정 G35 UND-78).
  */
-class AppComponent(settingsFile: Path) {
+class AppComponent(settingsFile: Path, appDirectory: Path) {
 
     private val gitAccess = GitAccess()
 
@@ -155,6 +170,15 @@ class AppComponent(settingsFile: Path) {
     private val signingGateway: SigningGateway = SigningGatewayImpl(gitAccess)
     private val identityGateway: IdentityGateway = IdentityGatewayImpl(gitAccess, settingsGateway)
     private val externalToolGateway: ExternalToolGateway = ExternalToolGatewayImpl(gitAccess, settingsGateway)
+
+    // ── Gateway (infrastructure) — 환경설정이 소비하는 읽기 전용 계약 ──
+    /**
+     * 셋 다 [gitAccess] 를 쓰지 않는다 — 저장소가 열려 있지 않아도 답할 수 있어야 하는 조회다.
+     * 전역·시스템 설정 파일 위치와 서체 측정 방식은 각 구현의 기본값이 소유한다.
+     */
+    private val gitConfigGateway: GitConfigGateway = GitConfigGatewayImpl()
+    private val monospaceFontGateway: MonospaceFontGateway = MonospaceFontGatewayImpl()
+    private val diagnosticsGateway: DiagnosticsGateway = DiagnosticsGatewayImpl(appDirectory)
 
     /** 병합·리베이스의 규칙(시작 전 검사·진행 중 검사·확인 대조)을 갖는 도메인 서비스. */
     private val mergeService = MergeService(repositoryGateway, mergeGateway)
@@ -195,10 +219,24 @@ class AppComponent(settingsFile: Path) {
     val identityUseCases = IdentityUseCases(
         loadProfiles = LoadProfilesUseCase(identityService),
         saveProfile = SaveProfileUseCase(identityService),
+        updateProfile = UpdateProfileUseCase(identityService),
         deleteProfile = DeleteProfileUseCase(identityService),
+        profileUsage = ProfileUsageUseCase(identityGateway),
         applyProfile = ApplyProfileUseCase(identityService),
         clearLocalIdentity = ClearLocalIdentityUseCase(identityService),
         assignedProfileName = AssignedProfileNameUseCase(identityGateway),
+    )
+
+    /** Git 탭이 앱 설정과 겹쳐 보여 줄 git 설정 실효값. 결합은 화면이 한다 (결정 G34 UND-75 1). */
+    val readEffectiveConfig = ReadEffectiveConfigUseCase(gitConfigGateway)
+
+    /** 도구 탭의 고정폭 서체 후보. 목록을 못 얻어도 직접 입력 경로는 그대로 남는다. */
+    val loadMonospaceFonts = LoadMonospaceFontsUseCase(monospaceFontGateway)
+
+    /** 고급 탭의 로그 디렉터리 조회·열기. 없으면 실패가 아니라 '아직 없음' 이 올라온다. */
+    val diagnosticsUseCases = DiagnosticsUseCases(
+        locateLogDirectory = LocateLogDirectoryUseCase(diagnosticsGateway),
+        openLogDirectory = OpenLogDirectoryUseCase(diagnosticsGateway),
     )
 
     val externalToolUseCases = ExternalToolUseCases(
