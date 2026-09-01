@@ -2,10 +2,12 @@ package dev.undine.infrastructure.identity
 
 import dev.undine.domain.AuthenticationMethod
 import dev.undine.domain.IdentityProfile
+import dev.undine.domain.Person
 import dev.undine.domain.RepositoryPath
 import dev.undine.domain.Settings
 import dev.undine.domain.SettingsGateway
 import dev.undine.domain.UndineException
+import dev.undine.domain.identity.GlobalIdentity
 import dev.undine.domain.identity.IdentityService
 import dev.undine.domain.identity.IdentityWarning
 import dev.undine.infrastructure.git.history.HistoryGatewayImpl
@@ -29,6 +31,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.yield
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.lib.PersonIdent
+import org.eclipse.jgit.lib.StoredConfig
 import org.eclipse.jgit.storage.file.FileBasedConfig
 import org.eclipse.jgit.transport.URIish
 import org.eclipse.jgit.util.FS
@@ -45,6 +48,13 @@ private const val WORK_PROFILE = "회사"
 private const val WORK_EMAIL = "me@work.example"
 private const val PERSONAL_EMAIL = "me@personal.example"
 private const val SIGNING_KEY = "ABCD1234"
+private const val PERSONAL_PROFILE = "개인"
+private const val RENAMED_PROFILE = "회사(신)"
+private const val OTHER_SIGNING_KEY = "FFFF9999"
+
+/** 닫히지 않은 섹션 머리 — git 도 JGit 도 파싱하지 못한다. */
+private const val BROKEN_CONFIG_TEXT = "[user\n"
+private const val GLOBAL_EMAIL = "global@example.com"
 
 private const val USER = "user"
 private const val UNDINE = "undine"
@@ -65,6 +75,14 @@ private val WORK = IdentityProfile(
     email = WORK_EMAIL,
     signingKeyId = SIGNING_KEY,
     defaultAuthentication = AuthenticationMethod.SSH,
+    expectedHost = null,
+)
+
+private val PERSONAL = IdentityProfile(
+    name = PERSONAL_PROFILE,
+    email = PERSONAL_EMAIL,
+    signingKeyId = null,
+    defaultAuthentication = AuthenticationMethod.HTTPS,
     expectedHost = null,
 )
 
@@ -373,7 +391,262 @@ class IdentityGatewayImplSpec : FunSpec({
         )
         outside.shouldBeEmpty()
     }
+
+    test("같은 프로필을 쓰는 최근 저장소가 둘이면 집계가 2 다") {
+        val first = tempdir().also(::seedRepository).also { work -> assignProfile(work, WORK_PROFILE) }
+        val second = tempdir().also(::seedRepository).also { work -> assignProfile(work, WORK_PROFILE) }
+        val other = tempdir().also(::seedRepository).also { work -> assignProfile(work, "개인") }
+        val untouched = tempdir().also(::seedRepository)
+        val open = tempdir().also(::seedRepository)
+
+        val usage = withUsageGateway(
+            open = open,
+            candidates = listOf(first, second, other, untouched),
+            globalIdentityConfig = globalIdentityConfig(name = "전역 사용자", email = GLOBAL_EMAIL),
+        ) { gateway -> gateway.profileUsage(WORK_PROFILE) }
+
+        usage.repositoryCount shouldBe 2
+        usage.uncheckedRepositoryCount shouldBe 0
+        usage.globalIdentity shouldBe GlobalIdentity.Configured(Person("전역 사용자", GLOBAL_EMAIL))
+    }
+
+    test("아무도 쓰지 않는 프로필과 빈 후보 목록의 집계는 0 이고 실패하지 않는다") {
+        val open = tempdir().also(::seedRepository)
+        val untouched = tempdir().also(::seedRepository)
+
+        val unused = withUsageGateway(open, listOf(untouched), emptyConfig()) { gateway ->
+            gateway.profileUsage(WORK_PROFILE)
+        }
+        val noCandidates = withUsageGateway(open, emptyList(), emptyConfig()) { gateway ->
+            gateway.profileUsage(WORK_PROFILE)
+        }
+
+        unused.repositoryCount shouldBe 0
+        noCandidates.repositoryCount shouldBe 0
+    }
+
+    test("사라졌거나 저장소가 아닌 후보는 실패가 아니라 세지 않고 넘어간다") {
+        val open = tempdir().also(::seedRepository)
+        val using = tempdir().also(::seedRepository).also { work -> assignProfile(work, WORK_PROFILE) }
+        val notARepository = tempdir()
+        val vanished = tempdir().also { work -> work.deleteRecursively() }
+
+        val usage = withUsageGateway(
+            open = open,
+            candidates = listOf(using, notARepository, vanished),
+            globalIdentityConfig = emptyConfig(),
+        ) { gateway -> gateway.profileUsage(WORK_PROFILE) }
+
+        // 저장소가 아닌 후보는 확인할 저장소 자체가 없다 — 미확인 수를 부풀리지 않는다.
+        usage.repositoryCount shouldBe 1
+        usage.uncheckedRepositoryCount shouldBe 0
+    }
+
+    test("같은 저장소를 가리키는 별칭 경로는 한 번만 센다") {
+        val work = tempdir().also(::seedRepository).also { path -> assignProfile(path, WORK_PROFILE) }
+        val open = tempdir().also(::seedRepository)
+        val alias = File(work, ".${File.separator}")
+
+        val usage = withUsageGateway(
+            open = open,
+            candidates = listOf(work, alias),
+            globalIdentityConfig = emptyConfig(),
+        ) { gateway -> gateway.profileUsage(WORK_PROFILE) }
+
+        usage.repositoryCount shouldBe 1
+    }
+
+    test("전역 identity 가 설정돼 있지 않으면 실패 대신 '설정 안 함' 이다") {
+        val open = tempdir().also(::seedRepository)
+
+        val missing = withUsageGateway(open, emptyList(), emptyConfig()) { gateway ->
+            gateway.profileUsage(WORK_PROFILE)
+        }
+        // 이름만 있는 반쪽 설정으로는 git 이 커밋할 수 없다 — '설정 없음' 과 같게 다룬다.
+        val halfConfigured = withUsageGateway(
+            open = open,
+            candidates = emptyList(),
+            globalIdentityConfig = globalIdentityConfig(name = "이름만", email = null),
+        ) { gateway -> gateway.profileUsage(WORK_PROFILE) }
+
+        missing.globalIdentity shouldBe GlobalIdentity.NotConfigured
+        halfConfigured.globalIdentity shouldBe GlobalIdentity.NotConfigured
+    }
+
+    test("전역 설정을 읽지 못하면 '설정 안 함' 이 아니라 '읽지 못함' 이다") {
+        val open = tempdir().also(::seedRepository)
+
+        // 파일을 열지 못하는 경우 — 삭제 확인이 막히지 않아야 한다.
+        val unreadable = withUsageGateway(open, emptyList(), failingConfig()) { gateway ->
+            gateway.profileUsage(WORK_PROFILE)
+        }
+        // 파싱하지 못하는 경우 — 닫히지 않은 섹션 머리는 git 도 읽지 못한다.
+        val invalid = withUsageGateway(open, emptyList(), brokenConfig()) { gateway ->
+            gateway.profileUsage(WORK_PROFILE)
+        }
+
+        // '없다' 고 말하면 삭제 확인 화면이 있는 신원을 없다고 알린다 (결정 G36).
+        unreadable.globalIdentity shouldBe GlobalIdentity.Unreadable
+        invalid.globalIdentity shouldBe GlobalIdentity.Unreadable
+    }
+
+    test("로컬 config 를 읽지 못한 후보는 실패도 미사용도 아니라 미확인으로 센다") {
+        val open = tempdir().also(::seedRepository)
+        val using = tempdir().also(::seedRepository).also { work -> assignProfile(work, WORK_PROFILE) }
+        val broken = tempdir().also(::seedRepository).also(::breakLocalConfig)
+
+        val usage = withUsageGateway(
+            open = open,
+            candidates = listOf(using, broken),
+            globalIdentityConfig = emptyConfig(),
+        ) { gateway -> gateway.profileUsage(WORK_PROFILE) }
+
+        // 깨진 후보 하나가 집계 전체를 실패로 만들지 않되, 전수가 아님을 화면이 알 수 있어야 한다.
+        usage.repositoryCount shouldBe 1
+        usage.uncheckedRepositoryCount shouldBe 1
+    }
+
+    test("같은 저장소를 가리키는 별칭 경로는 미확인 집계에서도 한 번만 센다") {
+        val open = tempdir().also(::seedRepository)
+        val broken = tempdir().also(::seedRepository).also(::breakLocalConfig)
+        val alias = File(broken, ".${File.separator}")
+
+        val usage = withUsageGateway(
+            open = open,
+            candidates = listOf(broken, alias),
+            globalIdentityConfig = emptyConfig(),
+        ) { gateway -> gateway.profileUsage(WORK_PROFILE) }
+
+        usage.uncheckedRepositoryCount shouldBe 1
+    }
+
+    test("이미 저장된 잘못된 형식의 이메일도 그대로 읽힌다") {
+        val open = tempdir().also(::seedRepository)
+        val settings = settingsFile()
+        val stored = WORK.copy(email = "예전에 저장된 값")
+        SettingsGatewayImpl(settings.toPath())
+            .save(Settings.DEFAULTS.copy(identityProfiles = listOf(stored)))
+
+        val profiles = withIdentityGateway(open, settings) { gateway -> gateway.profiles() }
+
+        profiles shouldContainExactly listOf(stored)
+    }
+
+    test("같은 이름 프로필의 이메일과 서명 키를 하나의 update 로 바꾼다") {
+        val work = tempdir().also(::seedRepository)
+        val settings = settingsFile()
+        val updated = WORK.copy(email = PERSONAL_EMAIL, signingKeyId = OTHER_SIGNING_KEY)
+
+        val profiles = withIdentityGateway(work, settings) { gateway ->
+            gateway.saveProfile(WORK)
+            gateway.updateProfile(WORK_PROFILE, updated)
+            gateway.profiles()
+        }
+
+        profiles shouldContainExactly listOf(updated)
+    }
+
+    // 저장소들은 로컬 설정에 프로필 '이름' 으로 연결을 적어 둔다 — 이름을 바꾸면 그 참조가 옛
+    // 이름을 가리킨 채 남아, 지운 것과 같은 결과가 된다 (결정 G38).
+    test("이름을 바꾸려는 수정은 거부하고 기존 프로필을 삭제된 상태로 남기지 않는다") {
+        val work = tempdir().also(::seedRepository)
+        val settings = settingsFile()
+
+        val profiles = withIdentityGateway(work, settings) { gateway ->
+            gateway.saveProfile(WORK)
+            gateway.saveProfile(PERSONAL)
+            // 아무도 쓰지 않는 새 이름이어도 거부한다 — 참조 이관은 이 연산의 범위가 아니다.
+            val renaming = shouldThrow<UndineException.StateViolation> {
+                gateway.updateProfile(WORK_PROFILE, WORK.copy(name = RENAMED_PROFILE))
+            }
+            renaming.detail shouldBe
+                "신원 프로필의 이름은 수정으로 바꿀 수 없습니다: '$WORK_PROFILE' → '$RENAMED_PROFILE'"
+            // 이미 다른 프로필이 쓰는 이름으로 바꾸려는 요청도 같은 이유로 거부된다.
+            shouldThrow<UndineException.StateViolation> {
+                gateway.updateProfile(WORK_PROFILE, WORK.copy(name = PERSONAL_PROFILE))
+            }
+            gateway.profiles()
+        }
+
+        profiles shouldContainExactlyInAnyOrder listOf(WORK, PERSONAL)
+    }
+
+    test("없는 프로필을 고치려 하면 새로 만들지 않고 거부한다") {
+        val work = tempdir().also(::seedRepository)
+        val settings = settingsFile()
+
+        val profiles = withIdentityGateway(work, settings) { gateway ->
+            shouldThrow<UndineException.StateViolation> { gateway.updateProfile(WORK_PROFILE, WORK) }
+            gateway.profiles()
+        }
+
+        profiles.shouldBeEmpty()
+    }
 })
+
+/**
+ * 사용 집계용 Gateway — 후보 저장소 목록을 설정에 심고 **전역 설정을 임시 파일로 갈아 끼운다**.
+ *
+ * 실제 사용자의 `~/.gitconfig` 를 읽으면 결과가 기계마다 달라진다. 전역 파일은 여기서도 **읽기만**
+ * 하고, 후보 저장소들은 열린 저장소와 별개라 `GitAccess` 를 지나지 않는다.
+ */
+private suspend fun <T> withUsageGateway(
+    open: File,
+    candidates: List<File>,
+    globalIdentityConfig: StoredConfig,
+    block: suspend (IdentityGatewayImpl) -> T,
+): T = withOpenRepository(open) { gitAccess ->
+    val settingsGateway = SettingsGatewayImpl(settingsFile().toPath())
+    settingsGateway.save(
+        Settings.DEFAULTS.copy(
+            recentRepositories = candidates.map { candidate -> RepositoryPath(candidate.path) },
+        ),
+    )
+    block(IdentityGatewayImpl(gitAccess, settingsGateway) { globalIdentityConfig })
+}
+
+/** 후보 저장소의 **로컬** 설정에 프로필 이름을 심는다 — 집계가 읽는 바로 그 키다. */
+private fun assignProfile(work: File, profileName: String) {
+    localConfig(work).also { config ->
+        config.setString(UNDINE, null, IDENTITY_PROFILE, profileName)
+        config.save()
+    }
+}
+
+private fun globalIdentityConfig(name: String?, email: String?): FileBasedConfig =
+    FileBasedConfig(temporaryConfigFile(), FS.DETECTED).also { config ->
+        name?.let { value -> config.setString(USER, null, "name", value) }
+        email?.let { value -> config.setString(USER, null, "email", value) }
+        config.save()
+    }
+
+/** 파일이 아예 없는 전역 설정 — "설정 없음" 경로를 재현한다. */
+private fun emptyConfig(): FileBasedConfig = FileBasedConfig(temporaryConfigFile(), FS.DETECTED)
+
+/**
+ * 파싱할 수 없는 전역 설정 — 닫히지 않은 섹션 머리는 `ConfigInvalidException` 을 낸다.
+ * 실제 사용자가 `~/.gitconfig` 를 손으로 고치다 만드는 상태다.
+ */
+private fun brokenConfig(): FileBasedConfig =
+    FileBasedConfig(temporaryConfigFile().also { file -> file.writeText(BROKEN_CONFIG_TEXT) }, FS.DETECTED)
+
+/**
+ * 열지 못하는 전역 설정 — 권한이 없거나 디스크를 읽지 못하는 경우를 `IOException` 으로 재현한다.
+ * 파일로는 플랫폼마다 재현이 갈려서 읽기 경계 자체를 갈아 끼운다.
+ */
+private fun failingConfig(): StoredConfig = object : StoredConfig() {
+    override fun load(): Unit = throw IOException("전역 설정을 읽지 못했다")
+
+    override fun save(): Unit = throw UnsupportedOperationException("전역 설정에는 쓰지 않는다")
+}
+
+/** 후보 저장소의 **로컬** config 를 파싱 불가 상태로 만든다 — 미확인 후보 경로를 재현한다. */
+private fun breakLocalConfig(work: File) {
+    File(File(work, ".git"), "config").writeText(BROKEN_CONFIG_TEXT)
+}
+
+private fun temporaryConfigFile(): File = File.createTempFile("undine-global", ".gitconfig")
+    .also { file -> file.delete(); file.deleteOnExit() }
 
 /** 테스트마다 새 설정 파일을 준다 — 프로필 목록이 테스트 사이에 새면 순서에 따라 결과가 달라진다. */
 private fun settingsFile(): File = File.createTempFile("undine-settings", ".json")

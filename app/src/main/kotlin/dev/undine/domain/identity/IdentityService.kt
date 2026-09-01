@@ -29,8 +29,27 @@ class IdentityService(
 
     suspend fun profiles(): List<IdentityProfile> = identityGateway.profiles()
 
-    /** @throws UndineException.StateViolation 같은 이름의 프로필이 이미 있을 때 */
-    suspend fun saveProfile(profile: IdentityProfile) = identityGateway.saveProfile(profile)
+    /**
+     * @throws UndineException.StateViolation 같은 이름의 프로필이 이미 있거나 이메일 형식이 틀렸을 때
+     */
+    suspend fun saveProfile(profile: IdentityProfile) {
+        requireValidEmailFormat(profile.email)
+        identityGateway.saveProfile(profile)
+    }
+
+    /**
+     * 프로필을 원자적으로 고친다. **`deleteProfile` + `saveProfile` 로 나누지 않는다** — 그 사이
+     * 실패가 프로필을 잃는 경로다.
+     *
+     * 이름은 바꿀 수 없다 — 그 판단은 [IdentityGateway.updateProfile] 계약이 한다.
+     *
+     * @throws UndineException.StateViolation 대상 프로필이 없거나, 이름을 바꾸려 하거나,
+     * 이메일 형식이 틀렸을 때
+     */
+    suspend fun updateProfile(originalName: String, profile: IdentityProfile) {
+        requireValidEmailFormat(profile.email)
+        identityGateway.updateProfile(originalName, profile)
+    }
 
     suspend fun deleteProfile(name: String) = identityGateway.deleteProfile(name)
 
@@ -63,20 +82,21 @@ class IdentityService(
     }
 
     private suspend fun emailWarning(profile: IdentityProfile): IdentityWarning? {
-        val otherEmails = recentCommits()
+        val otherEmails = historyGateway.recentCommits()
             .map { commit -> commit.author.email }
             .filterNot { email -> email.equals(profile.email, ignoreCase = true) }
             .distinct()
         return IdentityWarning.EmailMismatch(profile.email, otherEmails).takeIf { otherEmails.isNotEmpty() }
     }
 
-    private suspend fun recentCommits(): List<Commit> =
-        try {
-            historyGateway.load(listOf(HEAD), offset = 0, limit = RECENT_COMMIT_LIMIT)
-        } catch (missingHead: UndineException.NotFound) {
-            // 커밋이 하나도 없는 저장소는 HEAD 를 풀 수 없다 — 비교할 이력이 없다는 뜻이지 실패가 아니다.
-            // 첫 커밋 직전이 이 검사가 가장 필요한 순간이라 여기서 멈추면 안 된다.
-            if (missingHead.kind != UndineException.NotFound.Kind.REF) throw missingHead
-            emptyList()
-        }
 }
+
+private suspend fun HistoryGateway.recentCommits(): List<Commit> =
+    try {
+        load(listOf(HEAD), offset = 0, limit = RECENT_COMMIT_LIMIT)
+    } catch (missingHead: UndineException.NotFound) {
+        // 커밋이 하나도 없는 저장소는 HEAD 를 풀 수 없다 — 비교할 이력이 없다는 뜻이지 실패가 아니다.
+        // 첫 커밋 직전이 이 검사가 가장 필요한 순간이라 여기서 멈추면 안 된다.
+        if (missingHead.kind != UndineException.NotFound.Kind.REF) throw missingHead
+        emptyList()
+    }

@@ -22,11 +22,41 @@ interface IdentityGateway {
     suspend fun saveProfile(profile: IdentityProfile)
 
     /**
+     * [originalName] 프로필의 이메일·서명 키를 **한 번에** 바꾼다.
+     *
+     * `deleteProfile` + `saveProfile` 조합은 그 사이에 실패하면 프로필을 잃는다 — 데이터 유실
+     * 경로다. 그래서 수정을 계약으로 올려 읽기-수정-쓰기를 한 임계구역 안에서 끝낸다.
+     *
+     * **이름은 바꾸지 않는다** — [IdentityProfile.name] 이 [originalName] 과 다르면 거부한다
+     * (결정 G38). 저장소들은 로컬 설정에 프로필 **이름**을 적어 두므로 이름이 바뀌면 그 참조들이
+     * 옛 이름을 가리킨 채 남는다. 이름 변경은 참조 이관을 포함한 별도 기능이지 이 연산이 아니다.
+     *
+     * @throws UndineException.StateViolation [originalName] 프로필이 없거나,
+     * [IdentityProfile.name] 이 [originalName] 과 다를 때
+     */
+    suspend fun updateProfile(originalName: String, profile: IdentityProfile)
+
+    /**
      * 프로필 목록에서 [name] 을 지운다. **저장소를 훑지 않는다** — 어떤 저장소가 그 프로필을
      * 쓰는지 알려면 저장소 인덱스가 필요하고, 그것은 이 계약의 범위가 아니다. 사라진 이름을
      * 가리키는 저장소는 [IdentityWarning.ProfileNotAssigned] 로 다뤄진다.
      */
     suspend fun deleteProfile(name: String)
+
+    /**
+     * [name] 프로필을 지우기 전에 알려야 하는 사용 현황 — 사용 저장소 수와 삭제 후 적용될
+     * 전역 신원이다.
+     *
+     * 후보 집합은 `Settings.recentRepositories` 다. **디스크를 훑지 않고**, 같은 저장소가 여러 번
+     * 들어갈 수 있는 열린 탭 목록도 쓰지 않는다 — 집계 단위는 탭이 아니라 저장소다.
+     * 후보 목록이 비었거나 아무도 쓰지 않으면 `0` 이다.
+     *
+     * **집계는 실패로 끝나지 않는다** — 삭제 확인이 실패 경로가 되면 안 된다. 대신 읽지 못한 것을
+     * "없음" 으로 접지 않고 그대로 알린다 (결정 G36): 확인하지 못한 저장소는
+     * [IdentityProfileUsage.uncheckedRepositoryCount] 에, 전역 설정을 읽지 못한 것은
+     * [GlobalIdentity.Unreadable] 로 구분해 돌려준다.
+     */
+    suspend fun profileUsage(name: String): IdentityProfileUsage
 
     /**
      * 현재 열린 저장소의 **로컬** 설정에 프로필을 반영한다

@@ -3,6 +3,7 @@ package dev.undine.application.identity
 import dev.undine.domain.IdentityProfile
 import dev.undine.domain.UndineException
 import dev.undine.domain.identity.IdentityGateway
+import dev.undine.domain.identity.IdentityProfileUsage
 import dev.undine.domain.identity.IdentityService
 import dev.undine.domain.identity.IdentityWarning
 
@@ -22,6 +23,38 @@ class LoadProfilesUseCase(private val identityService: IdentityService) {
 class SaveProfileUseCase(private val identityService: IdentityService) {
 
     suspend fun execute(profile: IdentityProfile) = identityService.saveProfile(profile)
+}
+
+/**
+ * 프로필을 **원자적으로** 고친다 — 같은 이름을 유지한 채 이메일·서명 키를 바꾸는 경로다.
+ *
+ * 호출부가 `deleteProfile` + `saveProfile` 을 조합하지 않게 하려고 있는 UseCase다. 그 조합은
+ * 사이에 실패하면 프로필을 잃는다.
+ *
+ * 이름은 바꾸지 못한다 — 저장소들이 프로필 이름으로 연결을 적어 두기 때문이다 (결정 G38).
+ *
+ * @throws UndineException.StateViolation 대상 프로필이 없거나, 이름을 바꾸려 하거나,
+ * 이메일 형식이 틀렸을 때
+ */
+class UpdateProfileUseCase(private val identityService: IdentityService) {
+
+    suspend fun execute(originalName: String, profile: IdentityProfile) =
+        identityService.updateProfile(originalName, profile)
+}
+
+/**
+ * 프로필을 지우기 전 확인에 필요한 사용 현황 — 사용 저장소 수와 삭제 후 적용될 전역 신원이다.
+ *
+ * 읽지 못한 것이 있어도 실패가 되지 않는다 — 확인 화면이 막히면 사용자는 확인 없이 지운다. 다만
+ * **"없음" 과 "확인 못 함" 은 구분된 값으로 온다** (결정 G36): 확인하지 못한 저장소 수와
+ * `GlobalIdentity` 의 세 상태를 화면이 서로 다르게 말할 수 있어야 한다.
+ *
+ * 판단할 규칙이 없는 순수 조회라 [AssignedProfileNameUseCase] 와 같이 Gateway 를 그대로 받는다 —
+ * `IdentityService` 에 위임만 하는 메서드를 더하면 규칙이 사는 자리가 흐려진다.
+ */
+class ProfileUsageUseCase(private val identityGateway: IdentityGateway) {
+
+    suspend fun execute(name: String): IdentityProfileUsage = identityGateway.profileUsage(name)
 }
 
 /**
@@ -67,6 +100,10 @@ class CheckIdentityBeforeCommitUseCase(private val identityService: IdentityServ
  * 묶는 이유는 시그니처를 고정하기 위해서다 — 탭이 쓰는 동작이 늘 때마다 `PreferencesScreen` 의
  * 호출부까지 바뀌면, 그 파일을 수정할 수 없는 탭 티켓이 자기 일을 할 수 없다. 묶음 안을 늘리는 것은
  * 계정 탭 티켓의 자기 파일 변경으로 끝난다. 형태는 `RecoveryBisectUseCases` 와 같다.
+ *
+ * [UpdateProfileUseCase]·[ProfileUsageUseCase] 는 아직 이 묶음에 들어 있지 않다 — 묶음을 넓히면
+ * `di/AppComponent.kt` 를 함께 고쳐야 하는데, 그 파일은 wave 9 통합 티켓(UND-82)이 넷을 한 번에
+ * 잇는 자리다 (결정 G34). UND-82 가 여기에 두 필드를 더하고 화면 배선을 끝낸다.
  */
 data class IdentityUseCases(
     val loadProfiles: LoadProfilesUseCase,
