@@ -14,6 +14,8 @@ import dev.undine.domain.IdentityProfile
 import dev.undine.domain.RefName
 import dev.undine.domain.UndineException
 import dev.undine.domain.identity.IdentityGateway
+import dev.undine.domain.identity.GlobalIdentity
+import dev.undine.domain.identity.IdentityProfileUsage
 import dev.undine.domain.identity.IdentityService
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -96,6 +98,27 @@ private class FakeIdentityGateway(
             throw UndineException.StateViolation("같은 이름의 신원 프로필이 이미 있습니다: '${profile.name}'")
         }
         stored = stored + profile
+    }
+
+    /**
+     * UND-76 이 계약에 더한 원자적 수정. 이 화면은 아직 쓰지 않는다 — 전환은 UND-82 가 한다
+     * (결정 G34). 여기서는 계약을 만족시키되 **호출되면 드러나도록** [calls] 에 남긴다.
+     */
+    override suspend fun updateProfile(originalName: String, profile: IdentityProfile) {
+        calls += "updateProfile:$originalName"
+        val index = stored.indexOfFirst { saved -> saved.name == originalName }
+        if (index < 0) throw UndineException.StateViolation("고칠 신원 프로필이 없습니다: '$originalName'")
+        stored = stored.mapIndexed { position, saved -> if (position == index) profile else saved }
+    }
+
+    /** 사용 집계도 UND-82 가 쓴다. 이 화면은 부르지 않으므로 후보 없음과 같은 결과를 돌려준다. */
+    override suspend fun profileUsage(name: String): IdentityProfileUsage {
+        calls += "profileUsage:$name"
+        return IdentityProfileUsage(
+            repositoryCount = 0,
+            uncheckedRepositoryCount = 0,
+            globalIdentity = GlobalIdentity.NotConfigured,
+        )
     }
 
     override suspend fun deleteProfile(name: String) {
