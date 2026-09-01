@@ -70,3 +70,16 @@
 - 코드 작성 규칙: [`architecture-layers`](../rules/architecture-layers.md) · [`jgit-usage`](../rules/jgit-usage.md) · [`compose-ui`](../rules/compose-ui.md) · [`kotlin-idioms`](../rules/kotlin-idioms.md) · [`exception-handling`](../rules/exception-handling.md) · [`credential-handling`](../rules/credential-handling.md) · [`testing`](../rules/testing.md)
 - 리뷰 에이전트: [[custom-kotlin-desktop-engineer]] · [[custom-pr-call-graph-reviewer]] · [[custom-silent-failure-hunter]]
 - 등급·verdict: [`review-grading`](./review-grading.md)
+
+## FP-B17 — 설정 파일 부재를 "실패 은폐" 로 지적하는 것
+
+**지적 형태**: "`!file.isFile` / `gitDir == null` 경로가 손상·읽기 불가 설정을 폴백이나 빈 결과로
+바꿀 수 있다 — 부재/실패 분리 위반."
+
+**왜 오탐인가**: 파일이 **없는 것**과 있는데 **못 읽는 것**은 다르다. Git 자신이 `~/.gitconfig` 부재를
+오류로 보지 않고, 경로가 저장소가 아닌 것도 정상(전역·시스템만 조회)이다. 부재/실패 분리 규칙
+(결정 G35·G36·G37)이 금지하는 것은 **파일이 있는데 못 읽은 것을 "설정 안 함" 으로 접는 것**이며,
+`IOException`·`ConfigInvalidException` 을 `GitOperationFailed` 로 올리면 그 규칙은 지켜진 것이다.
+
+**지적 전에 확인할 것**: 그 null 반환 경로가 (a) 대상이 존재하지 않는 경우인가, (b) 존재하는데 읽기·
+파싱이 실패한 경우인가. (a) 면 부재가 맞다. 예외 catch 블록이 실패를 올리고 있는지 함께 본다.
