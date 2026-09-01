@@ -46,6 +46,9 @@ private const val TRANSITION_OVERLAP_WINDOW_MILLIS = 200L
 
 private fun keyOf(path: RepositoryPath) = RepositorySessionKey(path.value)
 
+/** [SessionSettingsGateway.updateFailure] 기본값이 내는 문구 — 보상 실패가 원인에 매달렸는지 볼 때 쓴다. */
+private const val SETTINGS_UPDATE_FAILURE_MESSAGE = "Git 연산 'settings.update' 이 실패했습니다."
+
 private val RepositorySessionSnapshot.lastTabId: TabId get() = tabs.last().id
 
 private fun RepositorySessionSnapshot.tabIdAt(index: Int): TabId = tabs[index].id
@@ -416,7 +419,12 @@ class RepositorySessionUseCaseSpec : BehaviorSpec({
 
                 val thrown = shouldThrow<UndineException.GitOperationFailed> { useCase.activate(alpha) }
 
-                thrown.suppressed.map { it.message } shouldContainExactly listOf("되돌리기 중단")
+                // 저장본 되돌리기도 같은(고장 난) 설정 Gateway 를 타므로 함께 실패한다. 보상 실패는
+                // 숨기지 않고 원인에 매달아 올린다 — 무엇 때문에 실패했는지를 보상이 덮지 않는다.
+                thrown.suppressed.map { it.message } shouldContainExactly listOf(
+                    SETTINGS_UPDATE_FAILURE_MESSAGE,
+                    "되돌리기 중단",
+                )
                 repositories.openSessions.shouldBeEmpty()
                 repositories.closeCount shouldBe 1
 
@@ -543,6 +551,114 @@ class RepositorySessionUseCaseSpec : BehaviorSpec({
                 val useCase = RepositorySessionUseCase(SessionGateway(), SessionSettingsGateway())
 
                 shouldThrow<IllegalArgumentException> { useCase.activate(TabId(1)) }
+            }
+        }
+    }
+
+    given("같은 저장소를 별칭 경로로 연 탭 둘") {
+        `when`("스냅샷을 읽으면") {
+            then("탭마다 홀더가 정규화한 세션 키를 싣는다 — 배선이 저장소 정체성을 이 값으로 식별한다") {
+                val useCase = RepositorySessionUseCase(canonicalizingGateway(), SessionSettingsGateway())
+
+                useCase.open(ALPHA)
+                val snapshot = useCase.open(ALPHA_ALIAS)
+
+                snapshot.tabs.map { it.sessionKey } shouldContainExactly
+                    listOf(keyOf(ALPHA), keyOf(ALPHA))
+            }
+        }
+    }
+
+    given("전이 결과를 화면에 옮기는 배선") {
+        `when`("전이 하나가 진행 중이면") {
+            then("반영은 임계 구역 안에서 끝나 다음 전이가 그 사이에 들어오지 못한다") {
+                val repositories = SessionGateway()
+                val settings = SessionSettingsGateway()
+                val useCase = RepositorySessionUseCase(repositories, settings)
+                val applied = mutableListOf<String>()
+                useCase.open(ALPHA)
+                val alphaTab = useCase.open(BETA).tabIdAt(0)
+
+                val gate = CompletableDeferred<Unit>()
+                val reached = CompletableDeferred<Unit>()
+                settings.updateGate = gate
+                settings.updateReached = reached
+
+                coroutineScope {
+                    val first = launch(Dispatchers.Default) {
+                        useCase.activate(alphaTab) { applied += "첫 전이 반영" }
+                    }
+                    reached.await()
+                    val second = launch(Dispatchers.Default) {
+                        useCase.activate(alphaTab) { applied += "뒤 전이 반영" }
+                    }
+                    delay(TRANSITION_OVERLAP_WINDOW_MILLIS)
+                    // 앞 전이가 아직 임계 구역 안이라 **아무 반영도 일어나지 않았다.**
+                    applied.shouldBeEmpty()
+                    gate.complete(Unit)
+                    first.join()
+                    second.join()
+                }
+
+                applied shouldContainExactly listOf("첫 전이 반영", "뒤 전이 반영")
+            }
+        }
+    }
+
+    given("설정을 저장한 뒤 화면 반영에서 실패하는 전이") {
+        `when`("반영이 예외를 던지면") {
+            then("메모리 장부뿐 아니라 **저장된 탭 목록**도 전이 이전으로 돌아간다") {
+                val settings = SessionSettingsGateway()
+                val useCase = RepositorySessionUseCase(SessionGateway(), settings)
+                useCase.open(ALPHA)
+
+                shouldThrow<IllegalStateException> {
+                    useCase.open(BETA) { error("화면 반영 실패") }
+                }
+
+                // 저장본이 곧 다음 실행의 탭 목록이다 — 여기가 되돌아가지 않으면 탭이 영구히 사라진다.
+                settings.stored.openTabs shouldContainExactly listOf(ALPHA)
+                settings.stored.activeTabIndex shouldBe 0
+                useCase.restore().tabs.map { it.path } shouldContainExactly listOf(ALPHA)
+            }
+        }
+
+        `when`("반영 도중 취소되면") {
+            then("같은 복원점으로 저장본까지 되돌아간다 — 취소도 실패와 같은 경계에 걸린다") {
+                val settings = SessionSettingsGateway()
+                val useCase = RepositorySessionUseCase(SessionGateway(), settings)
+                useCase.open(ALPHA)
+                val reached = CompletableDeferred<Unit>()
+
+                coroutineScope {
+                    val transition = launch(Dispatchers.Default) {
+                        useCase.open(BETA) {
+                            reached.complete(Unit)
+                            // 취소를 관측할 중단점. 여기가 없으면 취소가 끼어들 자리가 없다.
+                            delay(TRANSITION_OVERLAP_WINDOW_MILLIS)
+                        }
+                    }
+                    reached.await()
+                    transition.cancelAndJoin()
+                }
+
+                settings.stored.openTabs shouldContainExactly listOf(ALPHA)
+                settings.stored.activeTabIndex shouldBe 0
+                useCase.restore().tabs.map { it.path } shouldContainExactly listOf(ALPHA)
+            }
+        }
+
+        `when`("복원해 둔 탭 목록을 되살리는 전이가 반영에서 실패하면") {
+            then("아직 장부에 옮기지 못한 저장본을 빈 목록으로 덮어쓰지 않는다") {
+                val settings = SessionSettingsGateway(openTabs = listOf(ALPHA, BETA), activeTabIndex = 1)
+                val useCase = RepositorySessionUseCase(SessionGateway(), settings)
+
+                shouldThrow<IllegalStateException> {
+                    useCase.restore { error("화면 반영 실패") }
+                }
+
+                settings.stored.openTabs shouldContainExactly listOf(ALPHA, BETA)
+                settings.stored.activeTabIndex shouldBe 1
             }
         }
     }

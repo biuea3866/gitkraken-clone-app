@@ -173,7 +173,7 @@ class SubmoduleUseCasesSpec : BehaviorSpec({
     given("스테이징 Gateway") {
         val gateway = mockk<StagingGateway>(relaxUnitFun = true)
         val result = committed()
-        coEvery { gateway.commit("서브모듈 포인터 갱신") } returns result
+        coEvery { gateway.stageAndCommit(listOf("modules/core"), "서브모듈 포인터 갱신") } returns result
 
         `when`("현재 서브모듈 상태를 부모에 커밋하면") {
             val committed = CommitSubmodulePointerUseCase(gateway).execute(
@@ -181,10 +181,12 @@ class SubmoduleUseCasesSpec : BehaviorSpec({
                 message = "서브모듈 포인터 갱신",
             )
 
-            then("서브모듈 경로 하나를 stage한 뒤 같은 메시지로 commit한다") {
+            then("stage 와 commit 을 나눠 부르지 않고 결합 연산 하나로 끝낸다") {
                 committed shouldBe result
-                coVerify(exactly = 1) { gateway.stage(listOf("modules/core")) }
-                coVerify(exactly = 1) { gateway.commit("서브모듈 포인터 갱신") }
+                coVerify(exactly = 1) { gateway.stageAndCommit(listOf("modules/core"), "서브모듈 포인터 갱신") }
+                // 나눠 부르면 그 사이의 취소가 gitlink 만 올라간 부분 상태를 남긴다 (UND-81).
+                coVerify(exactly = 0) { gateway.stage(any()) }
+                coVerify(exactly = 0) { gateway.commit(any()) }
             }
         }
     }

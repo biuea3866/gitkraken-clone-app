@@ -23,12 +23,15 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.eclipse.jgit.api.Git
+import org.eclipse.jgit.diff.DiffFormatter
 import org.eclipse.jgit.lib.Constants
 import org.eclipse.jgit.lib.Repository
+import org.eclipse.jgit.util.io.DisabledOutputStream
 import org.eclipse.jgit.transport.RefSpec
 import org.eclipse.jgit.transport.URIish
 import java.io.File
@@ -117,6 +120,16 @@ private fun Repository.indexContentOf(path: String): String {
 
 private fun Repository.indexObjectIdOf(path: String): String =
     readDirCache().getEntry(path)?.objectId?.name ?: error("인덱스에 항목이 없습니다: $path")
+
+/** 커밋이 부모 대비 실제로 담은 경로. "의도한 변경만 커밋했는가" 는 인덱스가 아니라 트리가 답한다. */
+private fun Repository.changedPathsOf(commit: String): Set<String> {
+    val created = parseCommit(resolve(commit))
+    val parent = parseCommit(created.getParent(0).id)
+    return DiffFormatter(DisabledOutputStream.INSTANCE).use { formatter ->
+        formatter.setRepository(this)
+        formatter.scan(parent.tree, created.tree).map { entry -> entry.newPath }.toSet()
+    }
+}
 
 /**
  * 거부 경로 검증용 저장소 상태. amend 가 거부됐다면 세 축(HEAD·인덱스·워킹트리)이 **모두** 그대로여야 한다 —
@@ -693,6 +706,138 @@ class StagingGatewayImplSpec : FunSpec({
             val backups = git.backupRefs()
             backups shouldHaveSize 2
             backups.map { it.objectId.name }.toSet() shouldBe setOf(firstTarget, secondTarget)
+        }
+    }
+
+    test("stageAndCommit 은 지정한 경로만 인덱스에 올리고 그 경로만 커밋한다") {
+        initRepository().use { git ->
+            git.configureAuthor()
+            git.writeFile(FILE_PATH, "first\n")
+            git.commitAll("초기 커밋")
+            git.writeFile(FILE_PATH, "first\nsecond\n")
+            // 앱의 다른 경로가 이미 올려 둔 변경. 결합 연산이 이것까지 커밋하면 사용자가 고르지
+            // 않은 변경이 이력에 들어간다.
+            git.writeFile(OTHER_FILE_PATH, "other\n")
+            git.add().addFilepattern(OTHER_FILE_PATH).call()
+
+            val result = git.withStagingGateway { gateway ->
+                gateway.stageAndCommit(listOf(FILE_PATH), "gitlink 갱신")
+            }
+
+            git.repository.changedPathsOf(result.commitId.value) shouldBe setOf(FILE_PATH)
+            // 남의 변경은 인덱스에 그대로 남는다 — 커밋되지도, 지워지지도 않는다.
+            git.repository.indexContentOf(OTHER_FILE_PATH) shouldBe "other\n"
+        }
+    }
+
+    test("stageAndCommit 이 취소되면 gitlink 만 올라간 부분 상태를 남기지 않는다") {
+        initRepository().use { git ->
+            git.configureAuthor()
+            git.writeFile(FILE_PATH, "first\n")
+            git.commitAll("초기 커밋")
+            val headBefore = git.headCommit()
+            git.writeFile(FILE_PATH, "first\nsecond\n")
+
+            // 임계 구역을 다른 호출이 붙잡고 있는 동안 취소한다 — 결합 연산은 stage 도 시작하지 않는다.
+            // 나눠 부르는 형태였다면 stage 만 끝난 채 커밋이 사라진 중간 상태가 남는 지점이다.
+            git.withGitAccess { gitAccess ->
+                val boundaryEntered = CompletableDeferred<Unit>()
+                coroutineScope {
+                    val holder = launch(Dispatchers.Default) {
+                        gitAccess.withRepository {
+                            boundaryEntered.complete(Unit)
+                            Thread.sleep(SERIAL_BOUNDARY_HOLD_MILLIS)
+                        }
+                    }
+                    boundaryEntered.await()
+                    val combined = launch(Dispatchers.Default) {
+                        StagingGatewayImpl(gitAccess).stageAndCommit(listOf(FILE_PATH), "gitlink 갱신")
+                    }
+                    combined.cancel()
+                    holder.join()
+                }
+            }
+
+            git.headCommit() shouldBe headBefore
+            // 인덱스에 올라간 채 커밋되지 않은 중간 상태가 없다.
+            git.repository.indexContentOf(FILE_PATH) shouldBe "first\n"
+        }
+    }
+
+    test("stageAndCommit 이 커밋 단계에서 실패하면 인덱스에 올린 부분 상태를 되돌린다") {
+        initRepository().use { git ->
+            git.configureAuthor()
+            git.writeFile(FILE_PATH, "first\n")
+            git.commitAll("초기 커밋")
+            val headBefore = git.headCommit()
+            val indexBefore = git.repository.indexContentOf(FILE_PATH)
+            git.writeFile(FILE_PATH, "first\nsecond\n")
+
+            // 브랜치 ref 를 잠가 커밋의 마지막 단계만 실패시킨다. stage 는 이미 끝난 뒤라,
+            // 되돌리지 않으면 gitlink 만 인덱스에 올라간 부분 상태가 남는다 (결정 G41).
+            val branchLock = File(git.repository.directory, "refs/heads/$MAIN_BRANCH.lock")
+            branchLock.parentFile.mkdirs()
+            branchLock.writeText("")
+
+            shouldThrow<UndineException.GitOperationFailed> {
+                git.withStagingGateway { gateway -> gateway.stageAndCommit(listOf(FILE_PATH), "gitlink 갱신") }
+            }
+
+            git.headCommit() shouldBe headBefore
+            git.repository.indexContentOf(FILE_PATH) shouldBe indexBefore
+        }
+    }
+
+    test("결합 연산과 경쟁하는 stage 는 같은 직렬 경계에서 갈려 의도한 경로만 커밋된다") {
+        initRepository().use { git ->
+            git.configureAuthor()
+            git.writeFile(FILE_PATH, "first\n")
+            git.commitAll("초기 커밋")
+            git.writeFile(FILE_PATH, "first\nsecond\n")
+            git.writeFile(OTHER_FILE_PATH, "other\n")
+
+            val result = git.withGitAccess { gitAccess ->
+                val gateway = StagingGatewayImpl(gitAccess)
+                val boundaryEntered = CompletableDeferred<Unit>()
+                coroutineScope {
+                    // 두 호출이 모두 대기열에 들어가도록 경계를 붙잡아 둔다 — 어느 쪽이 먼저 통과하든
+                    // 결합 연산의 stage 와 commit 사이에는 끼어들 수 없어야 한다.
+                    val holder = launch(Dispatchers.Default) {
+                        gitAccess.withRepository {
+                            boundaryEntered.complete(Unit)
+                            Thread.sleep(SERIAL_BOUNDARY_HOLD_MILLIS)
+                        }
+                    }
+                    boundaryEntered.await()
+                    val combined = async(Dispatchers.Default) {
+                        gateway.stageAndCommit(listOf(FILE_PATH), "gitlink 갱신")
+                    }
+                    val competing = launch(Dispatchers.Default) { gateway.stage(listOf(OTHER_FILE_PATH)) }
+                    holder.join()
+                    competing.join()
+                    combined.await()
+                }
+            }
+
+            // 경쟁 stage 가 먼저 통과했든 나중이든, 커밋에는 결합 연산이 고른 경로만 들어간다.
+            git.repository.changedPathsOf(result.commitId.value) shouldBe setOf(FILE_PATH)
+            // 경쟁 stage 의 변경은 인덱스에 남는다 — 커밋되지도, 되돌려지지도 않는다.
+            git.repository.indexContentOf(OTHER_FILE_PATH) shouldBe "other\n"
+        }
+    }
+
+    test("stageAndCommit 은 그 경로에 올릴 변경이 없으면 빈 커밋을 만들지 않는다") {
+        initRepository().use { git ->
+            git.configureAuthor()
+            git.writeFile(FILE_PATH, "first\n")
+            git.commitAll("초기 커밋")
+            val headBefore = git.headCommit()
+
+            shouldThrow<UndineException.NothingToCommit> {
+                git.withStagingGateway { gateway -> gateway.stageAndCommit(listOf(FILE_PATH), "변경 없음") }
+            }
+
+            git.headCommit() shouldBe headBefore
         }
     }
 

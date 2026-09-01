@@ -96,6 +96,7 @@ Undine 구현을 **60개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2
 | [UND-80](UND-80-session-bound-execution.md) | 변경 실행을 시작 시점 세션에 묶는다 | M | 9 | UND-44 · UND-51 · **UND-79**(같은 파일) | `infrastructure/git/repository/GitAccess.kt` · `RepositoryHolder.kt` · `application/session/` |
 | [UND-81](UND-81-tab-session-wiring.md) | 탭 세션 배선 — 다중 저장소와 Undo 범위 | L | 9 | UND-43 · UND-44 · UND-51 · UND-80 · **UND-82**(같은 파일) | `presentation/RepositorySessionDriver.kt` · `di/AppComponent.kt`(세션 범위) · `presentation/App.kt`(탭 슬롯) |
 | [UND-82](UND-82-wave9-consumer-wiring.md) | wave 9 후반 계약 4건을 화면에 잇는다 | M | 9d | UND-75 · UND-76 · UND-77 · UND-78 | `di/AppComponent.kt` · `presentation/preferences/` · **`presentation/App.kt`** · `presentation/i18n/` · `application/diagnostics/` |
+| [UND-83](UND-83-tab-unavailable-state.md) | 저장소를 쓸 수 없는 탭의 상태를 모델에 넣는다 | M | 9f | UND-81 | `presentation/shell/` · `presentation/RepositorySessionDriver.kt` · `presentation/App.kt`(목적지 판정) |
 | [UND-52](UND-52-e2e-scenario-phase2.md) | 2차 E2E 시나리오 테스트 | M | 10 | UND-51 | `app/src/test/kotlin/.../scenario2/` |
 | [UND-54](UND-54-merge-start-state-guard.md) | merge/rebase 시작 경로 상태 가드 완결 | S | 4 | UND-21 | `infrastructure/git/merge/` (가드 추가) |
 | [UND-56](UND-56-gitkraken-visual-tuning.md) | GitKraken 계열 시각 튜닝 · 렌더 확인 수단 | S | 5 | UND-26 · UND-10 | `presentation/design/` · `presentation/graph/`(그리기) · `presentation/shell/`(분할선) |
@@ -208,6 +209,7 @@ flowchart LR
 | 9c | UND-80 | 1 |
 | 9d | UND-82 | 1 |
 | 9e | UND-81 | 1 |
+| 9f | UND-83 | 1 |
 | 10 | UND-50, UND-52 | 2 |
 
 - **너비 분포**: [1, 11, 11, 5, 3, 1, 8, 5, 3, 1, 9, 6, 1, 1, 1, 1, 2]

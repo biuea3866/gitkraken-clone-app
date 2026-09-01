@@ -5,6 +5,7 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
@@ -39,6 +40,8 @@ import kotlinx.coroutines.runBlocking
 import org.eclipse.jgit.api.Git
 import java.io.File
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 
 /** 실제 저장소를 열고 그래프까지 읽는 경로라 기본 1초로는 모자란다. */
 private const val WAIT_MILLIS = 30_000L
@@ -54,13 +57,17 @@ private val OVERRIDE_SHORTCUT = Shortcut(Key.F8, setOf(ShortcutModifier.PRIMARY,
 /** clone 사이에서 baseline 이 같아도 이력이 섞이지 않는지 보려고 옮겨 볼 브랜치. */
 private const val MOVABLE_BRANCH = "movable"
 
+/** 저장소를 구분하는 표식. 컨텍스트가 어느 저장소의 ref 를 들고 있는지는 이 이름으로만 말할 수 있다. */
+private const val FIRST_ONLY_BRANCH = "only-in-first"
+private const val SECOND_ONLY_BRANCH = "only-in-second"
+
 /**
  * 조립된 앱을 **그대로 띄워** 배선이 성립하는지 본다.
  *
  * 목적지 분기(`destinationFor`)나 등록 함수를 따로 부르는 테스트는 그 함수가 맞다는 것만 말한다 —
  * 앱이 그 함수를 부르는지, 부른 결과를 화면으로 옮기는지는 말하지 않는다. 여기서는 `AppRoot` 를
- * 렌더해 **일곱 화면 분기 · 빈 탭 슬롯 · 그래프 홀더 공유 · 시작 시 단축키 적용 · 저장소 전환과
- * 닫기·재열기에서의 Undo 범위 교체**를 한 조립 위에서 확인한다.
+ * 렌더해 **일곱 화면 분기 · 탭 막대 배선 · 그래프 홀더 공유 · 시작 시 단축키 적용 · 탭 전환과
+ * 닫기·재열기에서의 Undo 범위 수명**을 한 조립 위에서 확인한다.
  *
  * **Mock 을 쓰지 않는다** — 실제 임시 저장소와 실제 `AppComponent` 로 돈다 (`testing` 규칙 1).
  */
@@ -167,15 +174,18 @@ class AppAssemblySpec : FunSpec({
             val switched = wiring.currentUndo()
             runBlocking { switched.scope.loadUndoHistory.execute() }.shouldBeEmpty()
             runBlocking { switched.scope.peekUndoTarget.execute() }::class.simpleName shouldBe "None"
-            // 탭 슬롯은 비어 있다 — 이전 저장소가 탭으로 남지 않는다 (결정 G28).
-            onNodeWithText(systemStrings().tabs.closeTab).assertDoesNotExist()
+            // 두 저장소가 탭으로 남는다 — 전환은 앞 탭을 닫는 것이 아니다 (UND-81).
+            onAllNodesWithText(systemStrings().tabs.closeTab).fetchSemanticsNodes() shouldHaveSize 2
 
-            // 같은 저장소를 다시 열어도 버린 이력은 되살아나지 않는다.
+            // 앞 탭이 열려 있으므로 그 저장소의 이력은 살아 있다 — 범위의 수명은 탭이다 (UND-81).
+            // 되돌아가는 경로가 전환이든 같은 경로를 새 탭으로 여는 것이든 같은 범위를 본다.
             wiring.navigation.go(AppDestination.WELCOME)
             waitForIdle()
             openRecent(wiring, first)
             waitUntil(timeoutMillis = WAIT_MILLIS) { wiring.currentUndo() !== switched }
-            runBlocking { wiring.currentUndo().scope.loadUndoHistory.execute() }.shouldBeEmpty()
+            runBlocking { wiring.currentUndo().scope.loadUndoHistory.execute() } shouldHaveSize 1
+            // clone 은 여전히 갈려 있다 — baseline 이 같아도 세션 키가 다르기 때문이다 (결정 G29).
+            runBlocking { switched.scope.loadUndoHistory.execute() }.shouldBeEmpty()
         }
     }
 
@@ -219,7 +229,57 @@ class AppAssemblySpec : FunSpec({
             runBlocking { reopened.scope.peekUndoTarget.execute() }::class.simpleName shouldBe "None"
         }
     }
+
+    // 탭·셸 선택은 임계 구역 안에서 옮겨 가는데 컨텍스트만 그 밖에서 채워지면, 그 사이 화면은
+    // **이미 지나간 저장소의 ref** 를 보여 준다 — 그 창에 누른 조작이 다른 저장소로 간다 (결정 G42).
+    test("탭을 바꾸면 화면 컨텍스트가 이전 저장소의 ref 를 들고 있는 창이 없다") {
+        val settingsFile = File(tempdir(), "settings.json").toPath()
+        val first = seedRepository("첫.txt")
+        val second = seedRepository("둘.txt")
+        Git.open(first).use { opened -> opened.branchCreate().setName(FIRST_ONLY_BRANCH).call() }
+        Git.open(second).use { opened -> opened.branchCreate().setName(SECOND_ONLY_BRANCH).call() }
+        rememberAsRecent(settingsFile, first, second)
+
+        runComposeUiTest {
+            val wiring = startApp(settingsFile)
+            openRecent(wiring, first)
+            // 앞 저장소의 조회가 끝난 뒤에 바꾼다 — 채워지기 전에 바꾸면 무엇을 보고 있었는지 말할 수 없다.
+            waitUntil(timeoutMillis = WAIT_MILLIS) { wiring.holdsBranch(FIRST_ONLY_BRANCH) }
+            val firstUndo = wiring.currentUndo()
+
+            wiring.navigation.go(AppDestination.WELCOME)
+            waitForIdle()
+
+            // **표집은 별도 스레드에서 한다.** `waitUntil` 은 매 확인마다 조합이 한가해지기를 기다리므로
+            // (효과의 조회까지 끝난 뒤에야 본다) 전이와 조회 **사이**의 상태를 영영 보지 못한다.
+            // 결함은 바로 그 사이에만 보이므로, 한가해짐을 기다리지 않는 눈이 따로 있어야 한다.
+            val stopSampling = AtomicBoolean(false)
+            val sawPreviousRepository = AtomicBoolean(false)
+            val sampler = thread(name = "context-sampler") {
+                while (!stopSampling.get()) {
+                    // 범위가 이미 바뀌었는데 컨텍스트가 앞 저장소의 ref 를 들고 있는 순간 = 결함.
+                    if (wiring.currentUndo() !== firstUndo && wiring.holdsBranch(FIRST_ONLY_BRANCH)) {
+                        sawPreviousRepository.set(true)
+                    }
+                    Thread.yield()
+                }
+            }
+            try {
+                openRecent(wiring, second)
+                waitUntil(timeoutMillis = WAIT_MILLIS) { wiring.holdsBranch(SECOND_ONLY_BRANCH) }
+            } finally {
+                stopSampling.set(true)
+                sampler.join()
+            }
+
+            sawPreviousRepository.get() shouldBe false
+        }
+    }
 })
+
+/** 화면 컨텍스트가 그 브랜치를 가진 저장소를 가리키고 있는가. */
+private fun AppWiring.holdsBranch(branch: String): Boolean =
+    currentContext().branches.any { it.name.value.endsWith(branch) }
 
 /** 조립을 띄우고 그 배선 통로를 돌려준다. */
 @OptIn(ExperimentalTestApi::class)

@@ -101,6 +101,7 @@ internal fun DestinationArea(
     registry: CommandRegistry,
     welcomeState: WelcomeState,
     onOpenRepository: (RepositoryPath) -> Unit,
+    tabsSlot: @Composable () -> Unit,
 ) {
     // 지금 그려진 목적지를 태그로 남긴다 — 배선이 고른 화면을 테스트가 화면 문구에 기대지 않고 집는다.
     Box(modifier = Modifier.fillMaxSize().testTag(AppDestinationTags.of(destination))) {
@@ -114,7 +115,7 @@ internal fun DestinationArea(
                 shellState = shellState,
                 context = context,
                 screens = screens,
-                tabsSlot = {},
+                tabsSlot = tabsSlot,
             )
 
             AppDestination.PREFERENCES -> SecondaryScreen(navigation) {
