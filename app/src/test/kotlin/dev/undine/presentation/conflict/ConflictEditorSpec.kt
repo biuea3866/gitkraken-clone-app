@@ -3,11 +3,16 @@ package dev.undine.presentation.conflict
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.runComposeUiTest
 import dev.undine.domain.ThemeMode
 import dev.undine.domain.conflict.ConflictSide
@@ -233,6 +238,49 @@ class ConflictEditorSpec : FunSpec({
 
             onNodeWithTag(ConflictTags.ABORT_DIALOG).assertDoesNotExist()
             merge.calls.shouldBeEmpty()
+        }
+    }
+
+    // 대화상자를 마우스로만 닫을 수 있으면 키보드만 쓰는 사용자는 갇힌다 — 확인 버튼을 찾아
+    // 누르는 것 말고 빠져나올 길이 없다 (UND-50 접근성 감사).
+    test("중단 확인은 ESC 로 닫히고 되돌리지 않는다") {
+        runComposeUiTest {
+            val merge = StubMergeGateway()
+            val state = conflictStateWith(
+                conflict = textGateway(mapOf(TEXT_FILE to ONE_REGION_WITH_BASE)),
+                merge = merge,
+            )
+            setContent { EditorUnderTest(state) }
+
+            onNodeWithTag(ConflictTags.ABORT).performClick()
+            waitForIdle()
+            onNodeWithTag(ConflictTags.ABORT_DIALOG).assertIsDisplayed()
+
+            onNodeWithTag(ConflictTags.ABORT_CANCEL).requestFocus()
+            onNodeWithTag(ConflictTags.ABORT_CANCEL).performKeyInput { pressKey(Key.Escape) }
+            waitForIdle()
+
+            onNodeWithTag(ConflictTags.ABORT_DIALOG).assertDoesNotExist()
+            merge.calls.shouldBeEmpty()
+        }
+    }
+
+    test("중단 확인이 열려 있는 동안 포커스는 대화상자 밖으로 나가지 않는다") {
+        runComposeUiTest {
+            val state = conflictStateWith(
+                conflict = textGateway(mapOf(TEXT_FILE to ONE_REGION_WITH_BASE)),
+                merge = StubMergeGateway(),
+            )
+            setContent { EditorUnderTest(state) }
+
+            onNodeWithTag(ConflictTags.ABORT).performClick()
+            waitForIdle()
+
+            // 뒤에 가린 편집 화면의 조작으로 Tab 이 새면 사용자는 확인하지 않은 채 다른 것을 만진다.
+            onNodeWithTag(ConflictTags.ABORT_ACCEPT).requestFocus()
+            onNodeWithTag(ConflictTags.ABORT_ACCEPT).performKeyInput { pressKey(Key.Tab) }
+            waitForIdle()
+            onNodeWithTag(ConflictTags.ABORT).assertIsNotFocused()
         }
     }
 

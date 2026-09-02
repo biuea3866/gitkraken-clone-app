@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import dev.undine.presentation.design.UndineTokens
 import dev.undine.presentation.design.component.UndineToolbarButton
+import dev.undine.presentation.design.undineDialogSurface
 import dev.undine.presentation.i18n.common
 import dev.undine.presentation.i18n.conflict
 import dev.undine.presentation.i18n.strings
@@ -40,6 +41,7 @@ internal fun ConflictAbortDialog(
         modifier = modifier
             .background(colors.surface)
             .border(shape.borderThick, colors.warning, RoundedCornerShape(shape.cornerMedium))
+            .undineDialogSurface(onDismiss = onDismiss)
             .padding(spacing.medium)
             .testTag(ConflictTags.ABORT_DIALOG),
         verticalArrangement = Arrangement.spacedBy(spacing.small),

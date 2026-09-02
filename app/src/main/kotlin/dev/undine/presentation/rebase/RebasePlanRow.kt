@@ -21,6 +21,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import dev.undine.domain.rebase.RebaseAction
 import dev.undine.domain.rebase.RebasePlanStep
@@ -181,6 +183,7 @@ private fun MoveButtons(index: Int, stepCount: Int, onMove: (Int, Int) -> Unit) 
 @Composable
 private fun RewordField(index: Int, action: RebaseAction.Reword, onReword: (Int, String) -> Unit) {
     val colors = UndineTokens.color
+    val fieldLabel = strings.rebase.rewordPlaceholder
 
     BasicTextField(
         value = action.message,
@@ -193,6 +196,8 @@ private fun RewordField(index: Int, action: RebaseAction.Reword, onReword: (Int,
                 horizontal = UndineTokens.spacing.medium,
                 vertical = UndineTokens.spacing.extraSmall,
             )
+            // 빈 메시지 입력창은 읽을 텍스트가 없다 — 이름을 따로 붙인다.
+            .semantics { contentDescription = fieldLabel }
             .testTag(RebaseTags.rewordField(index)),
     )
 }

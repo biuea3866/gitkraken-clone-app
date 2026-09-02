@@ -14,6 +14,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import dev.undine.presentation.design.UndineTokens
 import dev.undine.presentation.design.component.UndineEmptyState
 import dev.undine.presentation.design.component.UndineListRow
@@ -86,7 +88,8 @@ private fun SearchField(
     BasicTextField(
         value = query,
         onValueChange = onQueryChange,
-        modifier = modifier.testTag(PaletteTags.QUERY),
+        // 안내 문구는 입력이 들어오면 사라진다 — 이름은 남아야 하므로 따로 붙인다.
+        modifier = modifier.semantics { contentDescription = placeholder }.testTag(PaletteTags.QUERY),
         singleLine = true,
         textStyle = typography.body.copy(color = colors.foregroundPrimary),
         cursorBrush = SolidColor(colors.accent),

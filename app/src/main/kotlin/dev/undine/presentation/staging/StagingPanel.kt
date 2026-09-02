@@ -17,11 +17,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import dev.undine.presentation.design.UndineTokens
 import dev.undine.presentation.design.component.UndineEmptyState
 import dev.undine.presentation.design.component.UndineListRow
 import dev.undine.presentation.design.component.UndineToolbarButton
+import dev.undine.presentation.design.undineDialogSurface
 import dev.undine.presentation.i18n.common
 import dev.undine.presentation.i18n.staging
 import dev.undine.presentation.i18n.strings
@@ -180,6 +183,8 @@ private fun CommitEditor(state: StagingState) {
                 .fillMaxWidth()
                 .border(shape.borderThin, colors.border, RoundedCornerShape(shape.cornerSmall))
                 .padding(horizontal = spacing.small, vertical = spacing.extraSmall)
+                // 빈 입력창은 읽을 텍스트가 없어 스크린리더에 이름 없는 조작 대상으로 나온다.
+                .semantics { contentDescription = texts.messagePlaceholder }
                 .testTag(StagingTags.MESSAGE),
         )
         BasicText(
@@ -224,6 +229,7 @@ private fun AmendConfirmDialog(shortHash: String, onAccept: () -> Unit, onDismis
             .fillMaxWidth()
             .background(colors.surface)
             .border(shape.borderThick, colors.warning, RoundedCornerShape(shape.cornerMedium))
+            .undineDialogSurface(onDismiss = onDismiss)
             .padding(spacing.medium)
             .testTag(StagingTags.AMEND_DIALOG),
         verticalArrangement = Arrangement.spacedBy(spacing.small),

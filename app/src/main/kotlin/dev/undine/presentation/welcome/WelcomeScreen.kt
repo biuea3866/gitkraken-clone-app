@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -271,6 +272,9 @@ private fun LabelledTextField(
                 .fillMaxWidth()
                 .border(shape.borderThin, colors.border, fieldShape)
                 .padding(horizontal = UndineTokens.spacing.small, vertical = UndineTokens.spacing.extraSmall)
+                // 옆의 안내 글자는 별개 노드다 — 입력창 자신이 이름을 갖지 않으면 빈 상태에서
+                // 스크린리더에 이름 없는 조작 대상으로 나온다.
+                .semantics { contentDescription = label }
                 .testTag(testTag),
         )
     }
