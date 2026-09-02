@@ -102,6 +102,14 @@ internal class RecordingStagingGateway(
         return committed("c")
     }
 
+    /** 결합 연산도 같은 장부에 남긴다 — 나눠 부른 것과 구분해서 확인할 수 있어야 한다. */
+    override suspend fun stageAndCommit(paths: List<String>, message: String): CommitResult {
+        commitFailure?.let { throw it }
+        staged += paths
+        commitMessages += message
+        return committed("c")
+    }
+
     override suspend fun inspectAmend(): AmendPreflight =
         AmendPreflight(target = amendTarget, existsOnRemote = amendExistsOnRemote)
 

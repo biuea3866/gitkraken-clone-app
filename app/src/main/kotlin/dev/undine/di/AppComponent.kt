@@ -49,6 +49,7 @@ import dev.undine.application.rebase.ApplyRebasePlanUseCase
 import dev.undine.application.rebase.LoadRebaseProgressUseCase
 import dev.undine.application.rebase.LoadRebaseTargetsUseCase
 import dev.undine.application.search.SearchCommitsUseCase
+import dev.undine.application.session.RepositorySessionUseCase
 import dev.undine.application.submodule.CommitSubmodulePointerUseCase
 import dev.undine.application.submodule.InitializeSubmoduleUseCase
 import dev.undine.application.submodule.LoadSubmodulesUseCase
@@ -77,6 +78,7 @@ import dev.undine.application.welcome.OpenRepositoryUseCase
 import dev.undine.domain.OpenedRepository
 import dev.undine.domain.RefGateway
 import dev.undine.domain.RepositoryGateway
+import dev.undine.domain.RepositorySessionGateway
 import dev.undine.domain.SettingsGateway
 import dev.undine.domain.bisect.BisectGateway
 import dev.undine.domain.bisect.BisectService
@@ -113,6 +115,7 @@ import dev.undine.infrastructure.git.staging.StagingGatewayImpl
 import dev.undine.infrastructure.git.remote.RemoteGatewayImpl
 import dev.undine.infrastructure.git.repository.GitAccess
 import dev.undine.infrastructure.git.repository.RepositoryGatewayImpl
+import dev.undine.infrastructure.git.repository.RepositorySessionGatewayImpl
 import dev.undine.infrastructure.git.repository.toOpenedRepository
 import dev.undine.infrastructure.git.submodule.SubmoduleGatewayImpl
 import dev.undine.infrastructure.git.worktree.WorktreeGatewayImpl
@@ -160,6 +163,12 @@ class AppComponent(settingsFile: Path, appDirectory: Path) {
     private val mergeGateway: MergeGateway = MergeGatewayImpl(gitAccess)
     private val rebaseGateway: InteractiveRebaseGateway = InteractiveRebaseGatewayImpl(gitAccess)
     private val settingsGateway: SettingsGateway = SettingsGatewayImpl(settingsFile)
+
+    /**
+     * 탭 세션 전이의 경계. **[gitAccess] 를 [repositoryGateway] 와 공유해야** 다른 Gateway 가 보는
+     * 활성 핸들과 탭의 활성 세션이 어긋나지 않는다.
+     */
+    private val repositorySessionGateway: RepositorySessionGateway = RepositorySessionGatewayImpl(gitAccess)
 
     // ── Gateway (infrastructure) — 2차 기능 ──
     private val blameGateway: BlameGateway = BlameGatewayImpl(gitAccess)
@@ -252,6 +261,12 @@ class AppComponent(settingsFile: Path, appDirectory: Path) {
 
     /** gitlink 를 부모에 반영하는 경로. 기존 스테이징·커밋 계약을 그대로 쓴다 (결정 E6). */
     val commitSubmodulePointer = CommitSubmodulePointerUseCase(stagingGateway)
+
+    /**
+     * 저장소 탭의 열기·활성화·닫기·복원. presentation 배선(`RepositorySessionDriver`)이 이 하나를
+     * 받아 탭 막대·셸 선택·되돌리기 범위를 함께 옮긴다 — 장부가 둘이면 탭과 실제 핸들이 갈라진다.
+     */
+    val repositorySession = RepositorySessionUseCase(repositorySessionGateway, settingsGateway)
 
     /**
      * **활성 저장소 하나**가 쓰는 되돌리기 이력과 그 이력에 기록하는 실행 경로.

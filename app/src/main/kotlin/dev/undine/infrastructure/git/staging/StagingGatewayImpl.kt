@@ -21,6 +21,7 @@ private const val OPERATION_STAGE = "staging.stage"
 private const val OPERATION_UNSTAGE = "staging.unstage"
 private const val OPERATION_STAGE_HUNKS = "staging.stageHunks"
 private const val OPERATION_COMMIT = "staging.commit"
+private const val OPERATION_STAGE_AND_COMMIT = "staging.stageAndCommit"
 private const val OPERATION_INSPECT_AMEND = "staging.inspectAmend"
 private const val OPERATION_AMEND = "staging.amend"
 private const val EMPTY_MESSAGE_DETAIL = "커밋 메시지가 비어 있습니다"
@@ -97,6 +98,32 @@ class StagingGatewayImpl(
         }
     }
 
+    /**
+     * stage 와 commit 을 **하나의 시퀀스**로 돌린다 ([GitAccess.withSequence]).
+     *
+     * 두 조작 사이에 다른 Git 접근이 끼어들 창이 없다 — 취소는 시퀀스가 시작되기 전에만 관측되므로
+     * "남의 변경이 섞인 커밋" 은 만들어지지 않는다 (결정 A-L3).
+     *
+     * **실패 창도 함께 닫는다.** 경합·취소를 막아도 stage 가 끝난 뒤 commit 이 *실패*하면 인덱스에
+     * gitlink 만 올라간 부분 상태가 남는다. 그래서 두 조작 전체를
+     * [withIndexRestoredOnFailure] 로 감싸 시작 시점 인덱스로 되돌린다 — 구역 안이라 그 사이
+     * 아무도 끼어들지 않으므로 되돌리기가 안전하다. 보상이 실패하면 원래 실패에 suppressed 로
+     * 매달아 올린다(그쪽 계약) — 무엇 때문에 실패했는지를 보상 실패가 덮지 않는다.
+     */
+    override suspend fun stageAndCommit(paths: List<String>, message: String): CommitResult {
+        if (message.isBlank()) throw UndineException.StateViolation(EMPTY_MESSAGE_DETAIL)
+        if (paths.isEmpty()) throw UndineException.NothingToCommit()
+        return gitAccess.withSequence { repository ->
+            repository.requireAuthorConfigured()
+            translateGitFailure(OPERATION_STAGE_AND_COMMIT) {
+                repository.withIndexRestoredOnFailure {
+                    repository.stagePaths(paths)
+                    repository.commitOnly(paths, message)
+                }
+            }
+        }
+    }
+
     override suspend fun inspectAmend(): AmendPreflight = gitAccess.withRepository { repository ->
         translateGitFailure(OPERATION_INSPECT_AMEND) { repository.inspectAmendTarget() }
     }
@@ -168,6 +195,35 @@ private fun Repository.createCommit(message: String): CommitResult =
             baseline = baselineHeld(),
         )
     }
+
+/**
+ * [paths] 만 담아 커밋한다.
+ *
+ * `commit()` 은 인덱스 전체를 담으므로, 앱의 다른 경로가 이미 올려 둔 변경까지 사용자가 고르지 않은
+ * 채 이력에 들어간다. `setOnly` 로 대상을 한정하면 그 변경은 인덱스에 올라간 채 남는다.
+ *
+ * 비어 있는 커밋을 막는 검사도 [paths] 로 좁힌다 — 인덱스 전체를 보면 남의 변경이 이 커밋의
+ * 존재 이유가 된다.
+ */
+private fun Repository.commitOnly(paths: List<String>, message: String): CommitResult =
+    Git(this).use { git ->
+        git.requireStagedChangesIn(paths)
+        val previousHead = resolve(Constants.HEAD)?.let { CommitId.of(it.name) }
+        val commit = git.commit().setMessage(message)
+        paths.forEach(commit::setOnly)
+        val created = commit.call()
+        CommitResult(
+            commitId = CommitId.of(created.name),
+            previousHead = previousHead,
+            baseline = baselineHeld(),
+        )
+    }
+
+private fun Git.requireStagedChangesIn(paths: List<String>) {
+    val status = status().call()
+    val staged = status.added + status.changed + status.removed
+    if (paths.none(staged::contains)) throw UndineException.NothingToCommit()
+}
 
 private fun Git.removeFromIndex(paths: List<String>) {
     val remove = rm().setCached(true)

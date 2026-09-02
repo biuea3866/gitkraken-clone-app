@@ -18,10 +18,17 @@ import dev.undine.domain.RepositoryPath
  */
 @Immutable
 data class AppShellSelection(
-    val repository: RepositoryPath?,
+    /** 활성 탭이 가리키는 저장소. 화면 판정(목적지·탭 슬롯)이 보는 값이다. */
+    val activeRepository: ActiveRepository,
     val commit: CommitId?,
     val filePath: String?,
-)
+) {
+    /**
+     * **조작 대상** 저장소. 쓸 수 있을 때만 값이 있다 — 경로를 잃은 탭에서는 `null` 이라
+     * Git 조작과 컨텍스트 조회가 직전 저장소로 새지 않는다 ([ActiveRepository]).
+     */
+    val repository: RepositoryPath? get() = (activeRepository as? ActiveRepository.Operable)?.path
+}
 
 /**
  * 앱 전역 선택 상태 홀더 — 열린 저장소, 고른 커밋, 고른 파일 경로 세 값을 보유한다
@@ -35,25 +42,30 @@ data class AppShellSelection(
  */
 @Stable
 class AppShellState(
-    repository: RepositoryPath? = null,
+    activeRepository: ActiveRepository = ActiveRepository.None,
     commit: CommitId? = null,
     filePath: String? = null,
 ) {
-    private var repositoryState by mutableStateOf(repository)
+    private var activeRepositoryState by mutableStateOf(activeRepository)
     private var commitState by mutableStateOf(commit)
     private var filePathState by mutableStateOf(filePath)
 
     val selection: AppShellSelection
         get() = AppShellSelection(
-            repository = repositoryState,
+            activeRepository = activeRepositoryState,
             commit = commitState,
             filePath = filePathState,
         )
 
-    /** 저장소를 연다. 다른 저장소로 바뀌면 커밋·파일 선택을 비운다. */
-    fun selectRepository(path: RepositoryPath?) {
-        if (path == repositoryState) return
-        repositoryState = path
+    /**
+     * 활성 탭이 가리키는 저장소를 옮긴다. 값이 바뀌면 커밋·파일 선택을 비운다.
+     *
+     * 경로를 잃는 것도 **바뀐 것**이다 — 읽을 수 없게 된 저장소의 커밋·파일 선택을 들고 있으면
+     * 하위 화면이 닿을 수 없는 대상을 조회한다.
+     */
+    fun selectActiveRepository(active: ActiveRepository) {
+        if (active == activeRepositoryState) return
+        activeRepositoryState = active
         commitState = null
         filePathState = null
     }

@@ -33,12 +33,22 @@ enum class TabAvailability {
     MissingPath,
 }
 
-/** 영속 경로와 별개로 세션 동안만 필요한 탭 자원 상태다. */
+/**
+ * 영속 경로와 별개로 세션 동안만 필요한 탭 자원 상태다.
+ *
+ * [sessionKey] 는 **홀더가 정규화해 돌려준 저장소 정체성**이다 ([RepositorySessionKey]). 배선은 이
+ * 값으로 저장소마다 하나인 것(되돌리기 범위 등)을 식별한다 — `path` 로 식별하면 `./`·심볼릭 링크
+ * 별칭에서 같은 저장소가 둘로 갈리고, `baseline`(브랜치·HEAD)으로 식별하면 같은 커밋을 가리키는
+ * 서로 다른 clone 이 하나로 합쳐진다 (결정 G29·C2 정정 3).
+ *
+ * 핸들이 없는 탭(경로가 사라졌거나 LRU 로 회수된 탭)은 `null` 이다.
+ */
 data class TabSession(
     val id: TabId,
     val path: RepositoryPath,
     val availability: TabAvailability,
     val resourcesLoaded: Boolean,
+    val sessionKey: RepositorySessionKey? = null,
 )
 
 /** presentation 이 탭 상태로 바꿔 그릴 수 있는 읽기 전용 세션 스냅샷. */
@@ -68,6 +78,18 @@ data class RepositorySessionSnapshot(
  * [RepositorySessionGateway.transition] 안에서 끝낸다 — 탭 장부 전이·설정 영속화·실패 보상까지
  * 같은 임계 구역이다 (결정 C2 정정 5). 장부만 밖에 남기면 gateway 호출 사이에 다른 전이가 끼어들어
  * 앞선 전이의 복원점이 뒤 전이의 탭·핸들을 덮는다.
+ *
+ * **표시 상태의 반영도 같은 구역 안이다.** 전이 메서드가 받는 `apply` 는 장부 전이와 설정 저장이
+ * 끝난 뒤 **락을 쥔 채** 호출된다 — 반환 뒤에 밖에서 반영하면 두 전이의 재개 순서가 완료 순서와
+ * 달라져 화면이 이미 지나간 탭을 활성으로 보여 준다 (UND-81). `apply` 는 값을 옮기기만 하고
+ * 실패하지 않아야 한다. 던지거나 취소되면 이 전이 전체가 — **메모리 장부와 저장된 탭 목록이 함께** —
+ * 되돌려진다 (결정 G42). `apply` 는 설정을 저장한 뒤에 불리므로 저장본까지 되돌려야 다음 실행에서
+ * 탭이 사라지지 않는다.
+ *
+ * **`apply` 가 정지 함수인 이유는 반영할 스레드가 여기가 아니기 때문이다.** 이 구역은 Git I/O 의
+ * 직렬화 경계(`Dispatchers.IO`) 위에서 돈다 — 배선이 Compose 상태를 그 스레드에서 바꾸면 UI 가
+ * 자기 스레드 밖에서 갱신된다. 그래서 반영은 UI 디스패처로 건너뛰어 하되, **그 왕복이 끝날 때까지
+ * 락을 놓지 않는다** (결정 G41). 스냅샷만 만들고 락을 놓으면 두 전이의 반영 순서가 뒤집힌다.
  */
 class RepositorySessionUseCase(
     private val sessionGateway: RepositorySessionGateway,
@@ -86,31 +108,46 @@ class RepositorySessionUseCase(
     private var lastTabId = 0L
 
     /** 새 저장소를 탭으로 열고 활성화한다. 이미 열린 경로여도 **새 탭**을 연다. */
-    suspend fun open(path: RepositoryPath): RepositorySessionSnapshot =
+    suspend fun open(
+        path: RepositoryPath,
+        apply: suspend (RepositorySessionSnapshot) -> Unit = {},
+    ): RepositorySessionSnapshot =
         sessionGateway.transition { sessions ->
             compensating(sessions) {
                 val opened =
                     TabSession(TabId(++lastTabId), path, TabAvailability.Available, resourcesLoaded = false)
                 tabs += opened
-                activateLocked(sessions, opened.id)
+                activateLocked(sessions, opened.id).also { snapshot -> apply(snapshot) }
             }
         }
 
     /** 기존 탭을 활성화한다. 이전 활성 탭은 완전 로드를 놓고, 상한을 넘은 세션은 회수된다. */
-    suspend fun activate(tabId: TabId): RepositorySessionSnapshot =
+    suspend fun activate(
+        tabId: TabId,
+        apply: suspend (RepositorySessionSnapshot) -> Unit = {},
+    ): RepositorySessionSnapshot =
         sessionGateway.transition { sessions ->
             // 확인도 임계 구역 안이다 — 밖에서 보면 그 사이에 닫힌 탭을 열려 있다고 읽는다.
             require(tabs.any { it.id == tabId }) { "열려 있지 않은 탭입니다: $tabId" }
-            compensating(sessions) { activateLocked(sessions, tabId) }
+            compensating(sessions) { activateLocked(sessions, tabId).also { snapshot -> apply(snapshot) } }
         }
 
     /** 탭을 닫고 그 탭의 JGit 자원을 즉시 해제한 뒤, 활성 탭이었다면 남은 탭을 활성화한다. */
-    suspend fun close(tabId: TabId): RepositorySessionSnapshot =
-        sessionGateway.transition { sessions -> compensating(sessions) { closeLocked(sessions, tabId) } }
+    suspend fun close(
+        tabId: TabId,
+        apply: suspend (RepositorySessionSnapshot) -> Unit = {},
+    ): RepositorySessionSnapshot =
+        sessionGateway.transition { sessions ->
+            compensating(sessions) { closeLocked(sessions, tabId).also { snapshot -> apply(snapshot) } }
+        }
 
     /** Settings가 제공한 탭 목록을 복원한다. 존재하지 않는 경로도 목록에서 지우지 않는다. */
-    suspend fun restore(): RepositorySessionSnapshot =
-        sessionGateway.transition { sessions -> compensating(sessions) { restoreLocked(sessions) } }
+    suspend fun restore(
+        apply: suspend (RepositorySessionSnapshot) -> Unit = {},
+    ): RepositorySessionSnapshot =
+        sessionGateway.transition { sessions ->
+            compensating(sessions) { restoreLocked(sessions).also { snapshot -> apply(snapshot) } }
+        }
 
     private suspend fun activateLocked(
         sessions: RepositorySessions,
@@ -195,14 +232,30 @@ class RepositorySessionUseCase(
         }
     }
 
+    /**
+     * 장부의 탭에 **지금의 세션 키**를 실어 낸다.
+     *
+     * 키를 [tabs] 안에 함께 들고 다니지 않는 이유는 소유가 하나여야 하기 때문이다 — 장부의
+     * 세션 키는 [sessionKeys] 하나가 갖고, 스냅샷은 그것을 읽어 옮기기만 한다. 두 곳에 두면
+     * 회수·되돌리기가 한쪽만 고쳐 두 값이 갈라진다.
+     */
     private val currentSnapshot: RepositorySessionSnapshot
-        get() = RepositorySessionSnapshot(tabs = tabs.toList(), activeTabId = activeTabId)
+        get() = RepositorySessionSnapshot(
+            tabs = tabs.map { tab -> tab.copy(sessionKey = sessionKeys[tab.id]) },
+            activeTabId = activeTabId,
+        )
 
     /**
      * 전이 도중 실패하면 **탭 장부·활성 탭·세션 핸들을 전이 이전으로 되돌린 뒤** 원인을 그대로 올린다.
      *
      * 설정 저장이 실패했을 때가 이 경계의 존재 이유다 — 메모리 상태만 바뀐 채 남으면 화면이 보여 주는
      * 탭과 다음 실행에 복원될 탭이 갈라진다.
+     *
+     * **복원점은 저장된 탭 목록까지 담는다** (결정 G42). 전이는 설정을 저장한 **뒤** `apply` 를
+     * 부르므로, 메모리만 되돌리면 이미 저장된 `openTabs`·`activeTabIndex` 가 그대로 남아 다음 실행에서
+     * 탭이 영구히 사라진다. 그래서 시작 시점의 저장본을 함께 뜬다 — 저장본이 어떤 값인지는 이 UseCase 의
+     * 장부로 추정하지 않는다. 추정하면 아직 장부에 옮기지 못한 복원 실패에서 사용자의 목록을 빈 목록으로
+     * 덮어쓴다.
      *
      * **실패 종류를 가리지 않는다.** 도메인 예외만 잡던 앞선 형태는 `SettingsGatewayImpl` 이 그대로
      * 올리는 [java.io.IOException] 과 취소를 놓쳐, 그 경로에서만 장부와 실제 핸들이 갈라졌다.
@@ -213,11 +266,14 @@ class RepositorySessionUseCase(
      * [RepositorySessionGateway.transition] 이 준 [sessions] 와 짝을 이룬다.
      */
     private suspend fun <T> compensating(sessions: RepositorySessions, block: suspend () -> T): T {
+        val persisted = settingsGateway.load()
         val restorePoint = SessionRestorePoint(
             tabs = tabs.toList(),
             activeTabId = activeTabId,
             sessionKeys = sessionKeys.toMap(),
             loadedSessions = loadedSessions.toList(),
+            openTabs = persisted.openTabs,
+            activeTabIndex = persisted.activeTabIndex,
         )
         return runCatching { block() }
             .onFailure { failure -> rollbackTo(sessions, restorePoint, failure) }
@@ -246,6 +302,17 @@ class RepositorySessionUseCase(
         sessionKeys += restorePoint.sessionKeys
 
         val restored = withContext(NonCancellable) {
+            // **저장본을 먼저 되돌린다.** 세션 되살리기가 또 실패하면 장부는 비워지지만, 사용자가 연
+            // 탭 목록은 다음 실행에 되살아나야 한다 — 이 순서라야 그 목록이 살아남는다.
+            runCatching {
+                settingsGateway.update { settings ->
+                    settings.copy(
+                        openTabs = restorePoint.openTabs,
+                        activeTabIndex = restorePoint.activeTabIndex,
+                    )
+                }
+            }.onFailure(failure::addSuppressed)
+
             val active = restorePoint.activeTabId?.let(restorePoint.sessionKeys::get)
             runCatching { sessions.restoreSessions(restorePoint.loadedSessions, active) }
                 .getOrElse { restoreFailure ->
@@ -306,10 +373,17 @@ private suspend fun RepositorySessions.releaseUnreferenced(
     release(key)
 }
 
-/** 전이 시작 시점의 탭 장부 — 실패하면 이 값으로 되돌린다. */
+/**
+ * 전이 시작 시점의 탭 장부 **와 그때 저장돼 있던 탭 목록** — 실패하면 이 값으로 되돌린다.
+ *
+ * 메모리(장부·핸들)와 저장본을 함께 담는 이유는 전이가 둘을 함께 바꾸기 때문이다. 한쪽만 되돌리면
+ * 화면이 보여 주는 탭과 다음 실행에 복원될 탭이 갈라진다 (결정 G42).
+ */
 private data class SessionRestorePoint(
     val tabs: List<TabSession>,
     val activeTabId: TabId?,
     val sessionKeys: Map<TabId, RepositorySessionKey>,
     val loadedSessions: List<RepositorySessionKey>,
+    val openTabs: List<RepositoryPath>,
+    val activeTabIndex: Int,
 )

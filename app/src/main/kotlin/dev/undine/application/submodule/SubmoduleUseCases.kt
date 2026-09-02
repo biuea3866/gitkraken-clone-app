@@ -79,10 +79,12 @@ class UpdateSubmoduleUseCase(
  * `SubmoduleGateway`를 넓히지 않는다. gitlink도 부모의 경로 하나이므로, 확정 결정(E6)대로
  * 기존 스테이징·커밋 계약을 그대로 사용한다. 커밋 자체의 Undo 기록은 스테이징·커밋 경로가
  * 소유하므로 여기서 두 번 남기지 않는다.
+ *
+ * **stage 와 commit 을 나눠 부르지 않는다** (UND-81). 나눠 부르면 두 호출 사이가 열려 있어, 그
+ * 사이에 취소되면 gitlink 만 인덱스에 올라간 채 커밋이 사라지고, 그 사이에 앱의 다른 경로가 올린
+ * 변경은 이 커밋에 딸려 들어간다. 결합 연산이 그 창을 없앤다.
  */
 class CommitSubmodulePointerUseCase(private val stagingGateway: StagingGateway) {
-    suspend fun execute(path: String, message: String): CommitResult {
-        stagingGateway.stage(listOf(path))
-        return stagingGateway.commit(message)
-    }
+    suspend fun execute(path: String, message: String): CommitResult =
+        stagingGateway.stageAndCommit(listOf(path), message)
 }

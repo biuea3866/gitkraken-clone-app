@@ -228,6 +228,8 @@ private class FailingStagingGateway : dev.undine.domain.StagingGateway {
 
     override suspend fun commit(message: String) = error("사용하지 않는다")
 
+    override suspend fun stageAndCommit(paths: List<String>, message: String) = error("사용하지 않는다")
+
     override suspend fun inspectAmend() = error("사용하지 않는다")
 
     override suspend fun amend(message: String, confirmation: AmendConfirmation) = error("사용하지 않는다")

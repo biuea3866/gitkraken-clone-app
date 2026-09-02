@@ -65,7 +65,10 @@ import dev.undine.presentation.graph.GraphOperationCallbacks
 import dev.undine.presentation.graph.GraphViewState
 import dev.undine.presentation.graph.rememberGraphViewState
 import dev.undine.presentation.i18n.LocalStrings
+import dev.undine.presentation.i18n.common
+import dev.undine.presentation.i18n.strings
 import dev.undine.presentation.i18n.systemStrings
+import dev.undine.presentation.i18n.tabs
 import dev.undine.presentation.palette.CommandPalette
 import dev.undine.presentation.palette.CommandRegistry
 import dev.undine.presentation.palette.commandShortcuts
@@ -94,6 +97,7 @@ import dev.undine.presentation.sidebar.SidebarTree
 import dev.undine.presentation.submodule.SubmodulePanelState
 import dev.undine.presentation.submodule.SubmoduleWorktreePanel
 import dev.undine.presentation.submodule.WorktreePanelState
+import dev.undine.presentation.tabs.RepositoryTabs
 import dev.undine.presentation.toolbar.RemoteToolbar
 import dev.undine.presentation.toolbar.rememberRemoteToolbarState
 import dev.undine.presentation.undo.UndoPanel
@@ -107,7 +111,6 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Clock
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
 /** 창 제목에 버전을 붙인다 — 사용자가 어느 빌드를 쓰는지 물어볼 때 답할 데가 필요하다. */
@@ -182,6 +185,11 @@ internal class AppWiring(
      * 조립 시점의 범위를 붙잡으면 전환 뒤의 이력을 확인할 수 없다 (결정 G29).
      */
     val currentUndo: () -> ActiveRepositoryUndo,
+    /**
+     * **지금** 화면이 쓰는 저장소 컨텍스트. 값이 아니라 통로인 이유는 [currentUndo] 와 같다 —
+     * 조립 시점의 값을 붙잡으면 전이 뒤에 컨텍스트가 어느 저장소를 가리키는지 확인할 수 없다.
+     */
+    val currentContext: () -> RepositoryContext,
 )
 
 /**
@@ -265,18 +273,52 @@ private fun AppContent(
     var context by remember { mutableStateOf(RepositoryContext()) }
     val latestContext = rememberUpdatedState(context)
 
-    val welcomeState = remember(component) {
+    // 탭 세션 배선. 셸 선택·되돌리기 범위·탭 막대가 **이 하나**를 통해 같은 전이를 본다 (UND-81).
+    val sessions = remember(component, shellState) {
+        RepositorySessionDriver(
+            sessions = component.repositorySession,
+            createUndoScope = component::newUndoScope,
+            onActiveRepository = { active ->
+                shellState.selectActiveRepository(active)
+                // **컨텍스트도 같은 임계 구역에서 내려놓는다** (결정 G42). 아래 효과가 새 저장소의
+                // ref 를 채울 때까지 이전 저장소의 브랜치·태그·원격을 들고 있으면, 탭·셸 선택은 이미
+                // 옮겨 간 그 창에서 누른 조작이 **다른 저장소**로 간다. 채우기까지 구역 안에서 할 수는
+                // 없다 — 조회도 같은 Git 경계를 지나므로 구역 안에서 부르면 교착한다. 그래서 "지나간
+                // 저장소를 가리키지 않는 것" 을 구역이 보장하고, 채우기는 밖에서 하되 늦게 도착한
+                // 결과는 버린다.
+                context = RepositoryContext()
+            },
+        )
+    }
+    // 저장해 둔 탭을 시작 시 되돌린다. 실패해도 앱은 뜬다 — 복원 실패로 시작 화면까지 막지 않는다.
+    LaunchedEffect(sessions) {
+        try {
+            sessions.restore()
+        } catch (failure: UndineException) {
+            errors.report(failure, logPath = null)
+        } catch (failure: IOException) {
+            errors.report(failure, logPath = null)
+        }
+    }
+
+    val welcomeState = remember(component, sessions) {
         WelcomeState(
             actions = component.welcomeActions,
             scope = scope,
-            onRepositoryOpened = shellState::selectRepository,
+            // 연 저장소는 **탭으로** 들어간다. 셸 선택은 탭 전이가 정한다 — 여기서 따로 정하면
+            // 탭 장부와 화면이 가리키는 저장소가 갈린다.
+            //
+            // 전이 실패는 **삼키지 않는다.** 최근 목록에서 열기도 clone 완료도 이 한 콜백으로
+            // 들어오는데, 맨 `launch` 로 띄우면 세션 전이가 실패했을 때 탭이 열리지 않은 이유가
+            // 사용자에게 닿지 않는다 — 탭 막대의 요청과 같은 경로로 전역 안내에 올린다.
+            onRepositoryOpened = { path -> scope.reportingFailure(errors) { sessions.open(path) } },
         )
     }
 
-    // 되돌리기 범위는 **활성 저장소의 것**이다. 저장소를 바꾸거나 닫으면 새 범위를 만들어 이전 이력을
-    // 버린다 — 남겨 두면 같은 브랜치·HEAD 인 clone 사이에서 baseline 검사가 통과해, 이전 저장소에서
-    // 기록한 되돌리기가 지금 저장소의 ref·워킹트리를 바꾼다 (결정 G29).
-    val undo = rememberActiveUndo(component, selection.repository, scope)
+    // 되돌리기 범위는 **활성 탭 저장소의 것**이다. 탭을 오가도 버리지 않고, 마지막 참조 탭이 닫힐 때
+    // 사라진다 — 판단 기준은 baseline(브랜치·HEAD)이 아니라 세션 키다. baseline 은 같은 커밋을
+    // 가리키는 clone 둘에서 같아 구분에 쓸 수 없다 (결정 G29, UND-81).
+    val undo = rememberActiveUndo(sessions.activeUndoScope, scope)
     val latestUndo = rememberUpdatedState(undo)
 
     // 그래프 조작 홀더는 앱 수명이다. 팔레트 명령도 시작 시 한 번 등록되므로 화면과 같은 홀더를 쓴다.
@@ -292,15 +334,25 @@ private fun AppContent(
     // 저장소가 바뀌면 열려 있던 확인창을 접는다 — 이전 저장소의 ref 를 대상으로 한 확인이다.
     LaunchedEffect(selection.repository) { dragDrop.cancelConfirmation() }
 
-    // welcome/메뉴 경로가 연 현재 핸들에서 컨텍스트를 읽는다. 다시 열면 활성 핸들을 불필요하게
-    // 교체하므로 조회만 한다. 실패를 빈 값으로 위장하지 않고 전역 안내로 보낸다.
+    // 탭 전이가 비워 둔 컨텍스트를 **활성 탭 저장소의 값으로** 채운다. 다시 열면 활성 핸들을
+    // 불필요하게 교체하므로 조회만 한다. 실패를 빈 값으로 위장하지 않고 전역 안내로 보낸다.
+    //
+    // 조회 중 사용자가 또 다른 탭으로 옮겨 갔으면 **이 결과를 버린다.** 늦게 도착한 값을 그대로
+    // 얹으면 컨텍스트만 지나간 저장소로 되돌아간다 — 전이가 구역 안에서 맞춰 놓은 것을 구역 밖의
+    // 조회가 다시 어긋내는 것이다 (결정 G42). 판정과 반영 사이에 중단점이 없어야 이 검사가 성립한다.
+    //
+    // 비교 대상은 **지금의 `shellState.selection`** 이다. 컴포지션이 캡처한 지역 `selection` 과
+    // 대조하면 같은 스냅샷끼리 비교해 **항상 참**이라 아무것도 걸러 내지 못한다. 키가 바뀔 때
+    // `LaunchedEffect` 가 이 코루틴을 취소하지만, 마지막 정지 지점 이후에는 취소가 관측되지 않으므로
+    // 취소만으로는 이 창이 닫히지 않는다.
     LaunchedEffect(selection.repository) {
-        if (selection.repository == null) {
+        val target = selection.repository
+        if (target == null) {
             context = RepositoryContext()
             return@LaunchedEffect
         }
-        try {
-            context = RepositoryContext(
+        val loaded = try {
+            RepositoryContext(
                 opened = component.currentRepository(),
                 branches = component.listBranches(),
                 tags = component.listTags(),
@@ -308,11 +360,12 @@ private fun AppContent(
             )
         } catch (failure: UndineException) {
             errors.report(failure, logPath = null)
-            context = RepositoryContext()
+            RepositoryContext()
         } catch (failure: IOException) {
             errors.report(failure, logPath = null)
-            context = RepositoryContext()
+            RepositoryContext()
         }
+        if (shellState.selection.repository == target) context = loaded
     }
 
     val screens = rememberRepositoryScreens(component, undo.scope, shellState, latestContext, errors, dragDrop)
@@ -320,6 +373,11 @@ private fun AppContent(
 
     // 팔레트 열기 요청. 커맨드 action 은 non-composable 이라 여기서 신호만 세우고 열기는 효과가 한다.
     var paletteRequested by remember { mutableStateOf(false) }
+
+    // 명령 가용성 판정이 읽는 문구. **조립 때 한 번만** 잡는다 — `systemStrings()` 는 부를 때마다
+    // 카탈로그를 새로 만들고, 이 판정은 팔레트가 열려 있는 동안 입력마다 다시 불린다.
+    // 로케일은 `AppRoot` 가 정적으로 한 번 제공하므로 이 값이 도중에 낡지 않는다.
+    val commandStrings = strings
 
     // **등록은 앱 시작 시 한 번뿐이다.** 저장소마다 다시 등록하면 같은 id 가 두 번 들어와 거부되고,
     // 무엇보다 단축키 충돌이 첫 저장소를 열 때까지 숨는다.
@@ -329,19 +387,15 @@ private fun AppContent(
                 registry = target,
                 handlers = AppCommandHandlers(
                     onOpenPalette = { paletteRequested = true },
-                    onCloseRepository = {
-                        scope.launch {
-                            try {
-                                component.closeRepository()
-                                shellState.selectRepository(null)
-                            } catch (failure: UndineException) {
-                                errors.report(failure, logPath = null)
-                            }
-                        }
-                    },
+                    // 닫기는 **활성 탭**을 닫는다. 전 세션을 닫으면 다른 탭의 열린 핸들까지 함께
+                    // 사라져, 사용자가 닫지 않은 저장소의 이력과 화면이 같이 무너진다.
+                    onCloseRepository = { scope.reportingFailure(errors) { sessions.closeActive() } },
                     onRefreshRefs = { latestScreens.value.sidebar.refresh() },
                     onToggleDiffView = { latestScreens.value.diff.toggleViewMode() },
                     onOpenRebasePlan = { latestScreens.value.rebase.load() },
+                    repositoryChangeBlockedReason = {
+                        repositoryChangeBlockedReason(shellState.selection.activeRepository, commandStrings)
+                    },
                 ),
                 )
             registerSecondaryCommands(
@@ -351,7 +405,10 @@ private fun AppContent(
                     onOpenRepository = { chooseDirectory()?.let(welcomeState::open) },
                     onUndoLast = { latestUndo.value.state.undoFromKeyboard() },
                     availabilityOf = { destination ->
-                        availabilityOf(destination, shellState.selection.repository != null)
+                        availabilityOf(destination, shellState.selection.activeRepository, commandStrings)
+                    },
+                    repositoryChangeBlockedReason = {
+                        repositoryChangeBlockedReason(shellState.selection.activeRepository, commandStrings)
                     },
                 ),
                 graphCallbacks = graphCallbacks,
@@ -373,6 +430,7 @@ private fun AppContent(
             registry = registry,
             dragDrop = dragDrop,
             currentUndo = { latestUndo.value },
+            currentContext = { latestContext.value },
         )
     }
     val latestOnAssembled = rememberUpdatedState(onAssembled)
@@ -414,7 +472,7 @@ private fun AppContent(
             .commandShortcuts(commandCenter.shortcutHandler),
     ) {
         DestinationArea(
-            destination = destinationFor(navigation.destination, selection.repository != null),
+            destination = destinationFor(navigation.destination, selection.activeRepository),
             component = component,
             errors = errors,
             navigation = navigation,
@@ -425,6 +483,7 @@ private fun AppContent(
             registry = registry,
             welcomeState = welcomeState,
             onOpenRepository = welcomeState::open,
+            tabsSlot = { RepositoryTabsArea(sessions = sessions, scope = scope, errors = errors) },
         )
         // **열렸을 때만 그린다.** 팔레트 컴포저블은 열림 여부를 스스로 판단하지 않는다
         // (`CommandPalette` KDoc). 늘 그리면 명령 목록이 화면 위에 덮인 채 남고, 그 아래
@@ -438,18 +497,16 @@ private fun AppContent(
 /**
  * 활성 저장소의 되돌리기 배선을 만든다.
  *
- * **[repository] 가 키다.** 저장소를 바꾸거나 닫으면(`null`) 범위를 새로 만들어 이전 이력을 버린다 —
- * 판단 기준은 `baseline`(브랜치+HEAD)이 아니라 저장소 정체성이다. baseline 은 clone 사이에서 같을 수
- * 있어 구분에 쓸 수 없다 (결정 G29). 닫았다 같은 저장소를 다시 열어도 옛 이력은 되살아나지 않는다.
+ * **[undoScope] 가 키다.** 어느 범위를 쓸지는 탭 배선([RepositorySessionDriver])이 저장소 세션 키로
+ * 정하고, 여기서는 그 범위를 읽는 화면 상태만 붙인다 — 저장소 정체성 판단을 두 곳에 두면 화면이
+ * 보는 이력과 기록이 쌓이는 이력이 갈린다 (결정 G29).
  */
 @Composable
 private fun rememberActiveUndo(
-    component: AppComponent,
-    repository: RepositoryPath?,
+    undoScope: AppComponent.RepositoryUndoScope,
     coroutineScope: CoroutineScope,
 ): ActiveRepositoryUndo {
-    val active = remember(component, repository, coroutineScope) {
-        val undoScope = component.newUndoScope()
+    val active = remember(undoScope, coroutineScope) {
         ActiveRepositoryUndo(
             scope = undoScope,
             state = UndoState(
