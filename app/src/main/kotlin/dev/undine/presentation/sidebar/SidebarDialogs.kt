@@ -24,6 +24,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import dev.undine.domain.Branch
 import dev.undine.presentation.design.UndineTokens
 import dev.undine.presentation.design.component.UndineToolbarButton
+import dev.undine.presentation.design.undineDialogSurface
 import dev.undine.presentation.i18n.common
 import dev.undine.presentation.i18n.sidebar
 import dev.undine.presentation.i18n.strings
@@ -56,7 +57,11 @@ internal fun SidebarConfirmationPanel(
         }
     }
 
-    SidebarPanel(title = title, modifier = modifier.testTag(SidebarTags.CONFIRM_DIALOG)) {
+    SidebarPanel(
+        title = title,
+        onDismiss = state::dismiss,
+        modifier = modifier.testTag(SidebarTags.CONFIRM_DIALOG),
+    ) {
         BasicText(
             text = message,
             style = UndineTokens.typography.body.copy(color = UndineTokens.color.foregroundPrimary),
@@ -92,7 +97,11 @@ internal fun SidebarRenamePanel(
     }
     val fieldLabel = sidebarStrings.renameField
 
-    SidebarPanel(title = sidebarStrings.renameTitle, modifier = modifier.testTag(SidebarTags.RENAME_DIALOG)) {
+    SidebarPanel(
+        title = sidebarStrings.renameTitle,
+        onDismiss = state::dismiss,
+        modifier = modifier.testTag(SidebarTags.RENAME_DIALOG),
+    ) {
         BasicTextField(
             value = draft,
             onValueChange = { draft = it },
@@ -119,6 +128,7 @@ internal fun SidebarRenamePanel(
 @Composable
 private fun SidebarPanel(
     title: String,
+    onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
@@ -130,6 +140,7 @@ private fun SidebarPanel(
             .fillMaxWidth()
             .background(colors.surface)
             .border(UndineTokens.shape.borderThick, colors.border)
+            .undineDialogSurface(onDismiss = onDismiss)
             .padding(spacing.medium),
         verticalArrangement = Arrangement.spacedBy(spacing.small),
     ) {

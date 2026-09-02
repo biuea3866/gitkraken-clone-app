@@ -3,10 +3,12 @@ package dev.undine.presentation.tabs
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.onClick
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
@@ -22,7 +24,9 @@ import androidx.compose.ui.semantics.Role
 import dev.undine.application.session.TabAvailability
 import dev.undine.application.session.TabId
 import dev.undine.domain.RepositoryPath
+import dev.undine.presentation.design.MinimumTargetSize
 import dev.undine.presentation.design.UndineTokens
+import dev.undine.presentation.design.undineFocusRing
 import dev.undine.presentation.i18n.strings
 import dev.undine.presentation.i18n.tabs
 
@@ -55,27 +59,41 @@ fun RepositoryTabs(
     ) {
         state.tabs.forEach { tab ->
             val selected = tab.id == state.activeTabId
-            Column(
-                modifier = Modifier
-                    .background(if (selected) colors.background else colors.surface)
-                    .clickable(role = Role.Tab) {
-                        state.activate(tab.id)
-                        onActivate(tab.id)
-                    }
-                    .padding(horizontal = spacing.medium, vertical = spacing.small),
+            // 탭 선택과 탭 닫기는 **형제 노드**다. 닫기를 탭 Column 안에 두면 그 Column 의
+            // `clickable` 이 자손 시맨틱스를 병합해 닫기가 독립 노드로 남지 않는다 —
+            // 스크린리더도 키보드도 클릭도 닫기에 개별로 닿지 못한다 (UND-50 감사 발견).
+            Row(
+                modifier = Modifier.background(if (selected) colors.background else colors.surface),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = tab.path.displayName(),
-                    color = if (selected) colors.foregroundPrimary else colors.foregroundSecondary,
-                )
-                if (tab.availability == TabAvailability.MissingPath) {
-                    Text(text = tabStrings.missingPath, color = colors.warning)
+                Column(
+                    modifier = Modifier
+                        .defaultMinSize(minHeight = MinimumTargetSize)
+                        .undineFocusRing()
+                        .clickable(role = Role.Tab) {
+                            state.activate(tab.id)
+                            onActivate(tab.id)
+                        }
+                        .padding(horizontal = spacing.medium, vertical = spacing.small),
+                ) {
+                    Text(
+                        text = tab.path.displayName(),
+                        color = if (selected) colors.foregroundPrimary else colors.foregroundSecondary,
+                    )
+                    if (tab.availability == TabAvailability.MissingPath) {
+                        Text(text = tabStrings.missingPath, color = colors.warning)
+                    }
                 }
-                Text(
-                    text = tabStrings.closeTab,
-                    color = colors.foregroundSecondary,
-                    modifier = Modifier.clickable { onCloseRequested(state.requestClose(tab.id)) },
-                )
+                Box(
+                    modifier = Modifier
+                        .defaultMinSize(minWidth = MinimumTargetSize, minHeight = MinimumTargetSize)
+                        .undineFocusRing()
+                        .clickable(role = Role.Button) { onCloseRequested(state.requestClose(tab.id)) }
+                        .padding(horizontal = spacing.extraSmall, vertical = spacing.small),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(text = tabStrings.closeTab, color = colors.foregroundSecondary)
+                }
             }
         }
     }

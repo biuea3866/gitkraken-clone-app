@@ -3,11 +3,15 @@ package dev.undine.presentation.search
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -22,8 +26,13 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import dev.undine.domain.Commit
+import dev.undine.presentation.design.MinimumTargetSize
 import dev.undine.presentation.design.UndineTokens
 import dev.undine.presentation.design.component.UndineEmptyState
 import dev.undine.presentation.design.component.UndineListRow
@@ -34,6 +43,12 @@ import dev.undine.presentation.i18n.strings
 
 /** 결과 행에 보여주는 해시 자릿수. 전체 40자는 행을 다 먹는다. */
 private const val HASH_ABBREVIATION_LENGTH = 8
+
+/** 확대에 밀려도 결과 목록에 남겨 두는 행 수. 셋이면 목록이 목록으로 읽힌다. */
+private const val RESULTS_MIN_ROWS = 3
+
+/** 결과 목록에 남겨 두는 최소 높이 — 조작할 수 있는 결과 행 [RESULTS_MIN_ROWS] 만큼이다. */
+private val RESULTS_MIN_HEIGHT = MinimumTargetSize * RESULTS_MIN_ROWS
 
 /**
  * 커밋 검색 화면 — 입력 축 여섯 개, 진행 표시, 점진적으로 늘어나는 결과 목록.
@@ -55,17 +70,34 @@ fun SearchPanel(
     modifier: Modifier = Modifier,
     onCommitSelected: (Commit) -> Unit = {},
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(UndineTokens.color.background)
-            .onPreviewKeyEvent { event -> handleSearchKey(event, state, onCommitSelected) }
-            .testTag(SearchTags.ROOT),
-    ) {
-        SearchFilters(state)
-        SearchStatusLine(state)
-        SearchResults(state, onCommitSelected, Modifier.fillMaxWidth().weight(1f))
+    // 조건 영역은 내용만큼 차지하므로, 확대해 여섯 축이 패널보다 높아지면 패널을 통째로 먹는다.
+    // 그러면 뒤따르는 결과 목록이 높이 0 으로 측정돼 조용히 사라진다 — 스크롤로 조건에 닿게 만든
+    // 것과 같은 결함이 결과 쪽으로 옮겨 갈 뿐이다. 조건 영역에 상한을 둬 결과가 늘 자리를 남긴다.
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val filtersMaxHeight = filtersMaxHeightIn(maxHeight)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(UndineTokens.color.background)
+                .onPreviewKeyEvent { event -> handleSearchKey(event, state, onCommitSelected) }
+                .testTag(SearchTags.ROOT),
+        ) {
+            SearchFilters(state, Modifier.heightIn(max = filtersMaxHeight))
+            SearchStatusLine(state)
+            SearchResults(state, onCommitSelected, Modifier.fillMaxWidth().weight(1f))
+        }
     }
+}
+
+/**
+ * 조건 영역이 차지할 수 있는 최대 높이.
+ *
+ * 패널 높이가 정해지지 않은 배치(위로 스크롤되는 부모)에서는 상한이 없다 — 그때는 결과 목록도
+ * 자기 높이를 그대로 갖게 되므로 굶길 일이 없다.
+ */
+private fun filtersMaxHeightIn(panelHeight: Dp): Dp = when (panelHeight) {
+    Dp.Infinity -> Dp.Unspecified
+    else -> (panelHeight - RESULTS_MIN_HEIGHT).coerceAtLeast(0.dp)
 }
 
 private fun handleSearchKey(
@@ -90,12 +122,18 @@ private inline fun consume(action: () -> Unit): Boolean {
 }
 
 @Composable
-private fun SearchFilters(state: SearchState) {
+private fun SearchFilters(state: SearchState, modifier: Modifier = Modifier) {
     val texts = strings.search
     val spacing = UndineTokens.spacing
 
+    // 글꼴을 확대하면 여섯 축이 배선이 준 높이를 넘어선다. 스크롤이 없으면 넘친 입력칸이 높이 0 으로
+    // 측정돼 **조용히 사라진다** — 키보드로도 마우스로도 닿을 수 없다 (UND-50 확대 감사 발견).
+    // 스크롤을 두면 기본 배율에서는 내용만큼만 차지하므로 배치가 그대로다.
     Column(
-        modifier = Modifier.fillMaxWidth().padding(spacing.medium),
+        modifier = modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(spacing.medium),
         verticalArrangement = Arrangement.spacedBy(spacing.small),
     ) {
         SearchFilterField(state, SearchField.MESSAGE, texts.messageLabel)
@@ -141,6 +179,8 @@ private fun SearchFilterField(
                     shape = RoundedCornerShape(shape.cornerSmall),
                 )
                 .padding(horizontal = spacing.small, vertical = spacing.extraSmall)
+                // 위의 안내 글자는 별개 노드다 — 입력창 자신이 이름을 가져야 빈 상태에서도 읽힌다.
+                .semantics { contentDescription = label }
                 .testTag(SearchTags.field(field)),
         )
         when {

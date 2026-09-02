@@ -15,6 +15,7 @@ import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.undine.application.sidebar.SidebarRefs
@@ -324,6 +325,68 @@ class SidebarTreeSpec : FunSpec({
 
             onNodeWithTag(SidebarTags.CONFIRM_DIALOG).assertDoesNotExist()
             coVerify(exactly = 0) { harness.refGateway.deleteBranch(RefName("feature/login"), force = true) }
+        }
+    }
+
+    // 대화상자를 마우스로만 닫을 수 있으면 키보드만 쓰는 사용자는 갇힌다 (UND-50 접근성 감사).
+    test("삭제 확인은 ESC 로 닫히고 어떤 삭제도 실행하지 않는다") {
+        runComposeUiTest {
+            val harness = SidebarStateHarness()
+            val state = harness.loaded()
+            setContent { SidebarHost(state) }
+
+            onNodeWithTag(SidebarTags.menuButton(SAMPLE_FEATURE)).performClick()
+            waitForIdle()
+            onNodeWithTag(SidebarTags.MENU_DELETE).performClick()
+            waitForIdle()
+            onNodeWithTag(SidebarTags.CONFIRM_DIALOG).assertIsDisplayed()
+
+            onNodeWithTag(SidebarTags.CONFIRM_CANCEL).requestFocus()
+            onNodeWithTag(SidebarTags.CONFIRM_CANCEL).performKeyInput { pressKey(Key.Escape) }
+            waitForIdle()
+
+            onNodeWithTag(SidebarTags.CONFIRM_DIALOG).assertDoesNotExist()
+            coVerify(exactly = 0) { harness.refGateway.deleteBranch(any(), any()) }
+        }
+    }
+
+    test("삭제 확인이 열려 있는 동안 포커스는 대화상자 밖으로 나가지 않는다") {
+        runComposeUiTest {
+            val state = SidebarStateHarness().loaded()
+            setContent { SidebarHost(state) }
+
+            onNodeWithTag(SidebarTags.menuButton(SAMPLE_FEATURE)).performClick()
+            waitForIdle()
+            onNodeWithTag(SidebarTags.MENU_DELETE).performClick()
+            waitForIdle()
+
+            onNodeWithTag(SidebarTags.CONFIRM_ACCEPT).requestFocus()
+            onNodeWithTag(SidebarTags.CONFIRM_ACCEPT).performKeyInput { pressKey(Key.Tab) }
+            waitForIdle()
+
+            // 뒤에 가린 브랜치 목록으로 Tab 이 새면 확인하지 않은 채 다른 브랜치를 만진다.
+            onNodeWithTag(SidebarTags.branchRow(SAMPLE_MAIN)).assertIsNotFocused()
+        }
+    }
+
+    test("이름 변경 대화상자도 ESC 로 닫힌다") {
+        runComposeUiTest {
+            val harness = SidebarStateHarness()
+            val state = harness.loaded()
+            setContent { SidebarHost(state) }
+
+            onNodeWithTag(SidebarTags.menuButton(SAMPLE_FEATURE)).performClick()
+            waitForIdle()
+            onNodeWithTag(SidebarTags.MENU_RENAME).performClick()
+            waitForIdle()
+            onNodeWithTag(SidebarTags.RENAME_DIALOG).assertIsDisplayed()
+
+            onNodeWithTag(SidebarTags.RENAME_CANCEL).requestFocus()
+            onNodeWithTag(SidebarTags.RENAME_CANCEL).performKeyInput { pressKey(Key.Escape) }
+            waitForIdle()
+
+            onNodeWithTag(SidebarTags.RENAME_DIALOG).assertDoesNotExist()
+            coVerify(exactly = 0) { harness.refGateway.renameBranch(any(), any()) }
         }
     }
 

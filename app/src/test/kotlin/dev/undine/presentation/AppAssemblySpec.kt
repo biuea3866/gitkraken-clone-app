@@ -365,19 +365,23 @@ class AppAssemblySpec : FunSpec({
             activateTab(lost)
             onAllNodesWithText(systemStrings().tabs.closeTab).fetchSemanticsNodes() shouldHaveSize 2
 
-            // 경로를 잃은 탭이 활성인 채로 "저장소 닫기" 를 **실행**한다. 등록만 확인하면
-            // 누를 수 있다는 것까지밖에 모른다 — 눌러서 닫히는지는 실행해야 안다.
-            val closeOutcome = wiring.registry.commands.single { it.id == CLOSE_REPOSITORY_COMMAND }.execute()
-            // 막는 쪽이 **탈출구까지 막지 않았는지** 여기서 드러난다.
-            closeOutcome.shouldBeInstanceOf<CommandOutcome.Executed>()
-            waitForIdle()
+            // 경로를 잃은 탭이 활성인 채로 **탭 막대의 닫기 버튼을 누른다.** 명령 등록만 확인하면
+            // 누를 수 있다는 것까지밖에 모르고, 명령 경로로 실행하면 마우스로 누르는 경로를
+            // 지나지 않는다 — 사용자가 하는 그대로 누른다 (UND-50 이 닫기를 독립 노드로 노출했다).
+            onAllNodesWithText(systemStrings().tabs.closeTab)[0].performClick()
 
-            // **여기까지가 이 테스트가 보장하는 범위다.** 닫기가 실행된 뒤 막대에서 탭이 실제로
-            // 사라지는지는 이 화면 테스트로 재현하지 못했다 — 닫기 텍스트가 탭 Column 의
-            // `clickable` 에 병합돼 독립 노드가 아니고(그래서 클릭으로도 못 누른다), 명령 경로로
-            // 실행하면 전이가 호출자 디스패처로 되돌아오는 구간과 `waitUntil` 이 같은 스레드를
-            // 두고 엇갈린다. **막대 갱신까지의 검증은 UND-50 에 남긴다** — 닫기 버튼을 개별
-            // 노드로 노출하는 접근성 작업과 뿌리가 같다.
+            // 막대에서 탭이 실제로 사라진다. 하나만 남으면 막대 자체가 숨는다 — "누를 수 있다" 와
+            // "눌러서 닫힌다" 는 다르고, UND-83 은 앞의 것까지만 보였다.
+            waitUntil(timeoutMillis = WAIT_MILLIS) {
+                onAllNodesWithText(systemStrings().tabs.closeTab).fetchSemanticsNodes().isEmpty()
+            }
+
+            // 갇히지 않았다 — 남은 탭이 조작 가능한 저장소이므로 그 저장소의 ref 를 본다.
+            waitUntil(timeoutMillis = WAIT_MILLIS) { wiring.holdsBranch(SECOND_ONLY_BRANCH) }
+
+            // 명령 경로도 같은 탈출구를 막지 않는다 — 막는 쪽이 탈출구까지 막았는지 함께 본다.
+            wiring.registry.commands.single { it.id == CLOSE_REPOSITORY_COMMAND }.execute()
+                .shouldBeInstanceOf<CommandOutcome.Executed>()
         }
     }
 

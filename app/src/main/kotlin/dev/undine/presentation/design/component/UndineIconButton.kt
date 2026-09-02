@@ -3,6 +3,7 @@ package dev.undine.presentation.design.component
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -11,7 +12,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
+import dev.undine.presentation.design.MinimumTargetSize
 import dev.undine.presentation.design.UndineTokens
+import dev.undine.presentation.design.undineFocusRing
 
 /**
  * 아이콘 하나만 있는 버튼.
@@ -31,9 +34,13 @@ fun UndineIconButton(
     val colors = UndineTokens.color
     val spacing = UndineTokens.spacing
 
+    val buttonShape = RoundedCornerShape(UndineTokens.shape.cornerSmall)
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(UndineTokens.shape.cornerSmall))
+            // 아이콘이 작아도 클릭 대상은 24dp 미만으로 내려가지 않는다 (결정 G45-1).
+            .defaultMinSize(minWidth = MinimumTargetSize, minHeight = MinimumTargetSize)
+            .clip(buttonShape)
+            .undineFocusRing(buttonShape)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(spacing.small),
         contentAlignment = Alignment.Center,

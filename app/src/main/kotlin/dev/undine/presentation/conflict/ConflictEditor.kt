@@ -20,6 +20,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import dev.undine.domain.conflict.ConflictChoice
 import dev.undine.domain.conflict.ConflictSide
@@ -310,7 +312,11 @@ private fun ResultPane(state: ConflictState) {
             onValueChange = { text -> state.editRegion(state.focusedRegion, text) },
             textStyle = UndineTokens.typography.mono.copy(color = colors.foregroundPrimary),
             cursorBrush = SolidColor(colors.foregroundPrimary),
-            modifier = Modifier.fillMaxWidth().testTag(ConflictTags.RESULT_EDITOR),
+            modifier = Modifier
+                .fillMaxWidth()
+                // 위의 창 제목은 별개 노드다 — 편집창 자신이 이름을 가져야 스크린리더가 읽는다.
+                .semantics { contentDescription = texts.resultPane }
+                .testTag(ConflictTags.RESULT_EDITOR),
         )
     }
 }
