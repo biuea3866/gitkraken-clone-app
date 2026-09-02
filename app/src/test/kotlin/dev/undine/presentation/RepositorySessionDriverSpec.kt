@@ -11,6 +11,7 @@ import dev.undine.domain.SettingsGateway
 import dev.undine.domain.ThemeMode
 import dev.undine.domain.UndineException
 import dev.undine.domain.WindowBounds
+import dev.undine.presentation.shell.ActiveRepository
 import dev.undine.presentation.tabs.TabKeyboardAction
 import dev.undine.presentation.tabs.TabKeyboardResult
 import io.kotest.assertions.throwables.shouldThrow
@@ -80,7 +81,7 @@ class RepositorySessionDriverSpec : BehaviorSpec({
 
                 wiring.driver.open(ALPHA)
 
-                wiring.selected shouldBe ALPHA
+                wiring.selected shouldBe ActiveRepository.Operable(ALPHA)
                 wiring.driver.tabs.tabs.map { it.path } shouldContainExactly listOf(ALPHA)
             }
         }
@@ -97,11 +98,11 @@ class RepositorySessionDriverSpec : BehaviorSpec({
                 val betaScope = wiring.driver.activeUndoScope
 
                 betaScope shouldNotBe alphaScope
-                wiring.selected shouldBe BETA
+                wiring.selected shouldBe ActiveRepository.Operable(BETA)
 
                 wiring.driver.activate(alphaTab)
 
-                wiring.selected shouldBe ALPHA
+                wiring.selected shouldBe ActiveRepository.Operable(ALPHA)
                 // 전환은 범위를 **버리지 않는다** — 돌아오면 그 저장소의 이력이 그대로 있다.
                 wiring.driver.activeUndoScope shouldBe alphaScope
             }
@@ -191,7 +192,7 @@ class RepositorySessionDriverSpec : BehaviorSpec({
 
                 wiring.driver.tabs.tabs.map { it.id } shouldContainExactly listOf(tab)
                 wiring.driver.activeUndoScope shouldBe scope
-                wiring.selected shouldBe ALPHA
+                wiring.selected shouldBe ActiveRepository.Operable(ALPHA)
             }
         }
 
@@ -208,7 +209,7 @@ class RepositorySessionDriverSpec : BehaviorSpec({
                 moved.shouldBeInstanceOf<TabKeyboardResult.Activated>()
                 wiring.driver.activate(moved.tabId)
 
-                wiring.selected shouldBe ALPHA
+                wiring.selected shouldBe ActiveRepository.Operable(ALPHA)
             }
         }
 
@@ -220,7 +221,7 @@ class RepositorySessionDriverSpec : BehaviorSpec({
 
                 wiring.driver.closeActive()
 
-                wiring.selected shouldBe null
+                wiring.selected shouldBe ActiveRepository.None
                 wiring.driver.tabs.tabs.shouldBeEmpty()
                 wiring.driver.activeUndoScope shouldNotBe scope
             }
@@ -235,7 +236,7 @@ class RepositorySessionDriverSpec : BehaviorSpec({
                 wiring.driver.restore()
 
                 wiring.driver.tabs.tabs.map { it.path } shouldContainExactly listOf(ALPHA, BETA)
-                wiring.selected shouldBe BETA
+                wiring.selected shouldBe ActiveRepository.Operable(BETA)
             }
         }
     }
@@ -268,9 +269,10 @@ class RepositorySessionDriverSpec : BehaviorSpec({
                 }
 
                 // 반영 순서가 완료 순서와 같다. 뒤집히면 나중에 고른 BETA 위에 ALPHA 가 덮인다.
-                wiring.selections shouldContainExactly listOf(ALPHA, BETA)
+                wiring.selections shouldContainExactly
+                    listOf(ActiveRepository.Operable(ALPHA), ActiveRepository.Operable(BETA))
                 wiring.driver.tabs.activeTabId shouldBe betaTab
-                wiring.selected shouldBe BETA
+                wiring.selected shouldBe ActiveRepository.Operable(BETA)
                 wiring.driver.activeUndoScope shouldBe betaScope
             }
         }
@@ -337,7 +339,7 @@ class RepositorySessionDriverSpec : BehaviorSpec({
 
     given("경로를 잃은 탭") {
         `when`("활성 탭의 저장소가 사라져 세션 키가 없어지면") {
-            then("셸에 그 경로를 넘기지 않는다 — 열려 있는 핸들은 직전 저장소다") {
+            then("조작 대상은 비우되 탭이 가리키는 저장소는 남긴다") {
                 val fixture = driverUnderTest()
                 fixture.driver.open(ALPHA)
                 val alphaTab = fixture.driver.tabs.tabs.first().id
@@ -347,8 +349,11 @@ class RepositorySessionDriverSpec : BehaviorSpec({
                 fixture.sessionGateway.missingPaths += ALPHA
                 fixture.driver.activate(alphaTab)
 
-                // 경로를 넘기면 화면은 ALPHA 를 가리키는데 핸들은 BETA 다 — 조작이 남의 저장소로 간다.
-                fixture.selections.last() shouldBe null
+                // 조작 대상으로 넘기면 화면은 ALPHA 를 가리키는데 핸들은 BETA 다 — 조작이 남의
+                // 저장소로 간다. 그렇다고 아무것도 안 넘기면 셸이 사라져 탭 막대까지 함께 사라진다.
+                // 그래서 **다른 타입**으로 넘긴다 (UND-83).
+                fixture.selections.last() shouldBe ActiveRepository.Unavailable(ALPHA)
+                fixture.selections.last().referencedPath shouldBe ALPHA
             }
 
             then("직전 저장소의 Undo 이력을 그 탭의 것으로 되살리지 않는다") {
@@ -440,11 +445,11 @@ private class DriverUnderTest(
     val settings: DriverSettingsGateway,
     val sessionGateway: DriverSessionGateway,
     /** 반영이 일어난 순서대로의 활성 저장소. 순서가 곧 화면이 본 순서다. */
-    val selections: MutableList<RepositoryPath?>,
+    val selections: MutableList<ActiveRepository>,
     /** 반영이 일어난 스레드 이름 — Compose 상태를 어디서 바꿨는지가 여기 남는다. */
     val reflectionThreads: MutableList<String>,
 ) {
-    val selected: RepositoryPath? get() = selections.lastOrNull()
+    val selected: ActiveRepository? get() = selections.lastOrNull()
 }
 
 private fun driverUnderTest(
@@ -454,16 +459,16 @@ private fun driverUnderTest(
 ): DriverUnderTest {
     val settings = DriverSettingsGateway(openTabs, activeTabIndex)
     val sessionGateway = DriverSessionGateway(transitionOn)
-    val selections = Collections.synchronizedList(mutableListOf<RepositoryPath?>())
+    val selections = Collections.synchronizedList(mutableListOf<ActiveRepository>())
     val reflectionThreads = Collections.synchronizedList(mutableListOf<String>())
     val driver = RepositorySessionDriver(
         sessions = RepositorySessionUseCase(sessionGateway, settings),
         createUndoScope = ::FakeUndoScope,
-        onActiveRepository = { path ->
+        onActiveRepository = { active ->
             sessionGateway.events += "반영"
             // 코루틴 디버그 이름(` @coroutine#N`)을 떼고 스레드만 남긴다.
             reflectionThreads += Thread.currentThread().name.substringBefore(" @")
-            selections += path
+            selections += active
         },
     )
     return DriverUnderTest(driver, settings, sessionGateway, selections, reflectionThreads)

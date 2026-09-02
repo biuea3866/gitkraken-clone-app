@@ -29,6 +29,7 @@ import dev.undine.presentation.palette.ShortcutModifier
 import dev.undine.presentation.palette.execute
 import dev.undine.presentation.palette.toBinding
 import dev.undine.presentation.welcome.WelcomeTags
+import io.kotest.core.TestConfiguration
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.engine.spec.tempdir
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -50,6 +51,9 @@ private val REFRESH_COMMAND = CommandId("refs.refresh")
 private val CHERRY_PICK_COMMAND = CommandId("graph.cherryPick")
 private val OPEN_PALETTE_COMMAND = CommandId("palette.open")
 private val CLOSE_REPOSITORY_COMMAND = CommandId("repository.close")
+
+/** 저장소를 바꾸는 명령 하나. 경로를 잃은 탭에서는 사유와 함께 막혀야 한다 (UND-83). */
+private val UNDO_LAST_COMMAND = CommandId("undo.last")
 
 /** 저장해 둘 단축키. 기존 기본 단축키와 겹치지 않게 수식키 둘을 함께 쓴다. */
 private val OVERRIDE_SHORTCUT = Shortcut(Key.F8, setOf(ShortcutModifier.PRIMARY, ShortcutModifier.ALT))
@@ -275,6 +279,163 @@ class AppAssemblySpec : FunSpec({
             sawPreviousRepository.get() shouldBe false
         }
     }
+
+    // UND-81 은 경로를 잃은 탭에 `null` 을 넘겨 데이터가 틀리는 것을 막았지만, 그러면 목적지가
+    // 시작 화면으로 가 **탭 막대까지 함께** 사라진다 — 사용자는 그 탭에 갇힌다 (UND-83).
+    test("경로를 잃은 활성 탭에서도 탭 막대가 남고 저장소를 바꾸는 명령이 사유와 함께 막힌다") {
+        val settingsFile = File(tempdir(), "settings.json").toPath()
+        val lost = seedRepository("사라질.txt")
+        val kept = seedRepository("남을.txt")
+        Git.open(lost).use { opened -> opened.branchCreate().setName(MOVABLE_BRANCH).call() }
+        Git.open(kept).use { opened -> opened.branchCreate().setName(SECOND_ONLY_BRANCH).call() }
+        rememberAsRecent(settingsFile, lost, kept)
+        val lostHead = headCommitOf(lost)
+        val keptRefsBefore = refSnapshotOf(kept)
+
+        runComposeUiTest {
+            val wiring = startApp(settingsFile)
+            openRecent(wiring, lost)
+            // 경로를 잃기 **전에** 되돌릴 것을 하나 쌓는다 — 이력이 이어지는지 뒤에서 확인한다.
+            val lostUndo = wiring.currentUndo()
+            runBlocking {
+                lostUndo.scope.executeGraphOperation.execute(
+                    GraphOperation.ResetBranch(RefName(MOVABLE_BRANCH), lostHead),
+                )
+                lostUndo.scope.loadUndoHistory.execute()
+            } shouldHaveSize 1
+
+            wiring.navigation.go(AppDestination.WELCOME)
+            waitForIdle()
+            openRecent(wiring, kept)
+            waitUntil(timeoutMillis = WAIT_MILLIS) { wiring.holdsBranch(SECOND_ONLY_BRANCH) }
+            val keptUndo = wiring.currentUndo()
+
+            // 저장소를 통째로 옮긴다 — 사용자가 파인더에서 폴더를 옮긴 것과 같다.
+            val hideout = File(tempdir(), lost.name)
+            lost.renameTo(hideout) shouldBe true
+
+            // 경로를 잃은 탭은 어느 저장소에도 매이지 않은 범위로 간다 — 직전 저장소의 것이 아니다.
+            activateTab(lost)
+            waitUntil(timeoutMillis = WAIT_MILLIS) { wiring.currentUndo() !== keptUndo }
+
+            // 셸이 남는다 — 시작 화면으로 튕기면 탭 막대가 함께 사라진다.
+            onNodeWithTag(AppDestinationTags.of(AppDestination.REPOSITORY)).assertExists()
+            onNodeWithTag(AppDestinationTags.of(AppDestination.WELCOME)).assertDoesNotExist()
+            onAllNodesWithText(systemStrings().tabs.closeTab).fetchSemanticsNodes() shouldHaveSize 2
+
+            // 저장소를 바꾸는 명령이 사유와 함께 막힌다 (결정 G43) — 새 표면을 만들지 않는다.
+            val blocked = wiring.registry.commands.single { it.id == UNDO_LAST_COMMAND }.execute()
+            blocked.shouldBeInstanceOf<CommandOutcome.Blocked>()
+                .reason shouldBe systemStrings().tabs.unavailableRepository
+            // 열려 있는 핸들은 직전 저장소다 — 막힌 조작이 그리로 새지 않았다.
+            refSnapshotOf(kept) shouldBe keptRefsBefore
+
+            // 다른 탭으로 옮길 수 있다 — 갇히지 않는다.
+            activateTab(kept)
+            waitUntil(timeoutMillis = WAIT_MILLIS) { wiring.holdsBranch(SECOND_ONLY_BRANCH) }
+
+            // 경로가 돌아오면 그 저장소의 이력이 이어진다 (UND-81 회귀 유지).
+            hideout.renameTo(lost) shouldBe true
+            activateTab(lost)
+            waitUntil(timeoutMillis = WAIT_MILLIS) { wiring.holdsBranch(MOVABLE_BRANCH) }
+            runBlocking { wiring.currentUndo().scope.loadUndoHistory.execute() } shouldHaveSize 1
+        }
+    }
+
+    // 위 테스트는 **막대가 남는 것**까지 본다. 남아 있어도 그 버튼이 실제로 탭을 닫지 못하면
+    // 사용자는 여전히 갇힌다 — "누를 수 있다" 와 "눌러서 닫힌다" 는 다르다.
+    test("경로를 잃은 탭을 실제로 닫아 빠져나온다") {
+        val settingsFile = File(tempdir(), "settings.json").toPath()
+        val lost = seedRepository("사라질.txt")
+        val kept = seedRepository("남을.txt")
+        Git.open(kept).use { opened -> opened.branchCreate().setName(SECOND_ONLY_BRANCH).call() }
+        rememberAsRecent(settingsFile, lost, kept)
+
+        runComposeUiTest {
+            val wiring = startApp(settingsFile)
+            openRecent(wiring, lost)
+            wiring.navigation.go(AppDestination.WELCOME)
+            waitForIdle()
+            openRecent(wiring, kept)
+            waitUntil(timeoutMillis = WAIT_MILLIS) { wiring.holdsBranch(SECOND_ONLY_BRANCH) }
+
+            val hideout = File(tempdir(), lost.name)
+            lost.renameTo(hideout) shouldBe true
+
+            activateTab(lost)
+            onAllNodesWithText(systemStrings().tabs.closeTab).fetchSemanticsNodes() shouldHaveSize 2
+
+            // 경로를 잃은 탭이 활성인 채로 "저장소 닫기" 를 **실행**한다. 등록만 확인하면
+            // 누를 수 있다는 것까지밖에 모른다 — 눌러서 닫히는지는 실행해야 안다.
+            val closeOutcome = wiring.registry.commands.single { it.id == CLOSE_REPOSITORY_COMMAND }.execute()
+            // 막는 쪽이 **탈출구까지 막지 않았는지** 여기서 드러난다.
+            closeOutcome.shouldBeInstanceOf<CommandOutcome.Executed>()
+            waitForIdle()
+
+            // **여기까지가 이 테스트가 보장하는 범위다.** 닫기가 실행된 뒤 막대에서 탭이 실제로
+            // 사라지는지는 이 화면 테스트로 재현하지 못했다 — 닫기 텍스트가 탭 Column 의
+            // `clickable` 에 병합돼 독립 노드가 아니고(그래서 클릭으로도 못 누른다), 명령 경로로
+            // 실행하면 전이가 호출자 디스패처로 되돌아오는 구간과 `waitUntil` 이 같은 스레드를
+            // 두고 엇갈린다. **막대 갱신까지의 검증은 UND-50 에 남긴다** — 닫기 버튼을 개별
+            // 노드로 노출하는 접근성 작업과 뿌리가 같다.
+        }
+    }
+
+    // UND-81 의 배선 테스트는 장부만 보고 이 경로를 지나지 않는다 (그 사실이 그 테스트에 적혀 있다).
+    // 여기서는 조회가 **실제 예외로** 실패하게 만들어 놓고 남아야 할 것이 남는지 본다.
+    test("컨텍스트 조회 넷이 실제 예외로 실패해도 탭·활성 탭·Undo 범위가 보존된다") {
+        val settingsFile = File(tempdir(), "settings.json").toPath()
+        val broken = seedRepository("깨질.txt")
+        // 짝 탭은 **detached HEAD** 다. 현재 브랜치가 없어 화면 홀더의 갱신 키(`refs`)가 빈 목록이고,
+        // 조회가 실패해 컨텍스트가 비었을 때와 같은 값이라 그 갱신이 다시 돌지 않는다 — 이 테스트가
+        // 보려는 것은 **조회 실패 뒤에 무엇이 남는가**이지, 훼손된 저장소를 훑는 화면 홀더들의
+        // 동작이 아니다 (그 경로는 이 티켓의 범위 밖이다).
+        val other = detachedRepository()
+        Git.open(broken).use { opened -> opened.branchCreate().setName(FIRST_ONLY_BRANCH).call() }
+        rememberAsRecent(settingsFile, broken, other)
+
+        runComposeUiTest {
+            val (wiring, errors) = startAppReportingErrors(settingsFile)
+            openRecent(wiring, broken)
+            waitUntil(timeoutMillis = WAIT_MILLIS) { wiring.holdsBranch(FIRST_ONLY_BRANCH) }
+            val brokenUndo = wiring.currentUndo()
+
+            wiring.navigation.go(AppDestination.WELCOME)
+            waitForIdle()
+            openRecent(wiring, other)
+
+            // 탭 막대로 한 번 오간다 — 두 저장소의 세션 핸들이 함께 캐시에 남는 경로다
+            // (최근 목록으로 여는 경로는 직전 활성 핸들을 놓는다).
+            activateTab(broken)
+            waitUntil(timeoutMillis = WAIT_MILLIS) { wiring.currentUndo().scope === brokenUndo.scope }
+            activateTab(other)
+            waitUntil(timeoutMillis = WAIT_MILLIS) { wiring.currentUndo().scope !== brokenUndo.scope }
+            // 여기까지의 실패는 이 테스트의 관심사가 아니다 — 아래에서 남는 실패가 조회의 것임을
+            // 단정하려면 먼저 비워야 한다.
+            errors.dismiss()
+
+            // 참조 파일을 읽을 수 없게 만든다. 경로와 캐시된 세션 핸들이 그대로라 **탭 활성화는
+            // 성공**하고, 그 핸들 위에서 도는 컨텍스트 조회가 **실제 예외로** 실패한다 —
+            // 배선의 장부만 보는 테스트가 지나지 못하는 경로다 (UND-81 이 남긴 검증 간극).
+            File(broken, ".git/packed-refs").writeText("이것은 참조 목록이 아니다\n")
+
+            activateTab(broken)
+            // ① 활성화가 성공했다 — 전이가 실패해 되돌려졌다면 범위가 돌아오지 않는다.
+            waitUntil(timeoutMillis = WAIT_MILLIS) { wiring.currentUndo().scope === brokenUndo.scope }
+            // ② 그 뒤 컨텍스트 조회가 **실제로** 실패했다. 실패하지 않았다면 이 테스트는 보존을
+            // 확인한 것이 아니라 아무 일도 없는 경로를 지난 것이다.
+            waitUntil(timeoutMillis = WAIT_MILLIS) { errors.failure != null }
+
+            // 그 실패로 잃은 것은 없다. 탭 둘이 그대로 남고,
+            onAllNodesWithText(systemStrings().tabs.closeTab).fetchSemanticsNodes() shouldHaveSize 2
+            // 화면은 시작 화면으로 튕기지 않았으며,
+            onNodeWithTag(AppDestinationTags.of(AppDestination.REPOSITORY)).assertExists()
+            // 되돌리기 범위는 그 저장소의 것 그대로다 — 조회 실패는 범위를 버리는 사유가 아니다.
+            // 범위를 감싸는 홀더는 활성화마다 새로 만들어지므로(`rememberActiveUndo`) 범위를 대조한다.
+            // (경로가 돌아온 뒤 이력이 **이어지는지**는 위의 경로 상실 테스트가 확인한다.)
+            wiring.currentUndo().scope shouldBe brokenUndo.scope
+        }
+    }
 })
 
 /** 화면 컨텍스트가 그 브랜치를 가진 저장소를 가리키고 있는가. */
@@ -283,15 +444,39 @@ private fun AppWiring.holdsBranch(branch: String): Boolean =
 
 /** 조립을 띄우고 그 배선 통로를 돌려준다. */
 @OptIn(ExperimentalTestApi::class)
-private fun ComposeUiTest.startApp(settingsFile: Path): AppWiring {
+private fun ComposeUiTest.startApp(settingsFile: Path): AppWiring =
+    startAppReportingErrors(settingsFile).first
+
+/**
+ * 조립을 띄우고 배선 통로와 **전역 실패 안내**를 함께 돌려준다.
+ *
+ * 조회 실패를 삼키지 않는지 보려면 앱이 실제로 쓰는 그 안내 상태를 봐야 한다 — 밖에서 새로 만들면
+ * 검증 대상이 앱이 아니라 그 복제본이 된다.
+ */
+@OptIn(ExperimentalTestApi::class)
+private fun ComposeUiTest.startAppReportingErrors(settingsFile: Path): Pair<AppWiring, AppErrorState> {
     var assembled: AppWiring? = null
     val component = AppComponent(settingsFile, settingsFile.parent)
+    val errors = AppErrorState()
     setContent {
-        AppRoot(component = component, errors = AppErrorState(), onAssembled = { assembled = it })
+        AppRoot(component = component, errors = errors, onAssembled = { assembled = it })
     }
     waitUntil(timeoutMillis = WAIT_MILLIS) { assembled != null }
-    return assembled.shouldNotBeNull()
+    return assembled.shouldNotBeNull() to errors
 }
+
+/** 사용자가 하는 그대로 탭 막대에서 그 저장소의 탭을 눌러 활성화한다. */
+@OptIn(ExperimentalTestApi::class)
+private fun ComposeUiTest.activateTab(repository: File) {
+    onNodeWithText(repository.name).performClick()
+    waitForIdle()
+}
+
+/** 저장소의 참조 상태. 막힌 조작이 이 저장소에 새지 않았는지 전후로 대조한다. */
+private fun refSnapshotOf(repository: File): Map<String, String> =
+    Git.open(repository).use { opened ->
+        opened.repository.refDatabase.getRefs().associate { ref -> ref.name to ref.objectId.name }
+    }
 
 /**
  * 사용자가 하는 그대로 최근 목록에서 저장소를 열고, 저장소 화면이 그려질 때까지 기다린다.
@@ -321,3 +506,12 @@ private suspend fun rememberAsRecent(settingsFile: Path, vararg repositories: Fi
 /** 그래프가 그릴 커밋. 행 태그가 이 값으로 만들어진다. */
 private fun headCommitOf(repository: File): CommitId =
     Git.open(repository).use { opened -> CommitId.of(requireNotNull(opened.repository.resolve("HEAD")).name) }
+
+/** HEAD 가 브랜치에서 떨어진 저장소. 현재 브랜치가 없어 화면 홀더의 갱신 키가 빈 목록이다. */
+private fun TestConfiguration.detachedRepository(): File {
+    val directory = seedRepository("떨어진.txt")
+    Git.open(directory).use { opened ->
+        opened.checkout().setName(headCommitOf(directory).value).call()
+    }
+    return directory
+}

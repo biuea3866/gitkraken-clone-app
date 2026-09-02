@@ -4,6 +4,7 @@ import androidx.compose.ui.input.key.Key
 import dev.undine.di.AppComponent
 import dev.undine.domain.BranchTarget
 import dev.undine.domain.CommitId
+import dev.undine.domain.RepositoryPath
 import dev.undine.domain.ShortcutBinding
 import dev.undine.domain.graphops.GraphOperation
 import dev.undine.presentation.graph.GraphDragDropState
@@ -18,14 +19,17 @@ import dev.undine.presentation.palette.Shortcut
 import dev.undine.presentation.palette.ShortcutModifier
 import dev.undine.presentation.palette.toBinding
 import dev.undine.presentation.palette.toShortcutOverrides
+import dev.undine.presentation.shell.ActiveRepository
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.engine.spec.tempdir
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainAll
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -33,6 +37,23 @@ import java.io.File
 
 /** 조작 대상 커밋. 실행까지 가지 않고 확인창만 여는 경로라 값 자체는 아무 커밋이어도 된다. */
 private const val COMMIT = "0123456789abcdef0123456789abcdef01234567"
+
+/** 경로를 잃은 탭. 저장소를 바꾸는 명령은 여기서 막혀야 한다 (UND-83). */
+private val UNAVAILABLE = ActiveRepository.Unavailable(RepositoryPath("/tmp/사라진-저장소"))
+
+/** 저장소를 바꾸는 명령. 막혔을 때 직전 저장소 핸들에 조작이 적용되면 안 된다. */
+private val REPOSITORY_CHANGING_COMMAND_IDS = listOf(
+    "undo.last",
+    "rebase.openPlan",
+    "graph.merge",
+    "graph.rebase",
+    "graph.cherryPick",
+    "graph.resetBranch",
+    "graph.moveTag",
+)
+
+/** 경로를 잃어도 남아 있어야 하는 명령 — 탭을 닫고 팔레트를 여는 길까지 막으면 갇힌다. */
+private val ALWAYS_OPEN_COMMAND_IDS = listOf("repository.close", "palette.open", "repository.open")
 
 /** 화면이 정의한 그래프 조작 명령 다섯. 등록 대상이 빠지면 팔레트에서 영영 못 부른다. */
 private val GRAPH_COMMAND_IDS = listOf(
@@ -48,12 +69,13 @@ private val GRAPH_COMMAND_IDS = listOf(
  * 순서가 다르면 충돌 판정도 달라지므로 여기서 앱과 어긋나면 테스트가 다른 것을 검증한다.
  */
 private class RegistrationFixture(
-    private val repositoryOpen: Boolean = true,
+    private val active: ActiveRepository = ActiveRepository.Operable(RepositoryPath("/tmp/undine")),
     private val selected: GraphOperation? = null,
 ) {
     val navigated = mutableListOf<AppDestination>()
     var openRequested = 0
     var undoRequested = 0
+    var rebasePlanRequested = 0
     val registry = CommandRegistry()
 
     /**
@@ -74,7 +96,8 @@ private class RegistrationFixture(
                 onCloseRepository = {},
                 onRefreshRefs = {},
                 onToggleDiffView = {},
-                onOpenRebasePlan = {},
+                onOpenRebasePlan = { rebasePlanRequested++ },
+                repositoryChangeBlockedReason = { repositoryChangeBlockedReason(active) },
             ),
         )
         registerSecondaryCommands(
@@ -84,7 +107,8 @@ private class RegistrationFixture(
                 onOpenRepository = { openRequested++ },
                 onUndoLast = { undoRequested++ },
                 // 앱이 쓰는 판정 그대로다 — 복제하면 앱과 어긋난 규칙을 검증하게 된다.
-                availabilityOf = { destination -> availabilityOf(destination, repositoryOpen) },
+                availabilityOf = { destination -> availabilityOf(destination, active) },
+                repositoryChangeBlockedReason = { repositoryChangeBlockedReason(active) },
             ),
             graphCallbacks = callbacks,
             selectedGraphOperation = { selected },
@@ -124,7 +148,7 @@ class AppCommandRegistrationSpec : BehaviorSpec({
 
         `when`("저장소가 열려 있지 않으면") {
             then("저장소가 필요한 화면의 이동 명령이 막힌다") {
-                val fixture = RegistrationFixture(repositoryOpen = false)
+                val fixture = RegistrationFixture(active = ActiveRepository.None)
 
                 val blocked = fixture.commandOf("navigate.blame")
                 val open = fixture.commandOf("navigate.preferences")
@@ -141,6 +165,64 @@ class AppCommandRegistrationSpec : BehaviorSpec({
 
                 availabilityOfCommand(fixture.commandOf("graph.cherryPick"))
                     .shouldBeInstanceOf<CommandAvailability.Blocked>()
+            }
+        }
+
+        `when`("활성 탭이 경로를 잃었으면") {
+            then("저장소를 바꾸는 명령이 전부 경로를 잃은 사유로 막힌다") {
+                val selected = GraphOperation.CherryPick(CommitId.of(COMMIT), BranchTarget.Current)
+                val fixture = RegistrationFixture(active = UNAVAILABLE, selected = selected)
+                val reason = repositoryChangeBlockedReason(UNAVAILABLE)
+
+                REPOSITORY_CHANGING_COMMAND_IDS.forEach { id ->
+                    availabilityOfCommand(fixture.commandOf(id))
+                        .shouldBeInstanceOf<CommandAvailability.Blocked>()
+                        .reason shouldBe reason
+                }
+            }
+
+            // 조용히 다른 저장소에 적용되는 것이 이 티켓이 막으려는 p0 다 — 열린 핸들은 직전 저장소다.
+            then("막힌 명령은 실행되지 않는다 — 직전 저장소 핸들에 조작이 닿지 않는다") {
+                val selected = GraphOperation.CherryPick(CommitId.of(COMMIT), BranchTarget.Current)
+                val fixture = RegistrationFixture(active = UNAVAILABLE, selected = selected)
+
+                fixture.commandOf("undo.last").execute().shouldBeInstanceOf<CommandOutcome.Blocked>()
+                fixture.commandOf("rebase.openPlan").execute().shouldBeInstanceOf<CommandOutcome.Blocked>()
+                fixture.commandOf("graph.cherryPick").execute().shouldBeInstanceOf<CommandOutcome.Blocked>()
+
+                fixture.undoRequested shouldBe 0
+                fixture.rebasePlanRequested shouldBe 0
+                fixture.callbacks.lastRequested.shouldBeEmpty()
+                fixture.dragDrop.confirmation.shouldBeNull()
+            }
+
+            then("탭을 닫고 팔레트를 여는 길은 막지 않는다 — 막으면 그 탭에 갇힌다") {
+                val fixture = RegistrationFixture(active = UNAVAILABLE)
+
+                ALWAYS_OPEN_COMMAND_IDS.forEach { id ->
+                    availabilityOfCommand(fixture.commandOf(id)) shouldBe CommandAvailability.Available
+                }
+            }
+
+            then("막힌 명령도 목록에는 남는다 — 왜 못 쓰는지 사용자가 알아야 한다") {
+                val ids = RegistrationFixture(active = UNAVAILABLE).registry.commands.map { it.id.value }
+
+                REPOSITORY_CHANGING_COMMAND_IDS.forEach { id -> ids shouldContain id }
+                ids shouldNotContain "존재하지 않는 명령"
+            }
+        }
+
+        `when`("저장소를 조작할 수 있으면") {
+            then("차단 사유가 명령 자신의 판정을 덮지 않는다") {
+                val selected = GraphOperation.CherryPick(CommitId.of(COMMIT), BranchTarget.Current)
+                val fixture = RegistrationFixture(selected = selected)
+
+                availabilityOfCommand(fixture.commandOf("graph.cherryPick")) shouldBe CommandAvailability.Available
+                availabilityOfCommand(fixture.commandOf("undo.last")) shouldBe CommandAvailability.Available
+                // 선택이 맞지 않는 명령은 **그 명령의 사유로** 막힌다 — 게이트가 덮어쓰지 않는다.
+                availabilityOfCommand(fixture.commandOf("graph.merge"))
+                    .shouldBeInstanceOf<CommandAvailability.Blocked>()
+                    .reason shouldNotBe repositoryChangeBlockedReason(UNAVAILABLE)
             }
         }
 

@@ -278,8 +278,8 @@ private fun AppContent(
         RepositorySessionDriver(
             sessions = component.repositorySession,
             createUndoScope = component::newUndoScope,
-            onActiveRepository = { path ->
-                shellState.selectRepository(path)
+            onActiveRepository = { active ->
+                shellState.selectActiveRepository(active)
                 // **컨텍스트도 같은 임계 구역에서 내려놓는다** (결정 G42). 아래 효과가 새 저장소의
                 // ref 를 채울 때까지 이전 저장소의 브랜치·태그·원격을 들고 있으면, 탭·셸 선택은 이미
                 // 옮겨 간 그 창에서 누른 조작이 **다른 저장소**로 간다. 채우기까지 구역 안에서 할 수는
@@ -374,6 +374,11 @@ private fun AppContent(
     // 팔레트 열기 요청. 커맨드 action 은 non-composable 이라 여기서 신호만 세우고 열기는 효과가 한다.
     var paletteRequested by remember { mutableStateOf(false) }
 
+    // 명령 가용성 판정이 읽는 문구. **조립 때 한 번만** 잡는다 — `systemStrings()` 는 부를 때마다
+    // 카탈로그를 새로 만들고, 이 판정은 팔레트가 열려 있는 동안 입력마다 다시 불린다.
+    // 로케일은 `AppRoot` 가 정적으로 한 번 제공하므로 이 값이 도중에 낡지 않는다.
+    val commandStrings = strings
+
     // **등록은 앱 시작 시 한 번뿐이다.** 저장소마다 다시 등록하면 같은 id 가 두 번 들어와 거부되고,
     // 무엇보다 단축키 충돌이 첫 저장소를 열 때까지 숨는다.
     val registry = remember {
@@ -388,6 +393,9 @@ private fun AppContent(
                     onRefreshRefs = { latestScreens.value.sidebar.refresh() },
                     onToggleDiffView = { latestScreens.value.diff.toggleViewMode() },
                     onOpenRebasePlan = { latestScreens.value.rebase.load() },
+                    repositoryChangeBlockedReason = {
+                        repositoryChangeBlockedReason(shellState.selection.activeRepository, commandStrings)
+                    },
                 ),
                 )
             registerSecondaryCommands(
@@ -397,7 +405,10 @@ private fun AppContent(
                     onOpenRepository = { chooseDirectory()?.let(welcomeState::open) },
                     onUndoLast = { latestUndo.value.state.undoFromKeyboard() },
                     availabilityOf = { destination ->
-                        availabilityOf(destination, shellState.selection.repository != null)
+                        availabilityOf(destination, shellState.selection.activeRepository, commandStrings)
+                    },
+                    repositoryChangeBlockedReason = {
+                        repositoryChangeBlockedReason(shellState.selection.activeRepository, commandStrings)
                     },
                 ),
                 graphCallbacks = graphCallbacks,
@@ -461,7 +472,7 @@ private fun AppContent(
             .commandShortcuts(commandCenter.shortcutHandler),
     ) {
         DestinationArea(
-            destination = destinationFor(navigation.destination, selection.repository != null),
+            destination = destinationFor(navigation.destination, selection.activeRepository),
             component = component,
             errors = errors,
             navigation = navigation,

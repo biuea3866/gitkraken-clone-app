@@ -11,6 +11,7 @@ import dev.undine.application.session.TabId
 import dev.undine.application.session.TabSession
 import dev.undine.domain.RepositoryPath
 import dev.undine.domain.RepositorySessionKey
+import dev.undine.presentation.shell.ActiveRepository
 import dev.undine.presentation.tabs.RepositoryTabsState
 import dev.undine.presentation.tabs.TabCloseRequest
 import kotlin.coroutines.ContinuationInterceptor
@@ -50,14 +51,16 @@ import kotlinx.coroutines.withContext
  *   `AppComponent` 의 내부 타입을 알 필요가 없기 때문이다 — 범위의 조립은 DI 가 소유한다.
  * @param onActiveRepository 활성 탭이 가리키는 저장소. **셸 선택과 화면 컨텍스트가 함께** 이 값을
  *   따른다 — 임계 구역 안에서 불리므로, 이 훅이 끝난 시점에 화면의 어느 부분도 지나간 저장소를
- *   가리키지 않아야 한다 (결정 G42). 저장소마다 다시 읽어야 하는 값(브랜치·태그·원격)의 **조회**는
- *   여기서 하지 않는다. 같은 Git 경계를 지나므로 구역 안에서 부르면 교착한다.
+ *   가리키지 않아야 한다 (결정 G42). 조작 대상과 탭이 가리키는 저장소를 가른 [ActiveRepository] 를
+ *   넘긴다 — 경로를 잃은 탭도 셸이 그릴 것을 알아야 탭 막대가 남는다 (UND-83). 저장소마다 다시
+ *   읽어야 하는 값(브랜치·태그·원격)의 **조회**는 여기서 하지 않는다. 같은 Git 경계를 지나므로
+ *   구역 안에서 부르면 교착한다.
  */
 @Stable
 class RepositorySessionDriver<UndoScope>(
     private val sessions: RepositorySessionUseCase,
     private val createUndoScope: () -> UndoScope,
-    private val onActiveRepository: (RepositoryPath?) -> Unit,
+    private val onActiveRepository: (ActiveRepository) -> Unit,
 ) {
 
     val tabs: RepositoryTabsState = RepositoryTabsState(EMPTY_SNAPSHOT)
@@ -177,8 +180,20 @@ class RepositorySessionDriver<UndoScope>(
         activeUndoScopeState = activeKey
             ?.let { key -> undoScopes.getOrPut(key, createUndoScope) }
             ?: detachedScope
-        onActiveRepository(active?.path?.takeIf { activeKey != null })
+        onActiveRepository(activeRepositoryOf(active, routable = activeKey != null))
     }
+}
+
+/**
+ * 활성 탭을 화면이 보는 세 갈래로 옮긴다 (UND-83).
+ *
+ * 라우팅이 막힌 탭을 "저장소 없음" 으로 뭉뚱그리지 않는다 — 그러면 셸이 사라져 탭 막대까지 함께
+ * 없어진다. 탭은 남아 있고 조작할 곳만 없다는 사실을 [ActiveRepository.Unavailable] 이 그대로 나른다.
+ */
+private fun activeRepositoryOf(active: TabSession?, routable: Boolean): ActiveRepository = when {
+    active == null -> ActiveRepository.None
+    routable -> ActiveRepository.Operable(active.path)
+    else -> ActiveRepository.Unavailable(active.path)
 }
 
 private val EMPTY_SNAPSHOT = RepositorySessionSnapshot(tabs = emptyList(), activeTabId = null)

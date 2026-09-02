@@ -12,4 +12,11 @@ class AppCommandHandlers(
     val onRefreshRefs: () -> Unit,
     val onToggleDiffView: () -> Unit,
     val onOpenRebasePlan: () -> Unit,
+    /**
+     * 저장소를 바꾸는 명령을 막을 사유. 막지 않으면 `null` — `repositoryChangeBlockedReason` 이 답한다.
+     *
+     * **기본값을 두지 않는다.** 배선이 이 값을 빠뜨리면 경로를 잃은 탭에서 조작이 직전 저장소로
+     * 조용히 새는데, 기본값이 있으면 그 누락이 컴파일에서도 드러나지 않는다.
+     */
+    val repositoryChangeBlockedReason: () -> String?,
 )

@@ -4,7 +4,11 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import dev.undine.presentation.i18n.Strings
+import dev.undine.presentation.i18n.systemStrings
+import dev.undine.presentation.i18n.tabs
 import dev.undine.presentation.palette.CommandAvailability
+import dev.undine.presentation.shell.ActiveRepository
 
 /**
  * 이 배선이 **실제로 닿게 한 화면**의 닫힌 목록.
@@ -134,23 +138,55 @@ fun verifyMenuReachesEveryDestination(menus: List<AppMenu> = APP_MENUS) {
     }
 }
 
+/** 열린 탭이 하나도 없을 때의 차단 사유. */
+private const val NO_REPOSITORY_REASON = "저장소를 먼저 여세요"
+
 /**
- * 실제로 그릴 화면. 저장소가 필요한 화면인데 저장소가 없으면 시작 화면으로 되돌린다 —
- * 저장소를 닫은 순간 열려 있던 Blame 화면이 빈 채로 남지 않게 한다.
+ * 실제로 그릴 화면.
+ *
+ * **하나의 불리언으로 가르지 않는다** (UND-83). 갈래는 셋이다:
+ * - 조작할 수 있으면 요청한 화면을 그대로 그린다.
+ * - 열린 탭이 없으면 시작 화면으로 되돌린다 — 저장소를 닫은 순간 열려 있던 Blame 화면이 빈 채로
+ *   남지 않게 한다.
+ * - 탭은 있는데 그 경로를 쓸 수 없으면 **저장소 셸**로 간다. 시작 화면으로 보내면 셸이 통째로
+ *   사라져 탭 막대까지 함께 없어지고, 사용자는 다른 탭을 고르지도 이 탭을 닫지도 못한 채 갇힌다.
  */
-internal fun destinationFor(requested: AppDestination, repositoryOpen: Boolean): AppDestination = when {
-    repositoryOpen -> requested
-    requested.requiresRepository -> AppDestination.WELCOME
-    else -> requested
+internal fun destinationFor(requested: AppDestination, active: ActiveRepository): AppDestination = when {
+    !requested.requiresRepository -> requested
+    active is ActiveRepository.Operable -> requested
+    active is ActiveRepository.Unavailable -> AppDestination.REPOSITORY
+    else -> AppDestination.WELCOME
 }
 
 /**
- * 저장소가 필요한 화면을 저장소 없이 열지 않는다. 열어 두면 빈 화면이 그려지고 사용자는 자기가
- * 무엇을 잘못했는지 알 수 없다.
+ * 저장소가 필요한 화면을 조작할 수 없는 상태로 열지 않는다. 열어 두면 빈 화면이 그려지고 사용자는
+ * 자기가 무엇을 잘못했는지 알 수 없다.
  */
-internal fun availabilityOf(destination: AppDestination, repositoryOpen: Boolean): CommandAvailability =
-    if (destination.requiresRepository && !repositoryOpen) {
-        CommandAvailability.Blocked("저장소를 먼저 여세요")
-    } else {
-        CommandAvailability.Available
-    }
+internal fun availabilityOf(
+    destination: AppDestination,
+    active: ActiveRepository,
+    strings: Strings = systemStrings(),
+): CommandAvailability = when {
+    !destination.requiresRepository -> CommandAvailability.Available
+    active is ActiveRepository.Operable -> CommandAvailability.Available
+    else -> CommandAvailability.Blocked(repositoryChangeBlockedReason(active, strings) ?: NO_REPOSITORY_REASON)
+}
+
+/**
+ * 저장소를 바꾸는 명령을 막을 사유. 막지 않으면 `null` 이다 (결정 G43).
+ *
+ * **새 차단 표면을 만들지 않는다.** 호출부가 이 사유를 기존 [CommandAvailability.Blocked] 에 실으면
+ * 팔레트가 열린 채로 후보 행에 사유를 남긴다 — 실행되지 않았는데 팔레트가 닫히면 사용자는
+ * "왜 아무 일도 없지" 로 끝난다.
+ *
+ * 막는 것은 **경로를 잃은 탭** 하나다. 열린 탭이 없을 때는 조작 대상 자체가 없으므로 여기서
+ * 가로채지 않고 명령 자신의 판정에 맡긴다 — 이 게이트가 다른 사유까지 덮어쓰면 사용자는 진짜
+ * 이유 대신 이 문구만 보게 된다.
+ */
+internal fun repositoryChangeBlockedReason(
+    active: ActiveRepository,
+    strings: Strings = systemStrings(),
+): String? = when (active) {
+    is ActiveRepository.Unavailable -> strings.tabs.unavailableRepository
+    ActiveRepository.None, is ActiveRepository.Operable -> null
+}

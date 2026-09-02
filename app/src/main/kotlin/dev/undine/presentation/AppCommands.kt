@@ -50,13 +50,14 @@ fun registerAppCommands(registry: CommandRegistry, handlers: AppCommandHandlers)
             action = handlers.onRefreshRefs,
         ),
     )
+    // 계획을 여는 것부터 막는다 — 열면 그 화면이 읽고 적용하는 대상이 **직전 저장소**가 된다.
     registry.register(
         Command(
             id = CommandId("rebase.openPlan"),
             title = "리베이스 계획 열기",
             shortcut = Shortcut(Key.I, setOf(ShortcutModifier.PRIMARY, ShortcutModifier.SHIFT)),
             action = handlers.onOpenRebasePlan,
-        ),
+        ).blockedBy(handlers.repositoryChangeBlockedReason),
     )
     registry.register(
         Command(
@@ -113,10 +114,31 @@ fun registerSecondaryCommands(
             title = "되돌리기",
             shortcut = Shortcut(Key.Z, setOf(ShortcutModifier.PRIMARY)),
             action = handlers.onUndoLast,
-        ),
+        ).blockedBy(handlers.repositoryChangeBlockedReason),
     )
-    graphOperationCommands(graphCallbacks, selectedOperation = selectedGraphOperation).forEach(registry::register)
+    graphOperationCommands(graphCallbacks, selectedOperation = selectedGraphOperation)
+        .map { command -> command.blockedBy(handlers.repositoryChangeBlockedReason) }
+        .forEach(registry::register)
 }
+
+/**
+ * 저장소를 바꾸는 명령에 차단 사유를 얹는다 (결정 G43, UND-83).
+ *
+ * **새 표면을 만들지 않는다** — 이미 있는 [CommandAvailability.Blocked] 로 낸다. 사유가 없으면
+ * 명령 자신의 판정을 그대로 쓴다: 게이트가 늘 이기면 "선택한 커밋이 없다" 같은 진짜 이유가
+ * 이 문구에 가려진다.
+ *
+ * 감싸는 쪽이 아니라 **같은 계약의 새 명령**을 만든다 — [Command.execute] 가 조건을 먼저 보고
+ * 통과한 것만 실행하므로, 막힌 명령의 [Command.action] 은 아예 불리지 않는다.
+ */
+private fun Command.blockedBy(reason: () -> String?): Command =
+    Command(
+        id = id,
+        title = title,
+        shortcut = shortcut,
+        availability = { reason()?.let(CommandAvailability::Blocked) ?: availability() },
+        action = action,
+    )
 
 /**
  * 2차 명령이 부를 동작. [AppCommandHandlers] 와 나누어 두는 이유는 소유가 다르기 때문이다 —
@@ -127,6 +149,8 @@ class SecondaryCommandHandlers(
     val onOpenRepository: () -> Unit,
     val onUndoLast: () -> Unit,
     val availabilityOf: (AppDestination) -> CommandAvailability,
+    /** [AppCommandHandlers.repositoryChangeBlockedReason] 과 같은 판정. 되돌리기·그래프 조작에 얹는다. */
+    val repositoryChangeBlockedReason: () -> String?,
 )
 
 /**
