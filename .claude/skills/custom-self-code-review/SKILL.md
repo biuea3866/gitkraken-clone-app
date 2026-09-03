@@ -67,7 +67,7 @@ base 는 **PR `baseRefName` 우선**(`gh pr view --json baseRefName`), 불명 �
 | 버그 fix 의 경우 재현 테스트 추가 | 회귀 방지 |
 | 티켓 md 의 테스트 케이스가 전부 코드로 존재 | 해피·실패·엣지 각각 |
 | Git 연산 테스트가 임시 저장소를 실제로 만들었는가 | Mock 만으로 통과하는 테스트는 근거가 없다 |
-| `./gradlew test` 실제 실행 | 출력 첨부 — "통과했다" 단언만은 무효 |
+| `./gradlew build` 실제 실행 | 출력 첨부 — "통과했다" 단언만은 무효. **`test` 만으로는 Compose 스펙 21개가 빠진다** (UND-87) |
 
 #### Axis 3 — 사이드 이펙트 (레이어 경계 · 호출 그래프 · 자원 수명)
 
@@ -114,7 +114,7 @@ base 는 **PR `baseRefName` 우선**(`gh pr view --json baseRefName`), 불명 �
 
 ### 2. 테스트 커버
 - [x] / [ ] 신규 클래스 테스트 존재
-- [x] / [ ] `./gradlew test` 출력 첨부
+- [x] / [ ] `./gradlew build` 출력 첨부 (`test` 만으로는 `composeTest` 가 빠진다)
 - 메모: ...
 
 ### 3. 사이드 이펙트
@@ -141,7 +141,7 @@ base 는 **PR `baseRefName` 우선**(`gh pr view --json baseRefName`), 불명 �
 ## 안티패턴
 
 - ❌ "내가 봤다" 만으로 5축 패스 — 항상 grep/diff 명령 결과 첨부
-- ❌ `./gradlew test` 를 돌리지 않고 "테스트 통과" 단언
+- ❌ `./gradlew build` 를 돌리지 않고 "테스트 통과" 단언 — `test` 만 돌리고 전체라 말하는 것도 같다
 - ❌ JGit 자원을 `use {}` 없이 열어 두고 파일 핸들 누수 방치
 - ❌ Git I/O 를 UI 코루틴에서 직접 호출
 - ❌ 티켓 범위 밖 리팩터링을 같은 커밋에 섞어 revert 불가로 만들기
