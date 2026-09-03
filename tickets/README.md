@@ -100,6 +100,7 @@ Undine 구현을 **60개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2
 | [UND-84](UND-84-destructive-operation-labels.md) | 이력의 표시값이 파괴성을 감추지 않게 한다 | S | 11 | UND-79 | `domain/undo/GitOperationKind.kt` · `application/graphops/` · `presentation/i18n/` |
 | [UND-85](UND-85-recorder-order-required.md) | 기록 순서 계약을 선택이 아니게 만든다 | S | 11 | UND-79 | `application/undo/OperationRecorder.kt` · 그 생성자 호출부 |
 | [UND-86](UND-86-detekt-test-sources.md) | 테스트 소스에도 정적 분석을 적용한다 | M | 11 | 없음 | `build.gradle.kts`(detekt) · `config/detekt/` · `app/src/test/**` |
+| [UND-87](UND-87-flaky-app-assembly-spec.md) | 전체 실행에서만 깨지는 `AppAssemblySpec` 을 잡는다 | M | 12 | 없음 | `app/src/test/.../AppAssemblySpec.kt` · `app/build.gradle.kts`(테스트 실행 설정) |
 | [UND-52](UND-52-e2e-scenario-phase2.md) | 2차 E2E 시나리오 테스트 | M | 10 | UND-51 | `app/src/test/kotlin/.../scenario2/` |
 | [UND-54](UND-54-merge-start-state-guard.md) | merge/rebase 시작 경로 상태 가드 완결 | S | 4 | UND-21 | `infrastructure/git/merge/` (가드 추가) |
 | [UND-56](UND-56-gitkraken-visual-tuning.md) | GitKraken 계열 시각 튜닝 · 렌더 확인 수단 | S | 5 | UND-26 · UND-10 | `presentation/design/` · `presentation/graph/`(그리기) · `presentation/shell/`(분할선) |
@@ -215,6 +216,7 @@ flowchart LR
 | 9f | UND-83 | 1 |
 | 10 | UND-50, UND-52 | 2 |
 | 11 | UND-84, UND-85, UND-86 | 3 |
+| 12 | UND-87 | 1 |
 
 - **너비 분포**: [1, 11, 11, 5, 3, 1, 8, 5, 3, 1, 9, 6, 1, 1, 1, 1, 2]
 - **평균 wave 너비**: 4.06
