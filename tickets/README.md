@@ -103,6 +103,7 @@ Undine 구현을 **60개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2
 | [UND-87](UND-87-flaky-app-assembly-spec.md) | 전체 실행에서만 깨지는 `AppAssemblySpec` 을 잡는다 | M | 12 | 없음 | `app/build.gradle.kts`(테스트 실행 설정) · **`.agent/rules/testing.md` · `.agent/skills/{custom-self-code-review,custom-affected-test-runner,custom-pr-create}` · `.agent/orchestration/workflows/develop-{2,3}-*.toml`**(테스트 실행 안내 — 아래) |
 | [UND-88](UND-88-graph-scale-harness.md) | 대형 저장소에서 그래프가 버티는지 재는 수단 | M | 12 | 없음 | `app/src/test/.../bench/` · `.agent/scripts/`(벤치 저장소 생성) |
 | [UND-89](UND-89-graph-density-render.md) | 실제 이력으로 그래프를 렌더해 밀도를 본다 | S | 12 | UND-88 | `app/src/test/.../bench/` |
+| [UND-90](UND-90-signing-shared-tmpdir.md) | 서명 테스트가 남의 빌드 임시 파일까지 세지 않게 한다 | S | 13 | 없음 | `app/src/test/.../signing/ProcessSigningCommandRunnerSpec.kt` |
 | [UND-52](UND-52-e2e-scenario-phase2.md) | 2차 E2E 시나리오 테스트 | M | 10 | UND-51 | `app/src/test/kotlin/.../scenario2/` |
 | [UND-54](UND-54-merge-start-state-guard.md) | merge/rebase 시작 경로 상태 가드 완결 | S | 4 | UND-21 | `infrastructure/git/merge/` (가드 추가) |
 | [UND-56](UND-56-gitkraken-visual-tuning.md) | GitKraken 계열 시각 튜닝 · 렌더 확인 수단 | S | 5 | UND-26 · UND-10 | `presentation/design/` · `presentation/graph/`(그리기) · `presentation/shell/`(분할선) |
@@ -220,6 +221,7 @@ flowchart LR
 | 11 | UND-84, UND-85, UND-86 | 3 |
 | 12 | UND-87, UND-88 | 2 |
 | 12b | UND-89 | 1 |
+| 13 | UND-90 | 1 |
 
 - **너비 분포**: [1, 11, 11, 5, 3, 1, 8, 5, 3, 1, 9, 6, 1, 1, 1, 1, 2]
 - **평균 wave 너비**: 4.06
