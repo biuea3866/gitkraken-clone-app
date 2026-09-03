@@ -4,6 +4,8 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import java.io.File
 
 /**
@@ -21,7 +23,8 @@ private val PRODUCERS: Map<GitOperationKind, String> = mapOf(
     GitOperationKind.CHERRY_PICK to
         "CherryPickCommitsUseCase · ContinueCherryPickUseCase · ExecuteGraphOperationUseCase",
     GitOperationKind.PUSH to "PushRemoteUseCase (되돌릴 수 없다는 사유와 함께)",
-    GitOperationKind.BRANCH_MOVE to "ExecuteGraphOperationUseCase (브랜치 드롭·reset)",
+    GitOperationKind.BRANCH_MOVE to
+        "ExecuteGraphOperationUseCase (GraphOperation.ResetBranch — hard reset 으로 실행한다)",
     GitOperationKind.TAG_MOVE to "ExecuteGraphOperationUseCase (태그 드롭)",
     GitOperationKind.SUBMODULE_INIT to "InitializeSubmoduleUseCase",
     GitOperationKind.SUBMODULE_UPDATE to "UpdateSubmoduleUseCase",
@@ -43,7 +46,8 @@ private val NO_PRODUCERS: Map<GitOperationKind, String> = mapOf(
     GitOperationKind.STASH_DROP to
         "stash 를 지우는 UseCase 가 없다. UndoService 내부의 삭제는 되돌리기 실행이지 producer 가 아니다.",
     GitOperationKind.HARD_RESET to
-        "전용 hard reset 진입점이 화면에 없다 — 그래프의 브랜치 reset 은 BRANCH_MOVE 로 기록된다(UND-42).",
+        "전용 hard reset 진입점이 화면에 없다 — 그래프의 ResetBranch 는 BRANCH_MOVE 로 기록되고" +
+            " (UND-42·결정 G31), 그 표시값이 hard reset 임을 말한다(UND-84). 기록을 이중으로 남기지 않는다.",
 )
 
 /** production 소스에서 이 값을 기록에 쓰는지 대조할 범위. 테스트 코드는 producer 가 아니다. */
@@ -100,6 +104,21 @@ class GitOperationKindProducerSpec : FunSpec({
             MAIN_SOURCES.any { source -> source.contains("GitOperationKind.${kind.name}") }
         }
         referenced.shouldBeEmpty()
+    }
+
+    test("워킹트리를 덮어쓰는 기록은 표시값이 그 사실을 말한다") {
+        // 그래프의 브랜치 드롭은 hard reset 이라 워킹트리 변경이 사라진다 (UND-84). 되돌릴 수 있는지와
+        // 무엇을 잃었는지는 다른 질문이고, "브랜치 이동" 만으로는 뒤쪽이 감춰진다.
+        val branchMove = GitOperationKind.BRANCH_MOVE.label
+        branchMove shouldContain "hard reset"
+        branchMove shouldContain "워킹트리"
+        branchMove shouldContain "유실"
+    }
+
+    test("파괴적이지 않은 태그 이동은 파괴적으로 표시하지 않는다") {
+        val tagMove = GitOperationKind.TAG_MOVE.label
+        tagMove shouldNotContain "hard reset"
+        tagMove shouldNotContain "워킹트리"
     }
 
     test("모든 값에 사람이 읽는 이름이 있다") {
