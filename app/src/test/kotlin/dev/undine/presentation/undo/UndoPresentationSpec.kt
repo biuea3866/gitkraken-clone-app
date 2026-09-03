@@ -146,4 +146,36 @@ class UndoPresentationSpec : FunSpec({
             ),
         )
     }
+    test("브랜치 드롭의 표시값은 hard reset 임을 버튼·툴팁에 그대로 싣고 태그 이동은 그대로 둔다") {
+        // 별도 i18n 연산명 매핑이 없으므로 화면은 operation.label 을 그대로 소비한다 (UND-84).
+        val branchMove = undoButtonPresentation(
+            target = UndoTarget.Undoable(
+                entry(
+                    operation = GitOperationKind.BRANCH_MOVE,
+                    strategy = UndoStrategy.HardResetTo(MAIN, previous = PARENT, expected = HEAD),
+                    targetLabel = "main",
+                ),
+            ),
+            isUndoing = false,
+            strings = undoStrings(),
+        )
+
+        branchMove.label shouldBe "브랜치 이동(hard reset · 워킹트리 변경 유실) 취소"
+        branchMove.tooltip shouldBe "브랜치 이동(hard reset · 워킹트리 변경 유실) 취소 — 대상: main"
+
+        val tagMove = undoButtonPresentation(
+            target = UndoTarget.Undoable(
+                entry(
+                    operation = GitOperationKind.TAG_MOVE,
+                    strategy = UndoStrategy.MoveTagTo(RefName("v1.0"), previous = PARENT, expected = HEAD),
+                    targetLabel = "v1.0",
+                ),
+            ),
+            isUndoing = false,
+            strings = undoStrings(),
+        )
+
+        tagMove.label shouldBe "태그 이동 취소"
+        tagMove.tooltip shouldBe "태그 이동 취소 — 대상: v1.0"
+    }
 })
