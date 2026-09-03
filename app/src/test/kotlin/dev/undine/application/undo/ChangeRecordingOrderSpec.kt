@@ -4,12 +4,14 @@ import dev.undine.application.staging.CommitStagedUseCase
 import dev.undine.domain.CommitResult
 import dev.undine.domain.StagingGateway
 import dev.undine.infrastructure.git.repository.GitAccess
+import dev.undine.testsupport.PassThroughChangeRecordingOrder
 import dev.undine.testsupport.baselineOf
 import dev.undine.testsupport.commitId
 import dev.undine.testsupport.recorderOf
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
 import io.mockk.spyk
 import kotlinx.coroutines.CompletableDeferred
@@ -19,6 +21,18 @@ import kotlinx.coroutines.withTimeoutOrNull
 import dev.undine.domain.undo.UndoStack
 
 class ChangeRecordingOrderSpec : FunSpec({
+
+    test("통과 구현은 전달된 블록을 그대로 실행하고 그 결과를 돌려준다") {
+        var ran = false
+
+        val result = PassThroughChangeRecordingOrder.withOrderedChange {
+            ran = true
+            "recorded"
+        }
+
+        ran shouldBe true
+        result shouldBe "recorded"
+    }
 
     test("첫 변경의 기록이 멈춰 있는 동안 다음 변경은 시작하지 않아 Undo 순서가 보존된다") {
         val firstHead = commitId(11)

@@ -25,6 +25,7 @@ import dev.undine.presentation.submodule.SubmodulePanelActions
 import dev.undine.presentation.submodule.SubmodulePanelState
 import dev.undine.presentation.submodule.WorktreePanelActions
 import dev.undine.presentation.submodule.WorktreePanelState
+import dev.undine.testsupport.PassThroughChangeRecordingOrder
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -86,7 +87,7 @@ private fun recorder(): OperationRecorder {
             behind = 0,
         ),
     )
-    return OperationRecorder(refGateway, UndoStack())
+    return OperationRecorder(refGateway, UndoStack(), changeRecordingOrder = PassThroughChangeRecordingOrder)
 }
 
 private fun submodulePanel(): SubmodulePanelState {

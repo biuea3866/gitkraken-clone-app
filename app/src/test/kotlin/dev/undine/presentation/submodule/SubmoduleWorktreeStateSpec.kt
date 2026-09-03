@@ -22,6 +22,7 @@ import dev.undine.domain.worktree.Worktree
 import dev.undine.domain.worktree.WorktreeGateway
 import dev.undine.domain.worktree.WorktreeListing
 import dev.undine.domain.worktree.WorktreeState
+import dev.undine.testsupport.PassThroughChangeRecordingOrder
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
@@ -373,7 +374,7 @@ private fun recorderOn(stack: UndoStack): OperationRecorder {
     coEvery { refGateway.listBranches() } returns listOf(
         Branch(RefName("main"), HEAD, isCurrent = true, isRemote = false, upstream = null, ahead = 0, behind = 0),
     )
-    return OperationRecorder(refGateway, stack)
+    return OperationRecorder(refGateway, stack, changeRecordingOrder = PassThroughChangeRecordingOrder)
 }
 
 private fun submoduleActions(gateway: RecordingSubmoduleGateway, stack: UndoStack = UndoStack()) =

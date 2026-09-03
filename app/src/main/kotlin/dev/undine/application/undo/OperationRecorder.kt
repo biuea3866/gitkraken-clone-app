@@ -36,7 +36,7 @@ class OperationRecorder(
     private val refGateway: RefGateway,
     private val undoStack: UndoStack,
     private val clock: Clock = Clock.systemDefaultZone(),
-    private val changeRecordingOrder: ChangeRecordingOrder? = null,
+    private val changeRecordingOrder: ChangeRecordingOrder,
 ) {
 
     /**
@@ -45,11 +45,14 @@ class OperationRecorder(
      * application이 `GitAccess`를 직접 알면 레이어가 역전되므로, 그 구현이 제공하는 domain 계약만
      * 받는다. 순번을 결과에 넣어 UndoStack에서 재정렬하는 방법은 이미 기록 중인 producer와 용량
      * 축출까지 모두 바꿔야 하므로, 기록이 끝날 때까지 다음 변경을 들이지 않는 쪽을 택했다 (G32).
-     * `null`은 GitAccess가 없는 단위 테스트의 기존 조립만 위한 값이며, 앱 배선과 실제 저장소
-     * 시나리오는 반드시 이 계약을 주입한다.
+     *
+     * [changeRecordingOrder]에 **기본값을 두지 않는다** (결정 G5, UND-85). 기본값이 있으면 주입을
+     * 빠뜨린 새 조립 지점에서 순서 보장이 아무 경고 없이 꺼진다 — 그때 남는 기록은 최상단의 기준
+     * 상태가 낡아 되돌리기가 거부된다. 순서를 일부러 걸지 않는 단위 테스트는 통과 구현을 명시적으로
+     * 넘겨 "없어서 안 걸었다"와 구분한다.
      */
     suspend fun <T> recordingChange(block: suspend () -> T): T =
-        changeRecordingOrder?.withOrderedChange(block) ?: block()
+        changeRecordingOrder.withOrderedChange(block)
 
     /**
      * 되돌릴 수 있는 연산과 **그 변경이 준 기준 상태**를 함께 기록한다.

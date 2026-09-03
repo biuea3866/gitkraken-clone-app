@@ -26,15 +26,30 @@ fun baselineOf(head: CommitId, branch: RefName? = FIXTURE_BRANCH): RepositoryBas
 val DETACHED_BASELINE: RepositoryBaseline = RepositoryBaseline(branch = null, head = null)
 
 /**
+ * 블록을 그대로 실행하는 [ChangeRecordingOrder] — **순서를 일부러 걸지 않는** 단위 테스트용이다.
+ *
+ * `OperationRecorder` 는 이 계약을 필수로 받으므로(UND-85) 기본값에 기대 조립할 수 없다. 변경이
+ * 하나뿐인 단위 테스트는 직렬화할 대상이 없어 실제 [dev.undine.infrastructure.git.repository.GitAccess]
+ * 가 필요 없고, 이 이름을 넘기는 것이 "순서 보장을 빠뜨렸다" 가 아니라 "이 테스트는 순서를 보지
+ * 않는다" 를 코드에서 드러낸다. 순서 자체를 검증하는 테스트는 `GitAccess` 를 넘긴다.
+ */
+object PassThroughChangeRecordingOrder : ChangeRecordingOrder {
+    override suspend fun <T> withOrderedChange(block: suspend () -> T): T = block()
+}
+
+/**
  * 기록만 검증하는 테스트용 [OperationRecorder].
  *
  * `RefGateway` 는 복구 불가 기록이 읽는 기준 상태만 답하면 되므로 대역이다 — 되돌릴 수 있는 기록은
  * 호출자가 넘긴 baseline 을 그대로 쓰므로 이 대역에 닿지 않는다 (결정 G9).
+ *
+ * [changeRecordingOrder] 는 [PassThroughChangeRecordingOrder] 를 그대로 흘려보낸다 — 필수 계약을
+ * 생략하는 것이 아니라 **순서를 보지 않는 테스트임을 명시**하는 값이다 (UND-85).
  */
 fun recorderOf(
     stack: UndoStack,
     head: CommitId = commitId(1),
-    changeRecordingOrder: ChangeRecordingOrder? = null,
+    changeRecordingOrder: ChangeRecordingOrder = PassThroughChangeRecordingOrder,
 ): OperationRecorder {
     val refGateway = mockk<RefGateway>()
     coEvery { refGateway.listBranches() } returns listOf(
