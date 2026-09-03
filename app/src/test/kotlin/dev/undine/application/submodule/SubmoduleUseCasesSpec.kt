@@ -13,6 +13,7 @@ import dev.undine.domain.submodule.SubmoduleGateway
 import dev.undine.domain.submodule.SubmoduleState
 import dev.undine.domain.undo.GitOperationKind
 import dev.undine.domain.undo.UndoStack
+import dev.undine.testsupport.PassThroughChangeRecordingOrder
 import dev.undine.testsupport.baselineOf
 import dev.undine.testsupport.commitId
 import io.kotest.assertions.throwables.shouldThrow
@@ -37,7 +38,7 @@ private fun branches() = listOf(
 )
 
 private fun recorderOn(stack: UndoStack, refGateway: RefGateway = readableRefGateway()): OperationRecorder =
-    OperationRecorder(refGateway, stack)
+    OperationRecorder(refGateway, stack, changeRecordingOrder = PassThroughChangeRecordingOrder)
 
 private fun readableRefGateway(): RefGateway = mockk<RefGateway>().also {
     coEvery { it.listBranches() } returns branches()

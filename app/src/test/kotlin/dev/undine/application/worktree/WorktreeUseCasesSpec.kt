@@ -13,6 +13,7 @@ import dev.undine.domain.worktree.Worktree
 import dev.undine.domain.worktree.WorktreeGateway
 import dev.undine.domain.worktree.WorktreeListing
 import dev.undine.domain.worktree.WorktreeState
+import dev.undine.testsupport.PassThroughChangeRecordingOrder
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.collections.shouldContainExactly
@@ -35,7 +36,7 @@ private fun branches() = listOf(
 )
 
 private fun recorderOn(stack: UndoStack, refGateway: RefGateway = readableRefGateway()): OperationRecorder =
-    OperationRecorder(refGateway, stack)
+    OperationRecorder(refGateway, stack, changeRecordingOrder = PassThroughChangeRecordingOrder)
 
 private fun readableRefGateway(): RefGateway = mockk<RefGateway>().also {
     coEvery { it.listBranches() } returns branches()

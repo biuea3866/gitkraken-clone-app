@@ -16,6 +16,7 @@ import dev.undine.domain.graphops.GraphOperation
 import dev.undine.domain.undo.GitOperationKind
 import dev.undine.domain.undo.UndoStack
 import dev.undine.domain.undo.UndoStrategy
+import dev.undine.testsupport.PassThroughChangeRecordingOrder
 import dev.undine.testsupport.spyRecorderOf
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
@@ -91,11 +92,15 @@ private fun resettingOps(): WorktreeOpsGateway = mockk<WorktreeOpsGateway>(relax
     coEvery { it.hardResetBranch(any(), any(), any()) } returns BASELINE_AFTER
 }
 
+/** 이 스펙은 변경이 하나뿐이라 순서를 볼 대상이 없다 — 통과 구현을 명시적으로 넘긴다 (UND-85). */
+private fun recorderOn(refs: RefGateway, stack: UndoStack): OperationRecorder =
+    OperationRecorder(refs, stack, changeRecordingOrder = PassThroughChangeRecordingOrder)
+
 private fun useCase(
     worktreeOps: WorktreeOpsGateway,
     refs: RefGateway,
     stack: UndoStack,
-    recorder: OperationRecorder = OperationRecorder(refs, stack),
+    recorder: OperationRecorder = recorderOn(refs, stack),
 ): ExecuteGraphOperationUseCase = ExecuteGraphOperationUseCase(worktreeOps, refs, recorder)
 
 /** [block] 을 실행하되 Git 변경이 성공하는 순간 호출자를 취소한다. 취소됐으면 true. */

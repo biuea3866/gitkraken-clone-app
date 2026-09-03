@@ -20,6 +20,7 @@ import dev.undine.domain.undo.OperationEntry
 import dev.undine.domain.undo.UndoOutcome
 import dev.undine.domain.undo.UndoStack
 import dev.undine.domain.undo.UndoStrategy
+import dev.undine.testsupport.PassThroughChangeRecordingOrder
 import dev.undine.testsupport.commitId
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
@@ -122,7 +123,7 @@ private class UndoFixture(
         coEvery { worktreeOpsGateway.stashDrop(any()) } just Runs
     }
 
-    val recorder = OperationRecorder(refGateway, stack)
+    val recorder = OperationRecorder(refGateway, stack, changeRecordingOrder = PassThroughChangeRecordingOrder)
 
     /**
      * 변경 Gateway 가 결과로 주는 **변경 직후 기준 상태**를 흉내 낸다 (UND-73). 이 스펙의 Gateway 는

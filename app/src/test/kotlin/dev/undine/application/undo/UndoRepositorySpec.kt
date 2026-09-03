@@ -87,7 +87,7 @@ private class UndoHarness(private val directory: File) {
     private val worktreeOpsGateway = WorktreeOpsGatewayImpl(gitAccess)
     private val repositoryGateway = RepositoryGatewayImpl(gitAccess)
 
-    val recorder = OperationRecorder(refGateway, stack)
+    val recorder = OperationRecorder(refGateway, stack, changeRecordingOrder = gitAccess)
     val service = UndoService(stack, refGateway, repositoryGateway, worktreeOpsGateway)
 
     /**

@@ -10,6 +10,7 @@ import dev.undine.domain.undo.GitOperationKind
 import dev.undine.domain.undo.OperationEntry
 import dev.undine.domain.undo.UndoStack
 import dev.undine.domain.undo.UndoStrategy
+import dev.undine.testsupport.PassThroughChangeRecordingOrder
 import dev.undine.testsupport.commitId
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.collections.shouldContainExactly
@@ -71,7 +72,7 @@ class OperationRecorderSpec : BehaviorSpec({
 
         When("커밋을 기록하면") {
             val stack = UndoStack()
-            val recorded = OperationRecorder(refGateway, stack, FIXED_CLOCK).record(
+            val recorded = OperationRecorder(refGateway, stack, FIXED_CLOCK, PassThroughChangeRecordingOrder).record(
                 operation = GitOperationKind.COMMIT,
                 strategy = UndoStrategy.SoftResetTo(PARENT),
                 baseline = CAPTURED,
@@ -95,7 +96,7 @@ class OperationRecorderSpec : BehaviorSpec({
 
         When("여러 연산을 기록하면") {
             val stack = UndoStack()
-            val recorder = OperationRecorder(refGateway, stack)
+            val recorder = OperationRecorder(refGateway, stack, changeRecordingOrder = PassThroughChangeRecordingOrder)
             val first =
                 recorder.record(GitOperationKind.BRANCH_CREATE, UndoStrategy.DeleteBranch(FEATURE), CAPTURED)
             val second =
@@ -113,7 +114,7 @@ class OperationRecorderSpec : BehaviorSpec({
 
         When("연산을 기록하면") {
             val stack = UndoStack()
-            OperationRecorder(refGateway, stack).record(
+            OperationRecorder(refGateway, stack, changeRecordingOrder = PassThroughChangeRecordingOrder).record(
                 operation = GitOperationKind.CHERRY_PICK,
                 strategy = UndoStrategy.HardResetTo(MAIN, previous = PARENT, expected = HEAD),
                 baseline = detached,
@@ -130,7 +131,8 @@ class OperationRecorderSpec : BehaviorSpec({
 
         When("사유와 함께 기록하면") {
             val stack = UndoStack()
-            val recorded = OperationRecorder(refGateway, stack, FIXED_CLOCK).recordIrreversible(
+            val recorder = OperationRecorder(refGateway, stack, FIXED_CLOCK, PassThroughChangeRecordingOrder)
+            val recorded = recorder.recordIrreversible(
                 operation = GitOperationKind.PUSH,
                 reason = "원격에 올라간 커밋은 앱이 되돌릴 수 없습니다",
                 targetLabel = "origin/main",
