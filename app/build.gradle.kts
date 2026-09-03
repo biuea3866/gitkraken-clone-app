@@ -1,3 +1,5 @@
+import io.gitlab.arturbosch.detekt.Detekt
+import io.gitlab.arturbosch.detekt.DetektCreateBaselineTask
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
@@ -139,6 +141,30 @@ detekt {
     buildUponDefaultConfig = true
     config.setFrom(rootProject.file("config/detekt/detekt.yml"))
 }
+
+/**
+ * 테스트 소스도 검증 경로에 넣는다.
+ *
+ * 타입 해석까지 도는 `detektTest` 는 기본으로 `check` 에 걸리지 않는다 — 테스트 소스가 사실상
+ * **검사 밖에** 있었고, 검사를 안 도는 코드가 검사의 근거였다. 기존 위반은 전용 baseline 으로
+ * 고정해 빌드를 막지 않게 하고, baseline 에 없는 **새 위반만** 실패시킨다.
+ *
+ * baseline 은 영구 면제가 아니라 **빚 목록**이다 — 항목 수와 줄이는 방법은
+ * `config/detekt/README.md` 에 적고, `TestSourceAnalysisBaselineSpec` 이 그 숫자가 실제
+ * baseline 과 어긋나지 않는지 본다. 파일이 없거나 경로가 틀리면 Gradle 이 입력 검증에서
+ * 멈춘다 — 억제가 조용히 사라지는 대신 빌드가 실패한다.
+ */
+val testDetektBaseline = rootProject.file("config/detekt/detekt-baseline-test.xml")
+
+tasks.named<Detekt>("detektTest") {
+    baseline.set(testDetektBaseline)
+}
+
+tasks.named<DetektCreateBaselineTask>("detektBaselineTest") {
+    baseline.set(testDetektBaseline)
+}
+
+tasks.named("check") { dependsOn(tasks.named<Detekt>("detektTest")) }
 
 // Kotest 는 JUnit Platform 위에서 실행된다 — 테스트 코드에 org.junit.* 를 쓰는 것과는 다른 축이다.
 // 배포 산출물을 만드는 태스크는 자산 검증을 먼저 통과해야 한다.

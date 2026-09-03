@@ -1,0 +1,80 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>HasPlatformType:WorktreeOpsGatewayImplSpec.kt$RepositoryFixture$fun status()</ID>
+    <ID>IgnoredReturnValue:SearchStateSpec.kt$SearchStateSpec$execute(REFS, CommitSearchCriteria(message = "fix", zone = SEARCH_ZONE))</ID>
+    <ID>IgnoredReturnValue:SearchStateSpec.kt$SearchStateSpec$execute(REFS, expected)</ID>
+    <ID>IgnoredReturnValue:SearchStateSpec.kt$SearchStateSpec$execute(any(), any())</ID>
+    <ID>InjectDispatcher:AccountPreferencesStateSpec.kt$AccountFixture$Unconfined</ID>
+    <ID>InjectDispatcher:AdvancedPreferencesContentSpec.kt$AdvancedFixture$Unconfined</ID>
+    <ID>InjectDispatcher:AppComponentWiringSpec.kt$AppComponentWiringSpec$Default</ID>
+    <ID>InjectDispatcher:AppComponentWiringSpec.kt$Default</ID>
+    <ID>InjectDispatcher:BisectGatewayImplSpec.kt$BisectGatewayImplSpec$Default</ID>
+    <ID>InjectDispatcher:BlameHistoryStateSpec.kt$BlameHistoryStateSpec$Unconfined</ID>
+    <ID>InjectDispatcher:BranchSequenceSpec.kt$BranchSequenceSpec$Default</ID>
+    <ID>InjectDispatcher:BranchSequenceSpec.kt$Default</ID>
+    <ID>InjectDispatcher:CloneRepositoryUseCaseSpec.kt$CloneRepositoryUseCaseSpec$Default</ID>
+    <ID>InjectDispatcher:ConflictFixtures.kt$Unconfined</ID>
+    <ID>InjectDispatcher:ConflictStateSpec.kt$Unconfined</ID>
+    <ID>InjectDispatcher:DiffSerializationSpec.kt$DiffSerializationSpec$IO</ID>
+    <ID>InjectDispatcher:GeneralPreferencesSpec.kt$GeneralFixture$Unconfined</ID>
+    <ID>InjectDispatcher:GitAccessSpec.kt$Default</ID>
+    <ID>InjectDispatcher:GitAccessSpec.kt$GitAccessSpec$Default</ID>
+    <ID>InjectDispatcher:GitAccessSpec.kt$IO</ID>
+    <ID>InjectDispatcher:GitPreferencesContentSpec.kt$GitTabFixture$Unconfined</ID>
+    <ID>InjectDispatcher:GitPreferencesEffectiveRowsSpec.kt$GitPreferencesEffectiveRowsSpec$Unconfined</ID>
+    <ID>InjectDispatcher:GitPreferencesEffectiveRowsSpec.kt$Unconfined</ID>
+    <ID>InjectDispatcher:GraphDragDropStateSpec.kt$GraphDragDropStateSpec$Unconfined</ID>
+    <ID>InjectDispatcher:GraphDragDropStateSpec.kt$Unconfined</ID>
+    <ID>InjectDispatcher:GraphOperationCommandsSpec.kt$GraphOperationCommandsSpec$Unconfined</ID>
+    <ID>InjectDispatcher:GraphOperationKeyboardEquivalenceSpec.kt$Unconfined</ID>
+    <ID>InjectDispatcher:GraphOperationUseCasesSpec.kt$Default</ID>
+    <ID>InjectDispatcher:GraphViewStateSpec.kt$GraphViewStateSpec$Default</ID>
+    <ID>InjectDispatcher:HistoryGatewayImplSpec.kt$HistoryGatewayImplSpec$Default</ID>
+    <ID>InjectDispatcher:IdentityGatewayImplSpec.kt$IdentityGatewayImplSpec$IO</ID>
+    <ID>InjectDispatcher:LoadCommitHistoryUseCaseSpec.kt$LoadCommitHistoryUseCaseSpec$Default</ID>
+    <ID>InjectDispatcher:LogDirectoryStateSpec.kt$LogDirectoryStateSpec$Unconfined</ID>
+    <ID>InjectDispatcher:LogDirectoryStateSpec.kt$Unconfined</ID>
+    <ID>InjectDispatcher:MergeGatewayImplSpec.kt$MergeGatewayImplSpec$IO</ID>
+    <ID>InjectDispatcher:MonospaceFontStateSpec.kt$MonospaceFontStateSpec$Unconfined</ID>
+    <ID>InjectDispatcher:MonospaceFontStateSpec.kt$Unconfined</ID>
+    <ID>InjectDispatcher:PreferencesScreenSpec.kt$ScreenFixture$Unconfined</ID>
+    <ID>InjectDispatcher:PreferencesStateSpec.kt$GatedLoadFixture$Unconfined</ID>
+    <ID>InjectDispatcher:PreferencesStateSpec.kt$GatedStateFixture$Unconfined</ID>
+    <ID>InjectDispatcher:PreferencesStateSpec.kt$PreferencesStateFixture$Unconfined</ID>
+    <ID>InjectDispatcher:ProcessExternalToolRunnerSpec.kt$ProcessExternalToolRunnerSpec$Default</ID>
+    <ID>InjectDispatcher:ProcessSigningCommandRunnerSpec.kt$ProcessSigningCommandRunnerSpec$Default</ID>
+    <ID>InjectDispatcher:RebaseFixtures.kt$Unconfined</ID>
+    <ID>InjectDispatcher:RecordingFailureSpec.kt$Default</ID>
+    <ID>InjectDispatcher:RecoveryStateSpec.kt$Unconfined</ID>
+    <ID>InjectDispatcher:RefGatewayImplSpec.kt$RefGatewayImplSpec$Default</ID>
+    <ID>InjectDispatcher:RemoteGatewayImplSpec.kt$RemoteGatewayImplSpec$Default</ID>
+    <ID>InjectDispatcher:RemoteToolbarStateSpec.kt$RemoteToolbarStateSpec$IO</ID>
+    <ID>InjectDispatcher:RepositoryHolderSpec.kt$RepositoryHolderSpec$Default</ID>
+    <ID>InjectDispatcher:RepositorySessionDriverSpec.kt$RepositorySessionDriverSpec$Default</ID>
+    <ID>InjectDispatcher:RepositorySessionGatewayImplSpec.kt$RepositorySessionGatewayImplSpec$Default</ID>
+    <ID>InjectDispatcher:RepositorySessionUseCaseSpec.kt$RepositorySessionUseCaseSpec$Default</ID>
+    <ID>InjectDispatcher:SearchPanelAccessibilitySpec.kt$Unconfined</ID>
+    <ID>InjectDispatcher:SearchPanelSpec.kt$Unconfined</ID>
+    <ID>InjectDispatcher:SearchStateSpec.kt$Unconfined</ID>
+    <ID>InjectDispatcher:SettingsGatewayImplSpec.kt$SettingsGatewayImplSpec$IO</ID>
+    <ID>InjectDispatcher:ShortcutPreferencesControllerSpec.kt$ShortcutFixture$Unconfined</ID>
+    <ID>InjectDispatcher:SidebarFixtures.kt$SidebarStateHarness$Unconfined</ID>
+    <ID>InjectDispatcher:StagingFixtures.kt$Unconfined</ID>
+    <ID>InjectDispatcher:StagingGatewayImplSpec.kt$StagingGatewayImplSpec$Default</ID>
+    <ID>InjectDispatcher:SubmoduleFixtures.kt$SwitchRaceFixture$IO</ID>
+    <ID>InjectDispatcher:SubmoduleUseCasesSpec.kt$Default</ID>
+    <ID>InjectDispatcher:SubmoduleWorktreeSidebarNodeSpec.kt$Unconfined</ID>
+    <ID>InjectDispatcher:SubmoduleWorktreeStateSpec.kt$SubmoduleWorktreeStateSpec$Unconfined</ID>
+    <ID>InjectDispatcher:SubmoduleWorktreeStateSpec.kt$Unconfined</ID>
+    <ID>InjectDispatcher:ToolPreferencesContentSpec.kt$ToolFixture$Unconfined</ID>
+    <ID>InjectDispatcher:UndineSshSessionFactorySpec.kt$UndineSshSessionFactorySpec$Default</ID>
+    <ID>InjectDispatcher:UndoStateSpec.kt$UndoStateFixture$Unconfined</ID>
+    <ID>InjectDispatcher:WelcomeStateSpec.kt$WelcomeStateSpec$Default</ID>
+    <ID>InjectDispatcher:WelcomeStateSpec.kt$WelcomeStateSpec$Unconfined</ID>
+    <ID>InjectDispatcher:WorktreeOpsGatewayImplSpec.kt$WorktreeOpsGatewayImplSpec$Default</ID>
+    <ID>InjectDispatcher:WorktreeUseCasesSpec.kt$Default</ID>
+    <ID>UseOrEmpty:SubmoduleFixtures.kt$ParentFixture$file(GIT_MODULES).takeIf(File::exists)?.readText() ?: ""</ID>
+  </CurrentIssues>
+</SmellBaseline>
