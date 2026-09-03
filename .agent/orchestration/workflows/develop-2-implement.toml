@@ -64,7 +64,7 @@ prompt = '''
   "status": "implemented" | "blocked_by_open_questions",
   "files_changed": ["경로", ...],
   "tests_added": ["테스트 클래스/메서드", ...],
-  "build": [{"module": "app", "command": "./gradlew test", "result": "pass" | "fail", "note": "..."}],
+  "build": [{"module": "app", "command": "./gradlew build", "result": "pass" | "fail", "note": "..."}],
   "deviations": ["스펙과 다르게 구현한 점과 이유", ...],
   "summary_ko": "한 문장 요약"
 }
@@ -238,7 +238,7 @@ prompt = '''
 4. **사용자 설정 파일 스키마** — 저장 형식이 바뀌었다면 **구버전 설정 파일을 읽었을 때의 동작**을
    확인합니다. 하위 호환 처리가 없으면 p1 입니다.
 5. **테스트 게이트** — 변경 범위에 대응하는 테스트가 실제로 실행되는지 확인하고, 실행 근거
-   (`./gradlew test` 출력)를 checked 에 남깁니다.
+   (`./gradlew build` 출력)를 checked 에 남깁니다. **`test` 만으로는 Compose 스펙이 빠집니다** (UND-87).
 
 빌드·툴체인에 영향이 없는 변경이면 근거와 함께 n/a 로 남깁니다.
 '''

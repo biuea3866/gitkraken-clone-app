@@ -49,9 +49,12 @@ done
 ### Step 3: 실행
 
 ```bash
-./gradlew test                          # 전체 (기본)
+./gradlew build                         # 전체 (기본) — test + composeTest + detekt
 ./gradlew test --tests '*GraphLane*'    # 변경 범위가 좁을 때 선별
 ```
+
+> **`./gradlew test` 는 전체가 아니다** — Compose 스펙 21개가 `composeTest` 로 빠져 있다 (UND-87).
+> 변경이 `presentation/` 을 건드렸으면 `composeTest` 가 도는 명령을 쓴다.
 
 - **JDK 는 `gradle.properties` 의 `undine.jvm` 이 SSOT** — `custom-gradlew-jvm-guard.sh` 훅이 미스매치를 차단한다.
 - 실패하면 **출력 원문을 그대로 보고**한다. 요약해서 "일부 실패" 로 뭉개지 않는다.
@@ -66,7 +69,7 @@ done
 | `.../GraphLaneAssigner.kt` | `GraphLaneAssignerSpec.kt` | ✅ |
 | `.../RemoteGatewayImpl.kt` | (없음) | ⚠ 테스트 누락 (p2) |
 
-실행: `./gradlew test`
+실행: `./gradlew build` (`test` 만으로는 Compose 스펙 21개가 빠진다 — UND-87)
 <실행 출력 발췌>
 
 판정: 통과 | 실패 | 테스트 누락

@@ -56,7 +56,7 @@ prompt = '''
   "fixed": [{"level": "p0", "file": "경로", "line": 0, "how": "무엇을 어떻게 고쳤는지"}],
   "disputed": [{"level": "p1", "file": "경로", "line": 0, "why_ko": "왜 지적이 틀렸는지 근거"}],
   "files_changed": ["경로", ...],
-  "build": [{"module": "app", "command": "./gradlew test", "result": "pass" | "fail", "note": "..."}],
+  "build": [{"module": "app", "command": "./gradlew build", "result": "pass" | "fail", "note": "..."}],
   "summary_ko": "한 문장 요약"
 }
 '''

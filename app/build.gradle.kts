@@ -171,8 +171,68 @@ tasks.named("check") { dependsOn(tasks.named<Detekt>("detektTest")) }
 tasks.matching { task -> task.name.startsWith("package") || task.name == "createDistributable" }
     .configureEach { dependsOn(verifyPackagingAssets) }
 
+/**
+ * Compose scene 을 띄우는 스펙의 클래스 패턴.
+ *
+ * **목록을 손으로 관리하지 않는다** — 소스에서 `runComposeUiTest` 사용 여부로 판별한다. 목록을
+ * 적어 두면 새 Compose 스펙이 조용히 빠른 쪽 태스크로 들어가고, 그때 잔재가 다시 샌다.
+ */
+val composeSpecPatterns: List<String> =
+    file("src/test/kotlin").walkTopDown()
+        .filter { it.isFile && it.name.endsWith("Spec.kt") }
+        .filter { it.readText().contains("runComposeUiTest") }
+        .map { spec ->
+            spec.relativeTo(file("src/test/kotlin")).path
+                .removeSuffix(".kt")
+                .replace(File.separatorChar, '.')
+        }
+        .sorted()
+        .toList()
+        .also { patterns ->
+            // 스캔이 아무것도 못 찾으면 **설정 단계에서 멈춘다.** 빈 목록을 그대로 두면
+            // `composeTest` 가 아무 스펙도 돌리지 않은 채 통과하고, 빌드는 초록불이 된다 —
+            // 이 티켓이 고치려던 "검사를 안 도는데 통과" 가 그 자리에 다시 생긴다.
+            require(patterns.isNotEmpty()) {
+                "Compose 스펙을 하나도 찾지 못했습니다 — src/test/kotlin 경로나 판별 조건을 확인하세요."
+            }
+        }
+
+/**
+ * Compose 스펙을 **본 테스트 태스크에서 뺀다.**
+ *
+ * 21개 스펙이 한 JVM 에서 `runComposeUiTest` 를 돌리면 앞선 scene 의 잔재가 다음 스펙으로 새어,
+ * `AppAssemblySpec` 이 전체 실행에서만 산발적으로 깨졌다 (전체 9회 중 2회 · 격리 6회 중 0회 ·
+ * 서로 다른 두 테스트가 같은 `IndexOutOfBoundsException`). JVM 을 가르면 사라진다 — UND-87.
+ *
+ * **`forkEvery = 1` 을 전체에 걸지 않는다.** 그러면 빌드가 1분 40초에서 22분이 된다. 13배를 치르면
+ * 사람들이 곧 테스트를 안 돌리고, 산발적 실패를 고치려다 **검사 자체를 무력화**한다. 잔재가 새는
+ * 경계는 Compose 스펙 사이이므로 그 21개만 갈라 낸다.
+ */
 tasks.test {
     useJUnitPlatform()
     // 생성된 BuildInfo 가 정말 이 값을 담았는지 테스트가 대조한다.
     systemProperty("undine.version", undineVersion)
+    filter {
+        composeSpecPatterns.forEach { pattern -> excludeTestsMatching(pattern) }
+        // 제외만 남으면 Gradle 이 "일치하는 테스트 없음" 으로 실패한다 — 나머지 전부를 명시한다.
+        includeTestsMatching("*")
+    }
 }
+
+/** Compose 스펙 전용 실행. **스펙마다 JVM 을 새로 띄워** scene 잔재가 넘어가지 않게 한다. */
+val composeTest by tasks.registering(Test::class) {
+    description = "Compose scene 을 띄우는 스펙을 스펙별 JVM 에서 실행한다 (UND-87)."
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform()
+    systemProperty("undine.version", undineVersion)
+    forkEvery = 1
+    // **`isFailOnNoMatchingTests` 를 끄지 않는다.** 끄면 필터가 어긋났을 때 이 태스크가 스펙을
+    // 하나도 돌리지 않고 통과하고, `check` 는 초록불이 된다 — 검사가 사라진 것을 아무도 모른다.
+    filter {
+        composeSpecPatterns.forEach { pattern -> includeTestsMatching(pattern) }
+    }
+}
+
+tasks.named("check") { dependsOn(composeTest) }

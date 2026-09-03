@@ -32,8 +32,14 @@ paths:
 ## 실행
 
 ```bash
-./gradlew test                      # 전체
+./gradlew build                       # 전체 — test + composeTest + detekt
 ./gradlew test --tests '*GraphLane*'  # 선별
 ```
+
+> **`./gradlew test` 는 전체가 아니다.** Compose scene 을 띄우는 스펙 21개는 별도 태스크
+> `composeTest` 에서 **스펙별 JVM** 으로 돈다 — 한 JVM 에 몰아 넣으면 앞선 scene 의 잔재가
+> 다음 스펙으로 새어 `AppAssemblySpec` 이 산발적으로 깨졌다 (UND-87). 전체를 보려면
+> `./gradlew build`(또는 `check`)를 쓴다. 대상은 소스의 `runComposeUiTest` 사용 여부로
+> 자동 판별하므로 목록을 관리하지 않는다.
 
 "테스트 통과" 단언은 **실행 출력과 함께**만 유효하다 — [[custom-self-code-review]] Axis 2.
