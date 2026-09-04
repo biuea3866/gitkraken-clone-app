@@ -2,7 +2,9 @@ package dev.undine.infrastructure.git.signing
 
 import dev.undine.domain.signing.SigningCommandResult
 import io.kotest.core.spec.style.FunSpec
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.engine.spec.tempdir
+import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
@@ -119,7 +121,7 @@ class ProcessSigningCommandRunnerSpec : FunSpec({
 
     test("취소되면 자식 프로세스를 끊고 CancellationException 을 그대로 전파하며 임시 파일도 남기지 않는다") {
         val stub = stubSshKeygen(tempdir(), sleepSeconds = STUB_SLEEP_SECONDS)
-        val temporaryFiles = FakeTemporaryFiles()
+        val temporaryFiles = RecordingTemporaryFiles()
         val started = CompletableDeferred<Process>()
         // 제한 시간이 아니라 취소가 종료 사유임을 확실히 하려고 스텁의 수명보다 넉넉히 잡는다.
         val runner = ProcessSigningCommandRunner(
@@ -148,54 +150,50 @@ class ProcessSigningCommandRunnerSpec : FunSpec({
     }
 
     test("SSH 서명은 임시 파일로 넘기고 서명 결과를 수집한 뒤 임시 파일을 남기지 않는다") {
-        val before = temporarySigningFiles()
+        val temporaryFiles = RecordingTemporaryFiles()
 
-        val result = ProcessSigningCommandRunner()
+        val result = ProcessSigningCommandRunner(TEST_TIMEOUT_SECONDS, temporaryFiles)
             .run(sshSignCommand(stubSshKeygen(tempdir()).path), "commit payload".toByteArray())
 
         val completed = result.shouldBeInstanceOf<SigningCommandResult.Completed>()
         completed.exitCode shouldBe 0
         completed.standardOutput shouldContain SSH_SIGNATURE_HEADER
-        temporarySigningFiles() shouldBe before
+        temporaryFiles.assertCreatedFilesDeleted()
     }
 
     test("SSH 임시 파일을 만든 뒤 응답이 없으면 강제 종료 후 임시 파일을 남기지 않는다") {
         val stub = stubSshKeygen(tempdir(), sleepSeconds = STUB_SLEEP_SECONDS)
-        val before = temporarySigningFiles()
+        val temporaryFiles = RecordingTemporaryFiles()
 
-        val result = ProcessSigningCommandRunner(UNRESPONSIVE_TIMEOUT_SECONDS)
+        val result = ProcessSigningCommandRunner(UNRESPONSIVE_TIMEOUT_SECONDS, temporaryFiles)
             .run(sshSignCommand(stub.path), "commit payload".toByteArray())
 
         result.shouldBeInstanceOf<SigningCommandResult.Interrupted>()
-        temporarySigningFiles() shouldBe before
+        temporaryFiles.assertCreatedFilesDeleted()
     }
 
     test("임시 파일에 쓰지 못하면 만들어 둔 파일을 지우고 서명 실패 사유로 돌려준다") {
-        val temporaryFiles = FakeTemporaryFiles(failWriteWith = IOException("장치에 남은 공간이 없습니다"))
-        val before = temporarySigningFiles()
+        val temporaryFiles = RecordingTemporaryFiles(failWriteWith = IOException("장치에 남은 공간이 없습니다"))
 
         val result = ProcessSigningCommandRunner(TEST_TIMEOUT_SECONDS, temporaryFiles)
             .run(sshSignCommand(stubSshKeygen(tempdir()).path), "commit payload".toByteArray())
 
         result.shouldBeInstanceOf<SigningCommandResult.Interrupted>().detail shouldContain "남은 공간이 없습니다"
-        temporarySigningFiles() shouldBe before
+        temporaryFiles.assertCreatedFilesDeleted()
     }
 
     test("서명 파일을 읽지 못하면 서명 성공으로 오보고하지 않고 임시 파일을 정리한다") {
-        val temporaryFiles = FakeTemporaryFiles(failReadWith = IOException("서명 파일을 읽을 권한이 없습니다"))
-        val before = temporarySigningFiles()
+        val temporaryFiles = RecordingTemporaryFiles(failReadWith = IOException("서명 파일을 읽을 권한이 없습니다"))
 
         val result = ProcessSigningCommandRunner(TEST_TIMEOUT_SECONDS, temporaryFiles)
             .run(sshSignCommand(stubSshKeygen(tempdir()).path), "commit payload".toByteArray())
 
         result.shouldBeInstanceOf<SigningCommandResult.Interrupted>().detail shouldContain "읽을 권한이 없습니다"
         temporaryFiles.assertCreatedFilesDeleted()
-        temporarySigningFiles() shouldBe before
     }
 
     test("SSH 서명의 표준 입력 I/O가 실패하면 중단 사유로 돌리고 임시 파일 쌍을 정리한다") {
-        val temporaryFiles = FakeTemporaryFiles()
-        val before = temporarySigningFiles()
+        val temporaryFiles = RecordingTemporaryFiles()
 
         val result = ProcessSigningCommandRunner(
             TEST_TIMEOUT_SECONDS,
@@ -209,11 +207,10 @@ class ProcessSigningCommandRunnerSpec : FunSpec({
 
         result.shouldBeInstanceOf<SigningCommandResult.Interrupted>().detail shouldContain STANDARD_INPUT_FAILURE
         temporaryFiles.assertCreatedFilesDeleted()
-        temporarySigningFiles() shouldBe before
     }
 
     test("임시 파일 한쪽을 지우지 못해도 다른 쪽은 독립적으로 정리한다") {
-        val temporaryFiles = FakeTemporaryFiles(failDeleteOf = { path -> path.isPayload() })
+        val temporaryFiles = RecordingTemporaryFiles(failDeleteOf = { path -> path.isPayload() })
 
         val result = ProcessSigningCommandRunner(TEST_TIMEOUT_SECONDS, temporaryFiles)
             .run(sshSignCommand(stubSshKeygen(tempdir()).path), "commit payload".toByteArray())
@@ -225,12 +222,38 @@ class ProcessSigningCommandRunnerSpec : FunSpec({
         Files.deleteIfExists(payload)
     }
 
+    test("서명이 임시 파일을 남기면 기록 기반 정리 검사가 실패한다") {
+        val temporaryFiles = RecordingTemporaryFiles(failDeleteOf = { path -> path.isPayload() })
+
+        ProcessSigningCommandRunner(TEST_TIMEOUT_SECONDS, temporaryFiles)
+            .run(sshSignCommand(stubSshKeygen(tempdir()).path), "commit payload".toByteArray())
+
+        // 좁힌 검사가 여전히 누수를 잡는다는 근거다 — 잡지 못하면 여기서 아무 예외도 나지 않는다.
+        shouldThrow<AssertionError> { temporaryFiles.assertCreatedFilesDeleted() }
+        temporaryFiles.createdFiles.forEach(Files::deleteIfExists)
+    }
+
+    test("같은 접두사의 임시 파일을 다른 프로세스가 남겨도 자기 서명의 정리 검사에 섞이지 않는다") {
+        val foreign = Files.createTempFile(TEMPORARY_FILE_PREFIX, PAYLOAD_FILE_SUFFIX)
+        val temporaryFiles = RecordingTemporaryFiles()
+
+        try {
+            val result = ProcessSigningCommandRunner(TEST_TIMEOUT_SECONDS, temporaryFiles)
+                .run(sshSignCommand(stubSshKeygen(tempdir()).path), "commit payload".toByteArray())
+
+            result.shouldBeInstanceOf<SigningCommandResult.Completed>().exitCode shouldBe 0
+            temporaryFiles.assertCreatedFilesDeleted()
+        } finally {
+            Files.deleteIfExists(foreign)
+        }
+    }
+
     test("실제 ssh-keygen 으로 서명해도 임시 파일을 남기지 않는다")
         .config(enabled = supportsSshSigning()) {
             val key = File(tempdir(), "signing_key").also(::generateSigningKey)
-            val before = temporarySigningFiles()
+            val temporaryFiles = RecordingTemporaryFiles()
 
-            val result = ProcessSigningCommandRunner().run(
+            val result = ProcessSigningCommandRunner(TEST_TIMEOUT_SECONDS, temporaryFiles).run(
                 sshSignCommand(program = "ssh-keygen", key = key.path),
                 "commit payload".toByteArray(),
             )
@@ -238,21 +261,21 @@ class ProcessSigningCommandRunnerSpec : FunSpec({
             val completed = result.shouldBeInstanceOf<SigningCommandResult.Completed>()
             completed.exitCode shouldBe 0
             completed.standardOutput shouldContain SSH_SIGNATURE_HEADER
-            temporarySigningFiles() shouldBe before
+            temporaryFiles.assertCreatedFilesDeleted()
         }
 
     test("실제 ssh-keygen 서명이 실패해도 임시 파일을 남기지 않는다")
         .config(enabled = supportsSshSigning()) {
             val missingKey = File(tempdir(), "undine-no-such-key").path
-            val before = temporarySigningFiles()
+            val temporaryFiles = RecordingTemporaryFiles()
 
-            val result = ProcessSigningCommandRunner().run(
+            val result = ProcessSigningCommandRunner(TEST_TIMEOUT_SECONDS, temporaryFiles).run(
                 sshSignCommand(program = "ssh-keygen", key = missingKey),
                 "commit payload".toByteArray(),
             )
 
             result.shouldBeInstanceOf<SigningCommandResult.Completed>().exitCode shouldNotBe 0
-            temporarySigningFiles() shouldBe before
+            temporaryFiles.assertCreatedFilesDeleted()
         }
 })
 
@@ -291,8 +314,12 @@ private fun stubSshKeygen(directory: File, sleepSeconds: Int = 0): File {
 /**
  * 실패를 주입할 수 있는 임시 파일 경계. 주입한 실패 외에는 실제 파일 시스템에 위임하므로,
  * "잔재가 남지 않는다" 를 실제 파일 존재로 확인할 수 있다.
+ *
+ * **만든 경로를 만든 시점에 기록한다.** 정리 여부는 이 기록만 보고 판정한다 — 공용 임시
+ * 디렉터리를 접두사로 훑으면 같은 접두사를 쓰는 다른 빌드의 파일이 섞여 들어와, 아무 잘못
+ * 없이 정리 단언이 깨진다 (UND-90).
  */
-private class FakeTemporaryFiles(
+private class RecordingTemporaryFiles(
     private val failWriteWith: IOException? = null,
     private val failReadWith: IOException? = null,
     private val failDeleteOf: (Path) -> Boolean = { false },
@@ -319,7 +346,9 @@ private class FakeTemporaryFiles(
     }
 }
 
-private fun FakeTemporaryFiles.assertCreatedFilesDeleted() {
+private fun RecordingTemporaryFiles.assertCreatedFilesDeleted() {
+    // 기록이 비어 있으면 아래 단언이 통째로 공허하게 통과한다 — 무엇도 검사하지 않은 초록불이다.
+    createdFiles.shouldNotBeEmpty()
     createdFiles.forEach { payload ->
         Files.exists(payload) shouldBe false
         Files.exists(payload.signatureFile()) shouldBe false
@@ -380,11 +409,3 @@ private fun generateSigningKey(key: File) {
 private fun Path.isPayload(): Boolean = fileName.toString().endsWith(PAYLOAD_FILE_SUFFIX)
 
 private fun Path.signatureFile(): Path = resolveSibling("$fileName$SIGNATURE_FILE_SUFFIX")
-
-private fun temporarySigningFiles(): Set<String> =
-    Files.list(Path.of(System.getProperty("java.io.tmpdir"))).use { entries ->
-        entries.toList()
-            .map { path -> path.fileName.toString() }
-            .filter { name -> name.startsWith(TEMPORARY_FILE_PREFIX) }
-            .toSet()
-    }
