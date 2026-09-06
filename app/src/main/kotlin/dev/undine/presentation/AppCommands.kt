@@ -34,13 +34,15 @@ fun registerAppCommands(registry: CommandRegistry, handlers: AppCommandHandlers)
             action = handlers.onOpenPalette,
         ),
     )
+    // 진행 중인 적용·저장이 있으면 닫기도 막는다 (결정 C6) — 화면 이탈만 막고 세션 전환을 열어 두면
+    // 같은 구멍으로 빠져나가고, 검사한 저장소와 다른 저장소가 활성인 채로 적용이 이어진다.
     registry.register(
         Command(
             id = CommandId("repository.close"),
             title = "저장소 닫기",
             shortcut = Shortcut(Key.W, setOf(ShortcutModifier.PRIMARY)),
             action = handlers.onCloseRepository,
-        ),
+        ).blockedBy(handlers.activeJobBlockedReason),
     )
     registry.register(
         Command(
@@ -100,13 +102,14 @@ fun registerSecondaryCommands(
             ),
         )
     }
+    // 열기도 같은 판정을 본다 — 새 탭이 활성이 되면 진행 중인 적용의 대상이 바뀐다 (결정 C6).
     registry.register(
         Command(
             id = CommandId("repository.open"),
             title = "저장소 열기",
             shortcut = Shortcut(Key.O, setOf(ShortcutModifier.PRIMARY)),
             action = handlers.onOpenRepository,
-        ),
+        ).blockedBy(handlers.activeJobBlockedReason),
     )
     registry.register(
         Command(
@@ -151,6 +154,8 @@ class SecondaryCommandHandlers(
     val availabilityOf: (AppDestination) -> CommandAvailability,
     /** [AppCommandHandlers.repositoryChangeBlockedReason] 과 같은 판정. 되돌리기·그래프 조작에 얹는다. */
     val repositoryChangeBlockedReason: () -> String?,
+    /** [AppCommandHandlers.activeJobBlockedReason] 과 같은 판정. 저장소 열기에 얹는다 (결정 C6). */
+    val activeJobBlockedReason: () -> String?,
 )
 
 /**

@@ -396,6 +396,9 @@ private fun AppContent(
                     repositoryChangeBlockedReason = {
                         repositoryChangeBlockedReason(shellState.selection.activeRepository, commandStrings)
                     },
+                    // 화면 이탈과 **같은 판정**이다 (결정 C6) — 이동만 막으면 저장소를 여닫는 경로로
+                    // 빠져나가고, 검사한 저장소와 다른 저장소가 활성인 채로 적용이 이어진다.
+                    activeJobBlockedReason = navigation::activeJobBlockedReason,
                 ),
                 )
             registerSecondaryCommands(
@@ -404,12 +407,21 @@ private fun AppContent(
                     onNavigate = navigation::go,
                     onOpenRepository = { chooseDirectory()?.let(welcomeState::open) },
                     onUndoLast = { latestUndo.value.state.undoFromKeyboard() },
+                    // 지금 화면이 진행 중인 작업 때문에 떠날 수 없으면 그 사유를 함께 넘긴다 —
+                    // 팔레트가 뒤로 가기 버튼과 **같은 기준**을 보지 않으면 한쪽으로 빠져나가
+                    // 적용·저장이 조용히 끊긴다 (결정 C3).
                     availabilityOf = { destination ->
-                        availabilityOf(destination, shellState.selection.activeRepository, commandStrings)
+                        availabilityOf(
+                            destination,
+                            shellState.selection.activeRepository,
+                            commandStrings,
+                            navigation.exitBlockedReason(destination),
+                        )
                     },
                     repositoryChangeBlockedReason = {
                         repositoryChangeBlockedReason(shellState.selection.activeRepository, commandStrings)
                     },
+                    activeJobBlockedReason = navigation::activeJobBlockedReason,
                 ),
                 graphCallbacks = graphCallbacks,
                 // 드래그가 없을 때 선택만으로 만들 수 있는 조작은 하나다 — 고른 커밋을 현재 브랜치에
@@ -459,6 +471,9 @@ private fun AppContent(
             AppMenuBar(
                 navigation = navigation,
                 repositoryOpen = selection.repository != null,
+                // 메뉴도 팔레트와 같은 판정을 본다 (결정 C6) — 한 표면만 막으면 다른 쪽으로 저장소를
+                // 바꿔, 진행 중인 적용이 검사하지 않은 저장소 위에서 끝난다.
+                repositoryChangeBlocked = navigation.activeJobBlockedReason() != null,
                 onOpenRepository = { chooseDirectory()?.let(welcomeState::open) },
                 onUndoLast = { latestUndo.value.state.undo() },
             )
@@ -480,6 +495,7 @@ private fun AppContent(
             context = context,
             screens = screens,
             undo = undo,
+            sessionKey = sessions.activeSessionKey,
             registry = registry,
             welcomeState = welcomeState,
             onOpenRepository = welcomeState::open,

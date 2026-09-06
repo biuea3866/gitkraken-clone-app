@@ -11,8 +11,12 @@ wave 7~8 티켓들이 공통 파일(`App.kt`·DI 배선·커맨드 레지스트�
 하는 일:
 
 1. **신규 Gateway·UseCase 조립** — cherry-pick·blame·reflog·submodule·worktree·bisect·
-   서명·identity·undo·외부 도구를 DI 그래프에 넣는다. **patch 와 자동 업데이트는 넣지 않는다** —
+   서명·identity·undo·외부 도구를 DI 그래프에 넣는다. **자동 업데이트는 넣지 않는다** —
    배선할 화면·계약이 없다 (결정 G22: 눌러도 아무 일이 없는 항목은 없는 것보다 나쁘다).
+
+   > **patch 는 이 티켓이 배선하지 않았다.** 이 티켓이 UND-47 을 의존으로 걸고도 먼저 머지돼,
+   > `PatchGatewayImpl`·`PatchActionService` 조립과 `AppDestination.PATCH` 등록은
+   > **UND-47 이 자기 배선으로 수행했다.**
 2. **신규 화면 연결** — 설정·blame·Undo 이력·Submodule/Worktree·Reflog/Bisect 화면을 셸과
    네비게이션에 붙인다.
 3. **탭 구조 반영은 UND-81 이 한다** — UND-44 의 "저장소 하나 → 여러 개" 전제를 잇는 배선은
@@ -82,7 +86,7 @@ flowchart LR
 - recorder 를 받는 네 경로의 기록이 같은 Undo 이력 한 곳에 쌓인다
 - 저장소를 바꾸면 이전 저장소의 Undo 이력이 따라오지 않는다 (같은 브랜치·HEAD 인 clone 포함)
 - 탭 슬롯이 비어 있고 메뉴에 탭 전환 항목이 없다
-- OS 메뉴바에서 주요 기능에 도달할 수 있고 patch·자동 업데이트 항목이 없다
+- OS 메뉴바에서 주요 기능에 도달할 수 있고 자동 업데이트 항목이 없다 (patch 항목은 UND-47 이 추가한다)
 - 신규 Gateway 가 DI 그래프에서 정상 해결된다
 - 설정 변경이 관련 화면에 즉시 반영된다
 - 앱 시작 시 배선 누락이 있으면 실패한다 (조용한 통과 없음)

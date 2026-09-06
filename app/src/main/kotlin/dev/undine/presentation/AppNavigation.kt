@@ -16,7 +16,7 @@ import dev.undine.presentation.shell.ActiveRepository
  * 메뉴·팔레트 명령·화면 렌더링이 모두 이 enum 하나에서 나온다. 목록과 배선을 따로 두면 한쪽에만
  * 있는 화면이 생기는데, 그 화면은 아무도 열 수 없는 채로 조용히 남는다 — 그래서 목록이 곧 계약이다.
  *
- * 배선되지 않은 기능(patch·자동 업데이트)은 여기에 없다. 눌러도 아무 일이 없는 항목은 없는 것보다
+ * 배선되지 않은 기능(자동 업데이트)은 여기에 없다. 눌러도 아무 일이 없는 항목은 없는 것보다
  * 나쁘다 (결정 G22).
  *
  * @property requiresRepository 열린 저장소가 있어야 의미가 있는 화면인가. 설정만 저장소 없이도
@@ -31,6 +31,7 @@ enum class AppDestination(val label: String, val requiresRepository: Boolean) {
     UNDO("Undo 이력", requiresRepository = true),
     SUBMODULE_WORKTREE("Submodule / Worktree", requiresRepository = true),
     RECOVERY("Reflog / Bisect", requiresRepository = true),
+    PATCH("Patch", requiresRepository = true),
     ;
 
     /** 팔레트 명령 id 의 뒷부분. enum 이름을 그대로 쓰면 저장된 오버라이드가 리네임에 끌려간다. */
@@ -42,8 +43,20 @@ enum class AppDestination(val label: String, val requiresRepository: Boolean) {
  * 보는 테스트가 목적지 분기를 화면 구현의 문구에 기대지 않고 확인할 수 있다.
  */
 internal object AppDestinationTags {
+    /** 지금 화면을 떠날 수 없는 사유가 놓이는 자리. 나가는 길 바로 옆이라 사용자가 같은 곳에서 읽는다. */
+    const val EXIT_BLOCKED: String = "destination.exitBlocked"
+
     fun of(destination: AppDestination): String = "destination.${destination.commandKey}"
 }
+
+/**
+ * 지금 화면이 **떠나면 안 되는 상태**라는 등록 (결정 C3).
+ *
+ * 사유를 값이 아니라 **판정**으로 받는다 — 화면의 진행 상태에서 그때그때 파생시키게 해, 진행 여부를
+ * 복사한 플래그가 화면과 따로 놀지 않게 한다. 작업이 끝나면 판정이 `null` 을 돌려주므로 차단이
+ * 저절로 풀린다: 해제를 별도 상태로 두면 "끝났는데 갇힌" 화면이 남는다.
+ */
+private class ScreenExitBlock(val destination: AppDestination, val reason: () -> String?)
 
 /** 지금 어느 화면을 보고 있는가. 선택 상태(저장소·커밋·파일)와 달리 화면 전환만 담는다. */
 @Stable
@@ -52,7 +65,47 @@ class AppNavigationState(initial: AppDestination = AppDestination.REPOSITORY) {
     var destination: AppDestination by mutableStateOf(initial)
         private set
 
+    private var exitBlock: ScreenExitBlock? by mutableStateOf(null)
+
+    /**
+     * 지금 화면이 **진행 중인 작업 때문에** 내건 차단 사유. 막지 않으면 `null` 이다.
+     *
+     * 화면 이동과 **저장소 전환**이 이 판정 하나를 함께 본다 (결정 C6). 이동만 막으면 저장소를 여닫는
+     * 경로로 빠져나가고, 그때 진행 중이던 작업은 여전히 끊긴다 — 더 나쁘게는, 검사한 저장소와 다른
+     * 저장소가 활성인 채로 적용이 이어진다.
+     *
+     * 지금 화면에 걸린 등록만 본다 — 다른 화면이 남긴 등록은 그 화면을 떠난 뒤의 것이다.
+     */
+    fun activeJobBlockedReason(): String? =
+        exitBlock?.takeIf { block -> block.destination == destination }?.reason?.invoke()
+
+    /**
+     * [target] 으로 옮기지 못하게 하는 사유. 옮겨도 되면 `null` 이다.
+     *
+     * 판정은 [activeJobBlockedReason] 하나이고 여기서는 대상만 걸러 낸다 — 지금 화면으로 다시 가는
+     * 것은 막지 않는다: 떠나지 않으므로 잃을 작업이 없다.
+     */
+    fun exitBlockedReason(target: AppDestination): String? =
+        if (target == destination) null else activeJobBlockedReason()
+
+    /** 진행 중인 작업 때문에 [destination] 을 떠나면 안 된다고 등록한다. */
+    fun blockExitFrom(destination: AppDestination, reason: () -> String?) {
+        exitBlock = ScreenExitBlock(destination, reason)
+    }
+
+    /** 등록을 거둔다. 화면이 컴포지션을 떠날 때 부른다 — 남겨 두면 죽은 화면의 판정을 계속 묻는다. */
+    fun releaseExitFrom(destination: AppDestination) {
+        if (exitBlock?.destination == destination) exitBlock = null
+    }
+
+    /**
+     * 화면을 옮긴다. 떠나면 안 되는 상태면 **아무것도 하지 않는다**.
+     *
+     * 사유는 호출부(뒤로 가기 버튼·팔레트)가 [exitBlockedReason] 으로 읽어 그 자리에 말한다. 여기서
+     * 새 표면(모달·경고창)을 띄우지 않는다.
+     */
     fun go(target: AppDestination) {
+        if (exitBlockedReason(target) != null) return
         destination = target
     }
 }
@@ -99,6 +152,7 @@ val APP_MENUS: List<AppMenu> = listOf(
                 command = AppMenuCommand.Navigate(AppDestination.SUBMODULE_WORKTREE),
             ),
             AppMenuItem("Reflog / Bisect", AppMenuCommand.Navigate(AppDestination.RECOVERY)),
+            AppMenuItem("Patch", AppMenuCommand.Navigate(AppDestination.PATCH)),
         ),
     ),
     AppMenu(label = "편집", items = listOf(AppMenuItem("되돌리기", AppMenuCommand.UndoLast))),
@@ -161,12 +215,20 @@ internal fun destinationFor(requested: AppDestination, active: ActiveRepository)
 /**
  * 저장소가 필요한 화면을 조작할 수 없는 상태로 열지 않는다. 열어 두면 빈 화면이 그려지고 사용자는
  * 자기가 무엇을 잘못했는지 알 수 없다.
+ *
+ * @param exitBlockedReason 지금 화면을 떠날 수 없는 사유 ([AppNavigationState.exitBlockedReason]).
+ *   있으면 **기존 [CommandAvailability.Blocked] 에 실어** 팔레트가 후보 행에 사유를 남긴다 — 새
+ *   차단 표면을 만들지 않는다 (결정 G43 과 같은 선).
  */
 internal fun availabilityOf(
     destination: AppDestination,
     active: ActiveRepository,
     strings: Strings = systemStrings(),
+    exitBlockedReason: String? = null,
 ): CommandAvailability = when {
+    // 지금 화면을 떠날 수 없으면 그 사유가 먼저다 — 저장소 판정을 먼저 보면 "열려 있다" 로 통과해
+    // 팔레트가 이동을 실행하고, 진행 중인 적용·저장이 조용히 끊긴다 (결정 C3).
+    exitBlockedReason != null -> CommandAvailability.Blocked(exitBlockedReason)
     !destination.requiresRepository -> CommandAvailability.Available
     active is ActiveRepository.Operable -> CommandAvailability.Available
     else -> CommandAvailability.Blocked(repositoryChangeBlockedReason(active, strings) ?: NO_REPOSITORY_REASON)

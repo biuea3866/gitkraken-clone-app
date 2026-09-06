@@ -36,6 +36,8 @@ import dev.undine.application.identity.UpdateProfileUseCase
 import dev.undine.application.preferences.LoadPreferencesUseCase
 import dev.undine.application.preferences.LoadSigningPreferencesUseCase
 import dev.undine.application.preferences.UpdatePreferencesUseCase
+import dev.undine.application.patch.PatchActionService
+import dev.undine.application.patch.PatchActions
 import dev.undine.application.reflog.RecoveryActionService
 import dev.undine.application.reflog.RecoveryActions
 import dev.undine.application.reflog.RecoveryBisectUseCases
@@ -90,6 +92,7 @@ import dev.undine.domain.gitconfig.GitConfigGateway
 import dev.undine.domain.identity.IdentityGateway
 import dev.undine.domain.identity.IdentityService
 import dev.undine.domain.merge.MergeGateway
+import dev.undine.domain.patch.PatchGateway
 import dev.undine.domain.merge.MergeService
 import dev.undine.domain.rebase.InteractiveRebaseGateway
 import dev.undine.domain.reflog.ReflogGateway
@@ -105,6 +108,7 @@ import dev.undine.infrastructure.git.blame.BlameGatewayImpl
 import dev.undine.infrastructure.git.conflict.ConflictGatewayImpl
 import dev.undine.infrastructure.git.config.GitConfigGatewayImpl
 import dev.undine.infrastructure.git.merge.MergeGatewayImpl
+import dev.undine.infrastructure.git.patch.PatchGatewayImpl
 import dev.undine.infrastructure.git.rebase.InteractiveRebaseGatewayImpl
 import dev.undine.infrastructure.git.diff.DiffGatewayImpl
 import dev.undine.infrastructure.git.history.HistoryGatewayImpl
@@ -177,6 +181,7 @@ class AppComponent(settingsFile: Path, appDirectory: Path) {
     private val submoduleGateway: SubmoduleGateway = SubmoduleGatewayImpl(gitAccess)
     private val worktreeGateway: WorktreeGateway = WorktreeGatewayImpl(gitAccess)
     private val signingGateway: SigningGateway = SigningGatewayImpl(gitAccess)
+    private val patchGateway: PatchGateway = PatchGatewayImpl(gitAccess)
     private val identityGateway: IdentityGateway = IdentityGatewayImpl(gitAccess, settingsGateway)
     private val externalToolGateway: ExternalToolGateway = ExternalToolGatewayImpl(gitAccess, settingsGateway)
 
@@ -258,6 +263,14 @@ class AppComponent(settingsFile: Path, appDirectory: Path) {
     val loadBlame = LoadBlameUseCase(blameGateway)
     val loadFileHistory = LoadFileHistoryUseCase(blameGateway)
     val compareFileHistory = CompareFileHistoryUseCase(diffGateway)
+
+    /**
+     * Patch 화면이 부르는 동작 묶음.
+     *
+     * 되돌리기 범위 밖에 두는 이유는 이 경로가 `OperationRecorder` 를 쓰지 않기 때문이다 — 적용은
+     * 기본값(워킹트리만)에서 인덱스·이력을 건드리지 않고, 커밋 모드로 만든 커밋은 revert 로 되돌린다.
+     */
+    val patchActions: PatchActions = PatchActionService(patchGateway, historyGateway)
 
     /** gitlink 를 부모에 반영하는 경로. 기존 스테이징·커밋 계약을 그대로 쓴다 (결정 E6). */
     val commitSubmodulePointer = CommitSubmodulePointerUseCase(stagingGateway)
