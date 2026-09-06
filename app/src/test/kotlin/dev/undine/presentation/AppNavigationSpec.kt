@@ -2,6 +2,7 @@ package dev.undine.presentation
 
 import dev.undine.domain.RepositoryPath
 import dev.undine.presentation.i18n.MISSING_KEY_MARKER
+import dev.undine.presentation.i18n.builtInStringCatalog
 import dev.undine.presentation.i18n.systemStrings
 import dev.undine.presentation.i18n.tabs
 import dev.undine.presentation.palette.CommandAvailability
@@ -15,6 +16,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain as shouldNotContainText
 import io.kotest.matchers.types.shouldBeInstanceOf
+import java.util.Locale
 
 /** 결정 G22 가 정한 메뉴 4개. 더 늘리지 않는다 — 메뉴바는 발견 경로이고 팔레트가 실행 경로다. */
 private val EXPECTED_MENUS = listOf("저장소", "보기", "편집", "도구")
@@ -198,7 +200,9 @@ class AppNavigationSpec : BehaviorSpec({
         `when`("활성 탭이 경로를 잃었으면") {
             // "저장소를 찾을 수 없습니다" 로 끝내면 사용자가 할 수 있는 일이 없다 (결정 G43).
             then("무엇이 왜 막혔는지와 다음 행동을 함께 말한다") {
-                val reason = repositoryChangeBlockedReason(UNAVAILABLE)
+                // 문구를 한국어로 단언하므로 **로캘을 명시해서 받는다.** 시스템 기본 로캘에 기대면
+                // 영어로 도는 기계(CI)에서 같은 코드가 깨진다 — 검증 대상은 로캘이 아니라 문구다.
+                val reason = repositoryChangeBlockedReason(UNAVAILABLE, koreanStrings())
 
                 reason.shouldBeInstanceOf<String>()
                 reason shouldContain "탭"
@@ -231,3 +235,6 @@ class AppNavigationSpec : BehaviorSpec({
         }
     }
 })
+
+/** 한국어 문구를 단언할 때 쓰는 카탈로그 — 시스템 로캘에 기대지 않는다. */
+private fun koreanStrings() = builtInStringCatalog().stringsFor(Locale.KOREAN)
