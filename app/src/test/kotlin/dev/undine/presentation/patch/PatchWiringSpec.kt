@@ -72,7 +72,16 @@ private val PATCH_BYTES = """
 private val EXPORT = PatchExport(perCommit = emptyList(), combined = PATCH_BYTES)
 
 /** 화면 안쪽이 아니라 **배선**을 본다 — 배선이 얼마나 오래 걸릴지는 대역이 잡고 있는 시간이 정한다. */
-private const val WAIT_MILLIS = 10_000L
+/**
+ * 렌더가 끝나기를 기다리는 **행 방지 장치**다. 검증 대상이 아니므로 넉넉해야 한다.
+ *
+ * CI 는 `xvfb-run` 가상 디스플레이에서 `--no-daemon` 으로 돌고, `composeTest` 는 `forkEvery = 1`
+ * 이라 스펙마다 콜드 JVM 이다 — 소프트웨어 렌더링 첫 프레임이 로컬(GPU)보다 훨씬 느리다.
+ * 10초로 두었더니 **렌더된 노드를 기다리는 대기만** 골라 시간 초과했고(렌더가 필요 없는
+ * `commitLoads` 대기는 통과했다), 같은 성격인 [dev.undine.presentation.AppAssemblySpec] 이
+ * 이미 30초를 쓴다. 그 값에 맞춘다 — 상태는 게이트가 붙잡고 있으므로 늘려도 검증이 무뎌지지 않는다.
+ */
+private const val WAIT_MILLIS = 30_000L
 
 /**
  * PATCH 목적지의 실제 Compose 배선.
