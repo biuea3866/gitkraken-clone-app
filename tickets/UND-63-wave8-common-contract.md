@@ -11,7 +11,7 @@ wave 8 화면 티켓 7건의 스펙을 돌렸더니 **6건이 같은 질문을 �
 
 | 공통 파일 | 필요한 티켓 | 무엇이 필요한가 |
 |---|---|---|
-| `presentation/i18n/BuiltInStrings.kt` | UND-40·41·42·43·44·45·46 (7건) | `builtInTranslations` 목록에 자기 네임스페이스 한 줄 |
+| `presentation/i18n/BuiltInStrings.kt` | UND-40·41·42·43·44·45·46·47 (8건) | `builtInTranslations` 목록에 자기 네임스페이스 한 줄 |
 | `domain/Settings.kt` · `infrastructure/settings/SettingsCodec.kt` | UND-40·44·48 (3건) | 환경설정 · 탭 세션 · 업데이트 확인 주기 필드 |
 | `domain/undo/GitOperationKind.kt` | UND-42·45·46 (3건) | 그래프 조작 · 서브모듈/worktree · 복구 연산 종류 |
 
