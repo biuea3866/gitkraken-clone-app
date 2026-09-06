@@ -172,11 +172,11 @@ class AppNavigationSpec : BehaviorSpec({
         `when`("저장소가 없을 때 판정하면") {
             then("저장소가 필요한 화면만 사유와 함께 막힌다") {
                 val blocked = AppDestination.entries.filter {
-                    availabilityOf(it, ActiveRepository.None) is CommandAvailability.Blocked
+                    availabilityOf(it, ActiveRepository.None, koreanStrings()) is CommandAvailability.Blocked
                 }
 
                 blocked shouldBe AppDestination.entries.filter { it.requiresRepository }
-                availabilityOf(AppDestination.BLAME, ActiveRepository.None)
+                availabilityOf(AppDestination.BLAME, ActiveRepository.None, koreanStrings())
                     .shouldBeInstanceOf<CommandAvailability.Blocked>()
                     .reason shouldContain "저장소"
             }
@@ -185,20 +185,21 @@ class AppNavigationSpec : BehaviorSpec({
         `when`("저장소가 열려 있을 때 판정하면") {
             then("모든 화면의 이동 명령이 열린다") {
                 AppDestination.entries.forEach { destination ->
-                    availabilityOf(destination, OPERABLE) shouldBe CommandAvailability.Available
+                    availabilityOf(destination, OPERABLE, koreanStrings()) shouldBe CommandAvailability.Available
                 }
             }
         }
 
         `when`("활성 탭이 경로를 잃었을 때 판정하면") {
             then("저장소가 필요한 화면이 경로를 잃은 사유로 막힌다") {
-                availabilityOf(AppDestination.BLAME, UNAVAILABLE)
+                availabilityOf(AppDestination.BLAME, UNAVAILABLE, koreanStrings())
                     .shouldBeInstanceOf<CommandAvailability.Blocked>()
-                    .reason shouldBe systemStrings().tabs.unavailableRepository
+                    .reason shouldBe koreanStrings().tabs.unavailableRepository
             }
 
             then("저장소가 필요 없는 화면은 그대로 열린다") {
-                availabilityOf(AppDestination.PREFERENCES, UNAVAILABLE) shouldBe CommandAvailability.Available
+                availabilityOf(AppDestination.PREFERENCES, UNAVAILABLE, koreanStrings()) shouldBe
+                    CommandAvailability.Available
             }
         }
     }
@@ -219,7 +220,7 @@ class AppNavigationSpec : BehaviorSpec({
 
             // 뒤로 가기만 막고 팔레트를 열어 두면 사용자는 그쪽으로 빠져나가고, 작업은 그대로 끊긴다.
             then("팔레트 이동 명령도 저장소 판정보다 먼저 이 사유로 막힌다") {
-                availabilityOf(AppDestination.REPOSITORY, OPERABLE, systemStrings(), EXIT_REASON)
+                availabilityOf(AppDestination.REPOSITORY, OPERABLE, koreanStrings(), EXIT_REASON)
                     .shouldBeInstanceOf<CommandAvailability.Blocked>()
                     .reason shouldBe EXIT_REASON
             }
@@ -326,14 +327,15 @@ class AppNavigationSpec : BehaviorSpec({
             }
 
             then("i18n 리소스에서 온 문구다 — 코드에 박은 문자열이 아니다") {
-                repositoryChangeBlockedReason(UNAVAILABLE) shouldBe systemStrings().tabs.unavailableRepository
+                repositoryChangeBlockedReason(UNAVAILABLE, koreanStrings()) shouldBe
+                    koreanStrings().tabs.unavailableRepository
             }
         }
 
         `when`("조작할 수 있거나 열린 탭이 없으면") {
             then("이 판정은 막지 않는다 — 명령 자신의 조건에 맡긴다") {
-                repositoryChangeBlockedReason(OPERABLE).shouldBeNull()
-                repositoryChangeBlockedReason(ActiveRepository.None).shouldBeNull()
+                repositoryChangeBlockedReason(OPERABLE, koreanStrings()).shouldBeNull()
+                repositoryChangeBlockedReason(ActiveRepository.None, koreanStrings()).shouldBeNull()
             }
         }
     }

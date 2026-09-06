@@ -34,6 +34,8 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import java.io.File
+import dev.undine.presentation.i18n.builtInStringCatalog
+import java.util.Locale
 
 /** 조작 대상 커밋. 실행까지 가지 않고 확인창만 여는 경로라 값 자체는 아무 커밋이어도 된다. */
 private const val COMMIT = "0123456789abcdef0123456789abcdef01234567"
@@ -99,7 +101,7 @@ private class RegistrationFixture(
                 onRefreshRefs = {},
                 onToggleDiffView = {},
                 onOpenRebasePlan = { rebasePlanRequested++ },
-                repositoryChangeBlockedReason = { repositoryChangeBlockedReason(active) },
+                repositoryChangeBlockedReason = { repositoryChangeBlockedReason(active, koreanStrings()) },
                 activeJobBlockedReason = { activeJobBlocked },
             ),
         )
@@ -110,8 +112,8 @@ private class RegistrationFixture(
                 onOpenRepository = { openRequested++ },
                 onUndoLast = { undoRequested++ },
                 // 앱이 쓰는 판정 그대로다 — 복제하면 앱과 어긋난 규칙을 검증하게 된다.
-                availabilityOf = { destination -> availabilityOf(destination, active) },
-                repositoryChangeBlockedReason = { repositoryChangeBlockedReason(active) },
+                availabilityOf = { destination -> availabilityOf(destination, active, koreanStrings()) },
+                repositoryChangeBlockedReason = { repositoryChangeBlockedReason(active, koreanStrings()) },
                 activeJobBlockedReason = { activeJobBlocked },
             ),
             graphCallbacks = callbacks,
@@ -176,7 +178,7 @@ class AppCommandRegistrationSpec : BehaviorSpec({
             then("저장소를 바꾸는 명령이 전부 경로를 잃은 사유로 막힌다") {
                 val selected = GraphOperation.CherryPick(CommitId.of(COMMIT), BranchTarget.Current)
                 val fixture = RegistrationFixture(active = UNAVAILABLE, selected = selected)
-                val reason = repositoryChangeBlockedReason(UNAVAILABLE)
+                val reason = repositoryChangeBlockedReason(UNAVAILABLE, koreanStrings())
 
                 REPOSITORY_CHANGING_COMMAND_IDS.forEach { id ->
                     availabilityOfCommand(fixture.commandOf(id))
@@ -256,7 +258,7 @@ class AppCommandRegistrationSpec : BehaviorSpec({
                 // 선택이 맞지 않는 명령은 **그 명령의 사유로** 막힌다 — 게이트가 덮어쓰지 않는다.
                 availabilityOfCommand(fixture.commandOf("graph.merge"))
                     .shouldBeInstanceOf<CommandAvailability.Blocked>()
-                    .reason shouldNotBe repositoryChangeBlockedReason(UNAVAILABLE)
+                    .reason shouldNotBe repositoryChangeBlockedReason(UNAVAILABLE, koreanStrings())
             }
         }
 
@@ -347,3 +349,6 @@ class AppCommandRegistrationSpec : BehaviorSpec({
 
 /** 조건 판정만 꺼내 본다 — 실행 없이 가용성만 확인하려는 자리다. */
 private fun availabilityOfCommand(command: Command): CommandAvailability = command.availability()
+
+/** 판정에 넘길 문구는 **로케일을 고정해** 받는다 — 시스템 로케일에 기대면 기계마다 결과가 갈린다. */
+private fun koreanStrings() = builtInStringCatalog().stringsFor(Locale.KOREAN)

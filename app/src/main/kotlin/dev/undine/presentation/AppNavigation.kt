@@ -223,7 +223,10 @@ internal fun destinationFor(requested: AppDestination, active: ActiveRepository)
 internal fun availabilityOf(
     destination: AppDestination,
     active: ActiveRepository,
-    strings: Strings = systemStrings(),
+    // **기본값을 두지 않는다.** `systemStrings()` 를 기본으로 두면 호출부가 로케일을 고르지 않은
+    // 채로도 컴파일되고, 그 판정이 OS 로케일에 묶인다 — 한국어 기계에서만 통과하는 테스트가 그렇게
+    // 생겼다. 프로덕션은 이미 조립 시점에 잡은 문구를 넘긴다 (App.kt).
+    strings: Strings,
     exitBlockedReason: String? = null,
 ): CommandAvailability = when {
     // 지금 화면을 떠날 수 없으면 그 사유가 먼저다 — 저장소 판정을 먼저 보면 "열려 있다" 로 통과해
@@ -247,7 +250,7 @@ internal fun availabilityOf(
  */
 internal fun repositoryChangeBlockedReason(
     active: ActiveRepository,
-    strings: Strings = systemStrings(),
+    strings: Strings,
 ): String? = when (active) {
     is ActiveRepository.Unavailable -> strings.tabs.unavailableRepository
     ActiveRepository.None, is ActiveRepository.Operable -> null
