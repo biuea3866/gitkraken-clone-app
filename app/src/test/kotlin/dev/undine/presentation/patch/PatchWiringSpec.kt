@@ -227,12 +227,15 @@ class PatchWiringSpec : FunSpec({
 
             // 진행 중이던 작업이 그대로다. 홀더가 갈렸다면 유휴 상태로 돌아가 진행 표시가 사라지고,
             // 배선이 그 저장소의 목록을 처음부터 다시 읽는다.
-            textShown(copy.preparing) shouldBe true
+            //
+            // 문구는 **영어로** 본다 — 화면이 제공자를 따르므로 카탈로그를 바꾸면 같은 진행 상태가
+            // 영어로 그려진다. 여기서 보는 것은 언어가 아니라 **그 상태가 살아남았는가**다.
+            textShown(englishCopy.preparing) shouldBe true
             actions.commitLoads shouldBe 1
 
             // 결과도 갈 곳을 잃지 않는다 — 시작한 작업이 끝까지 이 화면에 도착한다.
             gate.complete(Unit)
-            waitUntil(timeoutMillis = WAIT_MILLIS) { textShown(copy.includedFiles) }
+            waitUntil(timeoutMillis = WAIT_MILLIS) { textShown(englishCopy.includedFiles) }
             actions.exportedScopes.size shouldBe 1
         }
     }

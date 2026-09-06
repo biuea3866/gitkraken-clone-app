@@ -16,7 +16,7 @@ import androidx.compose.ui.platform.testTag
 import dev.undine.presentation.design.UndineTokens
 import dev.undine.presentation.i18n.Strings
 import dev.undine.presentation.i18n.patch
-import dev.undine.presentation.i18n.systemStrings
+import dev.undine.presentation.i18n.strings as composedStrings
 
 /**
  * 패치를 만들고 적용하는 화면.
@@ -31,7 +31,10 @@ import dev.undine.presentation.i18n.systemStrings
 fun PatchScreen(
     state: PatchState,
     modifier: Modifier = Modifier,
-    strings: Strings = systemStrings(),
+    // 기본값은 **화면 트리가 제공하는 값**이다 — `systemStrings()` 를 기본으로 두면 OS 로케일을
+    // 따라가 앱의 언어 설정(`LocalStrings` 제공자)이 이 화면에만 적용되지 않는다.
+    // CI(영어 로케일)에서 한국어 카탈로그를 제공했는데도 영어가 그려져 드러났다.
+    strings: Strings = composedStrings,
 ) {
     val copy = strings.patch
     val colors = UndineTokens.color
