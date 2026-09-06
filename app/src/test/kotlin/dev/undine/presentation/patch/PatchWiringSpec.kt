@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
@@ -15,6 +16,8 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
@@ -102,7 +105,7 @@ class PatchWiringSpec : FunSpec({
             setContent { WiringUnderTest(navigation, FakePatchActions(applyGate = gate), files) }
 
             onNodeWithTag(PatchTags.CHOOSE_FILE).performClick()
-            waitUntil(timeoutMillis = WAIT_MILLIS) {
+            awaitOrDump("changedFiles") {
                 onAllNodesWithText(copy.changedFiles).fetchSemanticsNodes().isNotEmpty()
             }
             // 적용 전에는 나가는 길이 열려 있다 — 읽기·검사는 저장소를 바꾸지 않는다.
@@ -171,7 +174,7 @@ class PatchWiringSpec : FunSpec({
 
             waitUntil(timeoutMillis = WAIT_MILLIS) { actions.commitLoads == 1 }
             onNodeWithTag(PatchTags.PREPARE).performClick()
-            waitUntil(timeoutMillis = WAIT_MILLIS) { textShown(copy.preparing) }
+            awaitOrDump("preparing") { textShown(copy.preparing) }
 
             sessionKey = SESSION_B
             waitForIdle()
@@ -216,7 +219,7 @@ class PatchWiringSpec : FunSpec({
 
             waitUntil(timeoutMillis = WAIT_MILLIS) { actions.commitLoads == 1 }
             onNodeWithTag(PatchTags.PREPARE).performClick()
-            waitUntil(timeoutMillis = WAIT_MILLIS) { textShown(copy.preparing) }
+            awaitOrDump("preparing") { textShown(copy.preparing) }
             textShown(copy.openDialogTitle) shouldBe true
 
             catalog = englishStrings
@@ -239,6 +242,21 @@ class PatchWiringSpec : FunSpec({
 @OptIn(ExperimentalTestApi::class)
 private fun ComposeUiTest.exitBlockedShown(): Boolean =
     onAllNodesWithTag(AppDestinationTags.EXIT_BLOCKED).fetchSemanticsNodes().isNotEmpty()
+
+/**
+ * 진단용 — 대기가 시간 초과하면 **그 순간 화면에 실제로 무엇이 있는지** 찍고 다시 던진다.
+ * CI 에서만 깨지는 대기의 원인을 추측으로 좁히지 않기 위해서다.
+ */
+@OptIn(ExperimentalTestApi::class)
+private fun ComposeUiTest.awaitOrDump(label: String, condition: () -> Boolean) {
+    try {
+        waitUntil(timeoutMillis = WAIT_MILLIS, condition = condition)
+    } catch (timeout: ComposeTimeoutException) {
+        println("=== awaitOrDump 실패: $label ===")
+        println(runCatching { onRoot().printToString(maxDepth = 100) }.getOrElse { "화면 덤프 실패: $it" })
+        throw timeout
+    }
+}
 
 /** 그 문구가 지금 화면에 있는가. 폴링 조건으로도, 단언으로도 같은 판정을 쓴다. */
 @OptIn(ExperimentalTestApi::class)
