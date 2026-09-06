@@ -104,6 +104,8 @@ Undine 구현을 **60개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2
 | [UND-88](UND-88-graph-scale-harness.md) | 대형 저장소에서 그래프가 버티는지 재는 수단 | M | 12 | 없음 | `app/src/test/.../bench/` · `.agent/scripts/`(벤치 저장소 생성) |
 | [UND-89](UND-89-graph-density-render.md) | 실제 이력으로 그래프를 렌더해 밀도를 본다 | S | 12 | UND-88 | `app/src/test/.../bench/` |
 | [UND-90](UND-90-signing-shared-tmpdir.md) | 서명 테스트가 남의 빌드 임시 파일까지 세지 않게 한다 | S | 13 | 없음 | `app/src/test/.../signing/ProcessSigningCommandRunnerSpec.kt` |
+| [UND-91](UND-91-settings-applied-to-ui.md) | 저장한 언어·테마를 화면에 적용한다 | M | 14 | UND-40 · UND-63 | `presentation/App.kt` · `application/preferences/` |
+| [UND-92](UND-92-graph-column-bound.md) | 그래프 열이 커밋 메시지를 밀어내지 않게 한다 | M | 14 | UND-14 | `presentation/graph/` |
 | [UND-52](UND-52-e2e-scenario-phase2.md) | 2차 E2E 시나리오 테스트 | M | 10 | UND-51 | `app/src/test/kotlin/.../scenario2/` |
 | [UND-54](UND-54-merge-start-state-guard.md) | merge/rebase 시작 경로 상태 가드 완결 | S | 4 | UND-21 | `infrastructure/git/merge/` (가드 추가) |
 | [UND-56](UND-56-gitkraken-visual-tuning.md) | GitKraken 계열 시각 튜닝 · 렌더 확인 수단 | S | 5 | UND-26 · UND-10 | `presentation/design/` · `presentation/graph/`(그리기) · `presentation/shell/`(분할선) |
@@ -222,6 +224,7 @@ flowchart LR
 | 12 | UND-87, UND-88 | 2 |
 | 12b | UND-89 | 1 |
 | 13 | UND-90 | 1 |
+| 14 | UND-91, UND-92 | 2 |
 
 - **너비 분포**: [1, 11, 11, 5, 3, 1, 8, 5, 3, 1, 9, 6, 1, 1, 1, 1, 2]
 - **평균 wave 너비**: 4.06
