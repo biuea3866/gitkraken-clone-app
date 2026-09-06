@@ -12,8 +12,12 @@ import java.time.ZoneOffset
 /**
  * Gateway 통합 테스트가 쓰는 **실제 저장소** fixture. JGit 을 Mock 으로 대체하지 않는다.
  *
- * 초기 브랜치와 커밋 시각을 고정한다 — 사용자의 전역 `init.defaultBranch` 나 실행 시각에
- * 따라 결과가 흔들리면 테스트가 저장소 동작을 검증하지 못한다.
+ * 초기 브랜치·커밋 시각·**작성자 신원**을 고정한다 — 사용자의 전역 `init.defaultBranch`·
+ * `user.name`·실행 시각에 따라 결과가 흔들리면 테스트가 저장소 동작을 검증하지 못한다.
+ *
+ * 신원은 저장소 **로컬 설정**에 쓴다. `commitFile` 처럼 JGit 을 직접 부르는 경로는 커밋마다
+ * 작성자를 넘기지만, **프로덕션 커밋 경로**(`StagingGatewayImpl`)는 설정에서만 읽으므로
+ * 여기서 박아 두지 않으면 전역 설정이 없는 기계(CI)에서 `AuthorNotConfigured` 로 깨진다.
  */
 internal const val INITIAL_BRANCH = "main"
 
@@ -33,6 +37,16 @@ internal fun initRepository(directory: File): Git =
         .setDirectory(directory)
         .setInitialBranch(INITIAL_BRANCH)
         .call()
+        .also(Git::configureFixedAuthor)
+
+/** 저장소 로컬 설정에 작성자 신원을 박아 전역 설정 유무와 무관하게 만든다. */
+private fun Git.configureFixedAuthor() {
+    repository.config.apply {
+        setString("user", null, "name", FIXED_AUTHOR.name)
+        setString("user", null, "email", FIXED_AUTHOR.emailAddress)
+        save()
+    }
+}
 
 internal fun initBareRepository(directory: File): Git =
     Git.init()

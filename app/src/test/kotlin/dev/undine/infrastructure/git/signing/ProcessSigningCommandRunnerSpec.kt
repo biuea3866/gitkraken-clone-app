@@ -28,10 +28,21 @@ private const val PROBE_TIMEOUT_SECONDS = 10L
 private const val UNRESPONSIVE_TIMEOUT_SECONDS = 1L
 private const val TEST_TIMEOUT_SECONDS = 10L
 private const val PATIENT_TIMEOUT_SECONDS = 60L
-private const val STUB_SLEEP_SECONDS = 30
+private const val STUB_SLEEP_SECONDS = 120
 
-/** 스텁이 살아 있는 시간보다 훨씬 짧다 — 취소가 자식의 남은 수명을 기다리면 이 선을 넘는다. */
-private const val CANCELLATION_DEADLINE_MILLIS = 10_000L
+/**
+ * 테스트가 영영 멈추지 않게 하는 **행 방지 장치**다. 검증 대상이 아니므로 넉넉해야 한다 —
+ * 러너의 제한 시간([UNRESPONSIVE_TIMEOUT_SECONDS])을 여기에 맞춰 재면 느린 기계(CI)에서
+ * 러너가 옳게 동작하는데도 테스트가 먼저 끊긴다.
+ */
+private const val HANG_GUARD_SECONDS = 120L
+
+/**
+ * 스텁이 살아 있는 시간([STUB_SLEEP_SECONDS])보다 훨씬 짧다 — 취소가 자식의 남은 수명을
+ * 기다리면 이 선을 넘는다. **이 여유는 CI 의 느림을 위한 것이지 그 불변식을 무르게 하지 않는다**:
+ * 30초는 스텁 수명의 4분의 1이라 "취소가 자연 종료를 기다렸다" 와 여전히 명확히 구분된다.
+ */
+private const val CANCELLATION_DEADLINE_MILLIS = 30_000L
 private const val SIGNATURE_FILE_SUFFIX = ".sig"
 private const val SSH_SIGNATURE_HEADER = "-----BEGIN SSH SIGNATURE-----"
 private const val STANDARD_INPUT_FAILURE = "표준 입력을 쓸 수 없습니다"
@@ -83,7 +94,7 @@ class ProcessSigningCommandRunnerSpec : FunSpec({
         val runner = ProcessSigningCommandRunner(UNRESPONSIVE_TIMEOUT_SECONDS)
 
         try {
-            val result = withTimeout(TEST_TIMEOUT_SECONDS * 1_000) {
+            val result = withTimeout(HANG_GUARD_SECONDS * 1_000) {
                 runner.run(stdinHoldingDescendantCommand(childPidFile), ByteArray(PIPE_OVERFLOW_BYTES))
             }
 

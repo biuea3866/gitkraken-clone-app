@@ -6,8 +6,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import java.io.IOException
@@ -70,29 +71,29 @@ class ProcessSigningCommandRunner internal constructor(
      * 순서가 바뀌면 안 된다. 먼저 [Process.waitFor] 를 부르면 파이프 버퍼가 찬 순간 자식이 쓰기에서
      * 멈추고, 앱은 그 교착을 시간 초과로 잘못 보고한다 — 서명 실패가 아니라 서로 기다리는 상태다.
      * 표준 입력 쓰기도 같은 이유로 함께 진행한다: 자식이 다 읽기 전에는 끝나지 않기 때문이다.
+     *
+     * **세 펌프를 구조적 자식으로 두지 않는다.** 손자가 표준 입력 파이프를 물면 [feed] 의 `write`
+     * 가 막히는데, 그 `write` 는 취소로도 스레드 인터럽트로도 다른 스레드의 fd 닫기로도 풀리지
+     * 않는다 (Linux 에서 in-flight `write(2)` 는 읽는 쪽이 비우거나 모든 읽기 끝이 닫혀야 반환한다
+     * — macOS 는 달라서 이 결함이 그 기계에서는 보이지 않았다). 구조적 자식이면 감싸는 scope 가
+     * 그 코루틴을 기다리므로, 시간 초과 경로가 값을 정하고도 반환하지 못한다 — **제한 시간이
+     * 사실상 없는 것과 같다.** 그래서 별도 scope 에서 돌리고 빠져나갈 때 기다리지 않고 버린다.
+     *
+     * 버린 대가는 손자가 죽을 때까지 남는 [Dispatchers.IO] 스레드 하나다. 응답하지 않는 프로세스
+     * 에서 그 스레드를 회수할 방법은 없고, 대안은 호출자를 영영 멈추는 것이다.
      */
-    private suspend fun Process.collectResult(prepared: PreparedCommand): SigningCommandResult = coroutineScope {
-        val standardOutput = drainText(inputStream)
-        val standardError = drainText(errorStream)
-        val standardInput = feed(this@collectResult, prepared.standardInput)
-        try {
-            if (!awaitExit()) {
+    private suspend fun Process.collectResult(prepared: PreparedCommand): SigningCommandResult {
+        val pumps = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        val standardOutput = pumps.drainText(inputStream)
+        val standardError = pumps.drainText(errorStream)
+        val standardInput = pumps.feed(this, prepared.standardInput)
+        return try {
+            if (awaitExit()) {
+                settledResult(prepared, standardInput, standardOutput, standardError)
+            } else {
                 terminate()
-                return@coroutineScope SigningCommandResult.Interrupted(TIMEOUT_DETAIL)
+                SigningCommandResult.Interrupted(TIMEOUT_DETAIL)
             }
-            val written = standardInput.await()
-            val output = standardOutput.await()
-            val error = standardError.await()
-            // 스트림 실패를 먼저 판정한다 — 뒤로 미루면 반쪽만 읽은 출력을 성공으로 내보내게 된다.
-            listOf(written, output, error).firstFailure()?.let { failure ->
-                return@coroutineScope failure.toInterrupted()
-            }
-
-            SigningCommandResult.Completed(
-                exitCode = exitValue(),
-                standardOutput = prepared.signatureOutput() ?: output.text(),
-                standardError = error.text(),
-            )
         } catch (cancellation: CancellationException) {
             // 취소는 삼키지 않는다. 다만 되던지기 전에 자식을 끊어야 위 수집이 끝나고 임시 파일이 정리된다.
             terminate()
@@ -102,7 +103,29 @@ class ProcessSigningCommandRunner internal constructor(
             // 계약이 깨져 화면이 번역되지 않은 예외를 받는다 — 사유를 담아 결과로 돌려준다.
             terminate()
             failure.toInterrupted()
+        } finally {
+            // **기다리지 않고 버린다.** join 하면 위 return 이 정한 값이 나가지 못한다.
+            pumps.cancel()
         }
+    }
+
+    /** 자식이 스스로 끝난 뒤의 결과. 세 스트림이 모두 끝났으므로 여기서는 기다려도 막히지 않는다. */
+    private suspend fun Process.settledResult(
+        prepared: PreparedCommand,
+        standardInput: Deferred<StreamOutcome<Unit>>,
+        standardOutput: Deferred<StreamOutcome<String>>,
+        standardError: Deferred<StreamOutcome<String>>,
+    ): SigningCommandResult {
+        val written = standardInput.await()
+        val output = standardOutput.await()
+        val error = standardError.await()
+        // 스트림 실패를 먼저 판정한다 — 뒤로 미루면 반쪽만 읽은 출력을 성공으로 내보내게 된다.
+        return listOf(written, output, error).firstFailure()?.toInterrupted()
+            ?: SigningCommandResult.Completed(
+                exitCode = exitValue(),
+                standardOutput = prepared.signatureOutput() ?: output.text(),
+                standardError = error.text(),
+            )
     }
 
     /** 취소되면 대기 스레드를 끊어 [CancellationException] 으로 나온다 — 취소가 제한 시간만큼 늦지 않는다. */
