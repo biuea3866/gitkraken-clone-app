@@ -30,7 +30,7 @@ import dev.undine.presentation.design.component.UndineProgressBar
 import dev.undine.presentation.i18n.RecoveryStrings
 import dev.undine.presentation.i18n.Strings
 import dev.undine.presentation.i18n.recovery
-import dev.undine.presentation.i18n.systemStrings
+import dev.undine.presentation.i18n.strings as composedStrings
 
 /**
  * Reflog 복구와 bisect 세션을 나란히 제공하는 화면.
@@ -42,7 +42,9 @@ import dev.undine.presentation.i18n.systemStrings
 fun RecoveryScreen(
     state: RecoveryState,
     modifier: Modifier = Modifier,
-    strings: Strings = systemStrings(),
+    // 화면 트리가 제공하는 값을 따른다 — `systemStrings()` 를 기본으로 두면 OS 로케일을 따라가
+    // 앱의 언어 설정(`LocalStrings` 제공자)이 이 화면에만 적용되지 않는다.
+    strings: Strings = composedStrings,
     onRecover: (ReflogEntry, RecoveryMode) -> Unit = { _, _ -> },
 ) {
     val copy = strings.recovery
