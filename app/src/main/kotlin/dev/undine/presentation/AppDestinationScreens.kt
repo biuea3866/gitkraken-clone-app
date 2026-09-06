@@ -5,6 +5,7 @@
 package dev.undine.presentation
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,17 +14,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import dev.undine.application.patch.PatchActions
 import dev.undine.application.reflog.RecoveryActions
 import dev.undine.di.AppComponent
 import dev.undine.domain.Branch
 import dev.undine.domain.CommitId
 import dev.undine.domain.RefName
 import dev.undine.domain.RepositoryPath
+import dev.undine.domain.RepositorySessionKey
 import dev.undine.domain.UndineException
 import dev.undine.domain.blame.LineRange
 import dev.undine.domain.reflog.RecoveryTarget
@@ -38,7 +44,13 @@ import dev.undine.presentation.conflict.ConflictState
 import dev.undine.presentation.design.UndineTokens
 import dev.undine.presentation.design.component.UndineToolbarButton
 import dev.undine.presentation.diff.DiffViewer
+import dev.undine.presentation.i18n.patch
+import dev.undine.presentation.i18n.strings
 import dev.undine.presentation.palette.CommandRegistry
+import dev.undine.presentation.patch.AwtPatchFiles
+import dev.undine.presentation.patch.PatchFiles
+import dev.undine.presentation.patch.PatchScreen
+import dev.undine.presentation.patch.rememberPatchState
 import dev.undine.presentation.preferences.PreferencesScreen
 import dev.undine.presentation.preferences.PreferencesState
 import dev.undine.presentation.preferences.PreferencesTabDependencies
@@ -98,6 +110,7 @@ internal fun DestinationArea(
     context: RepositoryContext,
     screens: RepositoryScreens,
     undo: ActiveRepositoryUndo,
+    sessionKey: RepositorySessionKey?,
     registry: CommandRegistry,
     welcomeState: WelcomeState,
     onOpenRepository: (RepositoryPath) -> Unit,
@@ -147,6 +160,10 @@ internal fun DestinationArea(
             AppDestination.RECOVERY -> SecondaryScreen(navigation) {
                 RecoveryArea(recovery = undo.scope.recoveryActions, context = context)
             }
+
+            AppDestination.PATCH -> SecondaryScreen(navigation) {
+                PatchArea(patch = component.patchActions, navigation = navigation, sessionKey = sessionKey)
+            }
         }
     }
 }
@@ -156,15 +173,34 @@ internal fun DestinationArea(
  *
  * 메뉴 없이도 저장소로 돌아올 수 있어야 한다. 나가는 길이 메뉴바뿐이면 메뉴를 찾지 못한 사용자는
  * 갇힌다.
+ *
+ * 화면이 **떠나면 안 되는 상태**(적용·저장 진행 중)면 나가는 길을 잠그고 **사유를 그 자리에 말한다**
+ * (결정 C3). 눌리지 않는 버튼만 두면 사용자는 앱이 멈춘 줄로 알고, 팔레트로 빠져나가 작업을 끊는다 —
+ * 그래서 팔레트도 같은 판정([availabilityOf])을 본다.
  */
 @Composable
-private fun SecondaryScreen(navigation: AppNavigationState, content: @Composable () -> Unit) {
+internal fun SecondaryScreen(navigation: AppNavigationState, content: @Composable () -> Unit) {
+    val exitBlockedReason = navigation.exitBlockedReason(AppDestination.REPOSITORY)
     Column(modifier = Modifier.fillMaxSize().background(UndineTokens.color.background)) {
-        Row(modifier = Modifier.fillMaxWidth().padding(UndineTokens.spacing.small)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(UndineTokens.spacing.small),
+            horizontalArrangement = Arrangement.spacedBy(UndineTokens.spacing.small),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             UndineToolbarButton(
                 label = "← ${AppDestination.REPOSITORY.label}",
                 onClick = { navigation.go(AppDestination.REPOSITORY) },
+                enabled = exitBlockedReason == null,
             )
+            exitBlockedReason?.let { reason ->
+                BasicText(
+                    text = reason,
+                    style = UndineTokens.typography.body.copy(
+                        color = UndineTokens.color.foregroundSecondary,
+                    ),
+                    modifier = Modifier.testTag(AppDestinationTags.EXIT_BLOCKED),
+                )
+            }
         }
         Box(modifier = Modifier.fillMaxSize()) { content() }
     }
@@ -324,6 +360,63 @@ private fun RecoveryArea(recovery: RecoveryActions, context: RepositoryContext) 
         modifier = Modifier.fillMaxSize(),
         onRecover = { entry, mode -> state.recoverWith(entry, mode, context.currentBranch) },
     )
+}
+
+/**
+ * 패치 생성·적용 화면.
+ *
+ * 파일 선택·저장 대화상자는 [PatchFiles] 경계 뒤에 있고 **배선이 실제 구현을 준다** — 화면이 AWT 를
+ * 직접 열면 화면 테스트가 사람 조작을 기다리며 멈추고 실제 파일까지 쓴다.
+ *
+ * 대화상자 제목도 다른 화면 문구와 같은 카탈로그에서 읽는다 — 배선에 한국어를 박으면 영어 로케일에서도
+ * 한국어 제목이 뜬다.
+ *
+ * **화면 상태는 활성 저장소의 정체성에 묶인다** (결정 C6). [sessionKey] 가 바뀌면 홀더를 새로 만들어
+ * 선택·미리보기·dry-run·적용 결과를 통째로 버리고 다시 읽는다 — 저장소 A 에서 통과한 검사를 들고
+ * B 로 넘어가면, UND-60 이 "부분 적용을 남기지 않는다" 로 지킨 원자성이 **엉뚱한 저장소 위에서**
+ * 성립한다. 정체성은 경로가 아니라 홀더가 정규화해 돌려준 세션 키다: 같은 저장소를 가리키는 두 탭은
+ * 같은 키라 상태를 버리지 않는다.
+ *
+ * @param sessionKey 지금 조작할 수 있는 저장소의 세션 키. 조작할 수 없으면 `null` 이다 — 그때는 이
+ *   목적지가 그려지지 않지만, 값이 비었다는 것 자체가 앞선 저장소와 다른 정체성이므로 키로 쓴다.
+ */
+@Composable
+internal fun PatchArea(
+    patch: PatchActions,
+    navigation: AppNavigationState,
+    sessionKey: RepositorySessionKey?,
+    files: PatchFiles = rememberAwtPatchFiles(),
+) {
+    val state = rememberPatchState(actions = patch, files = files, sessionKey = sessionKey)
+    LaunchedEffect(state) { state.load() }
+    // 적용·저장이 도는 중에 이 화면을 떠나면 상태 홀더의 스코프가 취소돼, 저장소를 바꾸는 작업이
+    // 사용자 모르게 끊기고 결과를 알릴 자리도 사라진다 (결정 C3). 사유는 **홀더의 진행 상태에서
+    // 파생**시켜 넘긴다 — 진행 여부를 복사한 플래그를 두면 작업이 끝났는데 차단만 남는다.
+    //
+    // 사유 문구는 등록의 **키가 아니다** — 문구를 키로 걸면 문구가 바뀔 때 등록이 잠깐 풀린다.
+    val exitBlocked = rememberUpdatedState(strings.patch.exitBlocked)
+    DisposableEffect(navigation, state) {
+        navigation.blockExitFrom(AppDestination.PATCH) { exitBlocked.value.takeIf { state.isMutating } }
+        onDispose { navigation.releaseExitFrom(AppDestination.PATCH) }
+    }
+    PatchScreen(state = state, modifier = Modifier.fillMaxSize())
+}
+
+/**
+ * AWT 대화상자 구현. **문구를 키로 기억하지 않는다** — 제목이 바뀌면 인스턴스가 새로 만들어지고,
+ * 그것을 키로 기억하는 [rememberPatchState] 의 홀더까지 새 유휴 상태로 갈린다. 그러면 진행 중이던
+ * 적용·저장의 완료·실패가 갈 곳을 잃고, 이탈 차단도 함께 풀린다. 제목은 대화상자를 열 때 읽는다.
+ */
+@Composable
+private fun rememberAwtPatchFiles(): PatchFiles {
+    val copy = rememberUpdatedState(strings.patch)
+    return remember {
+        AwtPatchFiles(
+            openTitle = { copy.value.openDialogTitle },
+            saveTitle = { copy.value.saveDialogTitle },
+            directoryTitle = { copy.value.directoryDialogTitle },
+        )
+    }
 }
 
 /** 화면이 고른 모드를 실제 복구 대상으로 옮긴다. 옮길 ref 가 없으면 아무것도 하지 않는다. */

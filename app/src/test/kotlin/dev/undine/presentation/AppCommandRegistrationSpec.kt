@@ -71,6 +71,8 @@ private val GRAPH_COMMAND_IDS = listOf(
 private class RegistrationFixture(
     private val active: ActiveRepository = ActiveRepository.Operable(RepositoryPath("/tmp/undine")),
     private val selected: GraphOperation? = null,
+    /** 진행 중인 적용·저장 때문에 저장소를 바꿀 수 없는 사유. 없으면 `null` — 평소 상태다 (결정 C6). */
+    private val activeJobBlocked: String? = null,
 ) {
     val navigated = mutableListOf<AppDestination>()
     var openRequested = 0
@@ -98,6 +100,7 @@ private class RegistrationFixture(
                 onToggleDiffView = {},
                 onOpenRebasePlan = { rebasePlanRequested++ },
                 repositoryChangeBlockedReason = { repositoryChangeBlockedReason(active) },
+                activeJobBlockedReason = { activeJobBlocked },
             ),
         )
         registerSecondaryCommands(
@@ -109,6 +112,7 @@ private class RegistrationFixture(
                 // 앱이 쓰는 판정 그대로다 — 복제하면 앱과 어긋난 규칙을 검증하게 된다.
                 availabilityOf = { destination -> availabilityOf(destination, active) },
                 repositoryChangeBlockedReason = { repositoryChangeBlockedReason(active) },
+                activeJobBlockedReason = { activeJobBlocked },
             ),
             graphCallbacks = callbacks,
             selectedGraphOperation = { selected },
@@ -209,6 +213,36 @@ class AppCommandRegistrationSpec : BehaviorSpec({
 
                 REPOSITORY_CHANGING_COMMAND_IDS.forEach { id -> ids shouldContain id }
                 ids shouldNotContain "존재하지 않는 명령"
+            }
+        }
+
+        `when`("진행 중인 적용·저장이 저장소 전환을 막고 있으면") {
+            // 화면 이탈만 막고 여기를 열어 두면 사용자는 저장소를 바꿔 버리고, 진행 중인 적용은
+            // 검사하지 않은 저장소 위에서 끝난다 (결정 C6).
+            then("저장소 열기·닫기가 그 사유로 막힌다") {
+                val reason = "패치를 적용하는 중입니다"
+                val fixture = RegistrationFixture(activeJobBlocked = reason)
+
+                listOf("repository.open", "repository.close").forEach { id ->
+                    availabilityOfCommand(fixture.commandOf(id))
+                        .shouldBeInstanceOf<CommandAvailability.Blocked>()
+                        .reason shouldBe reason
+                }
+            }
+
+            then("막힌 명령은 실행되지 않는다 — 활성 세션이 바뀌지 않는다") {
+                val fixture = RegistrationFixture(activeJobBlocked = "패치를 적용하는 중입니다")
+
+                fixture.commandOf("repository.open").execute().shouldBeInstanceOf<CommandOutcome.Blocked>()
+                fixture.openRequested shouldBe 0
+            }
+
+            then("작업이 없으면 두 명령은 그대로 열려 있다") {
+                val fixture = RegistrationFixture(active = UNAVAILABLE)
+
+                listOf("repository.open", "repository.close").forEach { id ->
+                    availabilityOfCommand(fixture.commandOf(id)) shouldBe CommandAvailability.Available
+                }
             }
         }
 

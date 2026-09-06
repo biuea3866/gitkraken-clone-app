@@ -27,8 +27,15 @@ private val OPERABLE = ActiveRepository.Operable(RepositoryPath("/tmp/undine"))
 /** 탭은 남아 있지만 그 경로를 쓸 수 없는 활성 탭 (`TabAvailability.MissingPath`). */
 private val UNAVAILABLE = ActiveRepository.Unavailable(RepositoryPath("/tmp/undine"))
 
-/** 배선되지 않은 기능. 메뉴에 있으면 눌러도 아무 일이 없는 항목이 된다 (결정 G22). */
-private val UNWIRED_KEYWORDS = listOf("패치", "patch", "업데이트", "update")
+/**
+ * 배선되지 않은 기능. 메뉴에 있으면 눌러도 아무 일이 없는 항목이 된다 (결정 G22).
+ *
+ * patch 는 UND-47 이 화면·DI·목적지까지 배선했으므로 여기서 빠졌다 — 이제 눌리면 화면이 열린다.
+ */
+private val UNWIRED_KEYWORDS = listOf("업데이트", "update")
+
+/** 이탈 차단 사유의 대역. 문구 자체는 화면 카탈로그의 몫이라 여기서는 전달만 확인한다. */
+private const val EXIT_REASON = "적용하는 중입니다"
 
 class AppNavigationSpec : BehaviorSpec({
 
@@ -63,7 +70,7 @@ class AppNavigationSpec : BehaviorSpec({
                     listOf(AppMenuCommand.UndoLast)
             }
 
-            then("배선되지 않은 patch·자동 업데이트 항목이 없다") {
+            then("배선되지 않은 자동 업데이트 항목이 없다") {
                 val labels = APP_MENUS.flatMap { menu -> menu.items.map { it.label.lowercase() } }
                 UNWIRED_KEYWORDS.forEach { keyword -> labels shouldNotContain keyword }
                 labels.none { label -> UNWIRED_KEYWORDS.any(label::contains) } shouldBe true
@@ -103,6 +110,7 @@ class AppNavigationSpec : BehaviorSpec({
                     AppDestination.UNDO,
                     AppDestination.SUBMODULE_WORKTREE,
                     AppDestination.RECOVERY,
+                    AppDestination.PATCH,
                 )
             }
         }
@@ -191,6 +199,114 @@ class AppNavigationSpec : BehaviorSpec({
 
             then("저장소가 필요 없는 화면은 그대로 열린다") {
                 availabilityOf(AppDestination.PREFERENCES, UNAVAILABLE) shouldBe CommandAvailability.Available
+            }
+        }
+    }
+
+    given("진행 중인 작업이 있는 화면의 이탈 차단 (결정 C3)") {
+
+        // 적용·저장은 저장소와 디스크를 이미 바꾸고 있다. 화면을 떠나면 그 작업의 스코프가 취소돼
+        // 사용자 모르게 끊기고, 무엇이 남았는지 알릴 자리까지 함께 사라진다.
+        `when`("지금 화면이 떠나면 안 된다고 등록했으면") {
+            then("다른 화면으로 옮기지 못하고 사유를 말한다") {
+                val navigation = AppNavigationState(AppDestination.PATCH)
+                navigation.blockExitFrom(AppDestination.PATCH) { EXIT_REASON }
+
+                navigation.exitBlockedReason(AppDestination.REPOSITORY) shouldBe EXIT_REASON
+                navigation.go(AppDestination.REPOSITORY)
+                navigation.destination shouldBe AppDestination.PATCH
+            }
+
+            // 뒤로 가기만 막고 팔레트를 열어 두면 사용자는 그쪽으로 빠져나가고, 작업은 그대로 끊긴다.
+            then("팔레트 이동 명령도 저장소 판정보다 먼저 이 사유로 막힌다") {
+                availabilityOf(AppDestination.REPOSITORY, OPERABLE, systemStrings(), EXIT_REASON)
+                    .shouldBeInstanceOf<CommandAvailability.Blocked>()
+                    .reason shouldBe EXIT_REASON
+            }
+
+            then("지금 보고 있는 화면으로 다시 가는 것은 막지 않는다 — 떠나지 않으므로 잃을 작업이 없다") {
+                val navigation = AppNavigationState(AppDestination.PATCH)
+                navigation.blockExitFrom(AppDestination.PATCH) { EXIT_REASON }
+
+                navigation.exitBlockedReason(AppDestination.PATCH).shouldBeNull()
+            }
+        }
+
+        `when`("작업이 끝나 판정이 사유를 내지 않으면") {
+            then("차단이 곧바로 풀린다 — 해제를 따로 기억하지 않는다") {
+                val navigation = AppNavigationState(AppDestination.PATCH)
+                var mutating = true
+                navigation.blockExitFrom(AppDestination.PATCH) { EXIT_REASON.takeIf { mutating } }
+
+                navigation.go(AppDestination.REPOSITORY)
+                navigation.destination shouldBe AppDestination.PATCH
+
+                mutating = false
+                navigation.exitBlockedReason(AppDestination.REPOSITORY).shouldBeNull()
+                navigation.go(AppDestination.REPOSITORY)
+                navigation.destination shouldBe AppDestination.REPOSITORY
+            }
+        }
+
+        `when`("화면이 컴포지션을 떠나 등록을 거뒀으면") {
+            then("남은 등록이 다음 이동을 막지 않는다") {
+                val navigation = AppNavigationState(AppDestination.PATCH)
+                navigation.blockExitFrom(AppDestination.PATCH) { EXIT_REASON }
+                navigation.releaseExitFrom(AppDestination.PATCH)
+
+                navigation.exitBlockedReason(AppDestination.REPOSITORY).shouldBeNull()
+                navigation.go(AppDestination.REPOSITORY)
+                navigation.destination shouldBe AppDestination.REPOSITORY
+            }
+        }
+
+        `when`("다른 화면이 남긴 등록만 있으면") {
+            then("지금 화면의 이동은 막히지 않는다") {
+                val navigation = AppNavigationState(AppDestination.BLAME)
+                navigation.blockExitFrom(AppDestination.PATCH) { EXIT_REASON }
+
+                navigation.exitBlockedReason(AppDestination.REPOSITORY).shouldBeNull()
+                navigation.activeJobBlockedReason().shouldBeNull()
+            }
+        }
+    }
+
+    given("진행 중인 작업이 저장소 전환도 막는 판정 (결정 C6)") {
+
+        // 이동만 막고 세션 전환을 열어 두면 같은 구멍으로 빠져나간다 — 그때 검사한 저장소와 실제
+        // 적용 대상이 갈린다.
+        `when`("지금 화면이 진행 중인 작업을 등록했으면") {
+            then("이동 차단과 저장소 전환 차단이 같은 사유를 낸다") {
+                val navigation = AppNavigationState(AppDestination.PATCH)
+                navigation.blockExitFrom(AppDestination.PATCH) { EXIT_REASON }
+
+                navigation.activeJobBlockedReason() shouldBe EXIT_REASON
+                navigation.activeJobBlockedReason() shouldBe navigation.exitBlockedReason(AppDestination.REPOSITORY)
+            }
+
+            // 이동은 "지금 화면으로 다시 가기" 를 열어 두지만, 저장소 전환에는 그런 예외가 없다 —
+            // 어느 화면에 있든 활성 세션이 바뀌면 적용 대상이 바뀐다.
+            then("지금 화면에 머무는 것과 무관하게 저장소 전환은 막힌다") {
+                val navigation = AppNavigationState(AppDestination.PATCH)
+                navigation.blockExitFrom(AppDestination.PATCH) { EXIT_REASON }
+
+                navigation.exitBlockedReason(AppDestination.PATCH).shouldBeNull()
+                navigation.activeJobBlockedReason() shouldBe EXIT_REASON
+            }
+        }
+
+        `when`("작업이 끝났거나 등록이 거둬졌으면") {
+            then("저장소 전환 차단도 곧바로 풀린다") {
+                val navigation = AppNavigationState(AppDestination.PATCH)
+                var mutating = true
+                navigation.blockExitFrom(AppDestination.PATCH) { EXIT_REASON.takeIf { mutating } }
+
+                navigation.activeJobBlockedReason() shouldBe EXIT_REASON
+                mutating = false
+                navigation.activeJobBlockedReason().shouldBeNull()
+
+                navigation.releaseExitFrom(AppDestination.PATCH)
+                navigation.activeJobBlockedReason().shouldBeNull()
             }
         }
     }

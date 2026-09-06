@@ -85,6 +85,18 @@ class RepositorySessionDriver<UndoScope>(
     /** **지금** 활성 저장소의 되돌리기 범위. 탭을 바꾸면 그 저장소의 것으로 바뀐다. */
     val activeUndoScope: UndoScope get() = activeUndoScopeState
 
+    private var activeSessionKeyState by mutableStateOf<RepositorySessionKey?>(null)
+
+    /**
+     * **지금** 활성 저장소의 정체성. 조작할 수 없는 탭(경로를 잃음·회수됨)에서는 `null` 이다.
+     *
+     * 저장소마다 하나여야 하는 화면 상태를 이 값에 건다 (결정 C6) — 경로 문자열로 걸면 `./`·심볼릭
+     * 링크 별칭에서 같은 저장소가 둘로 갈리고, 같은 저장소를 연 두 탭이 서로 다른 검사 결과를 갖는다.
+     * 판단 기준은 [activeUndoScope] 와 **같은 키**다: 화면이 보는 저장소와 이력이 쌓이는 저장소가
+     * 갈리지 않아야 한다 (결정 G29).
+     */
+    val activeSessionKey: RepositorySessionKey? get() = activeSessionKeyState
+
     private var pendingCloseState by mutableStateOf<TabId?>(null)
 
     /** 사용자의 확인을 기다리는 탭. 확인 전에는 닫지 않는다. */
@@ -177,6 +189,7 @@ class RepositorySessionDriver<UndoScope>(
         // 기억을 늘 버리면 잠깐 회수된 탭의 이력을 잃는다. 그래서 **기억은 남기되 라우팅은 막는다.**
         val activeKey = tabKeys[active?.id]
             ?.takeIf { active?.availability == TabAvailability.Available }
+        activeSessionKeyState = activeKey
         activeUndoScopeState = activeKey
             ?.let { key -> undoScopes.getOrPut(key, createUndoScope) }
             ?: detachedScope

@@ -5,11 +5,16 @@ import androidx.compose.ui.window.FrameWindowScope
 import androidx.compose.ui.window.MenuBar
 /**
  * OS 메뉴바. 구조는 [APP_MENUS] 가 소유하고 여기서는 그 목록을 그린다.
+ *
+ * @param repositoryChangeBlocked 진행 중인 적용·저장 때문에 저장소를 바꿀 수 없는가 (결정 C6).
+ *   이동 항목은 [AppNavigationState.go] 가 같은 판정으로 이미 막으므로, 여기서 더 막을 것은 저장소를
+ *   여는 항목뿐이다 — 한 표면만 막으면 다른 쪽으로 빠져나가 같은 구멍이 남는다.
  */
 @Composable
 internal fun FrameWindowScope.AppMenuBar(
     navigation: AppNavigationState,
     repositoryOpen: Boolean,
+    repositoryChangeBlocked: Boolean,
     onOpenRepository: () -> Unit,
     onUndoLast: () -> Unit,
 ) {
@@ -24,7 +29,11 @@ internal fun FrameWindowScope.AppMenuBar(
                             onClick = { navigation.go(command.destination) },
                         )
 
-                        AppMenuCommand.OpenRepository -> Item(text = item.label, onClick = onOpenRepository)
+                        AppMenuCommand.OpenRepository -> Item(
+                            text = item.label,
+                            enabled = !repositoryChangeBlocked,
+                            onClick = onOpenRepository,
+                        )
 
                         AppMenuCommand.UndoLast -> Item(text = item.label, onClick = onUndoLast)
                     }
