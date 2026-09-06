@@ -228,6 +228,12 @@ val composeTest by tasks.registering(Test::class) {
     useJUnitPlatform()
     systemProperty("undine.version", undineVersion)
     forkEvery = 1
+    // 실패한 스펙의 표준 출력을 CI 로그로 올린다 — Compose 스펙은 로컬에서만 재현되지 않는
+    // 실패가 나기 쉬운데, 출력이 없으면 원인을 추측으로만 좁히게 된다.
+    testLogging {
+        showStandardStreams = true
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
     // **`isFailOnNoMatchingTests` 를 끄지 않는다.** 끄면 필터가 어긋났을 때 이 태스크가 스펙을
     // 하나도 돌리지 않고 통과하고, `check` 는 초록불이 된다 — 검사가 사라진 것을 아무도 모른다.
     filter {
