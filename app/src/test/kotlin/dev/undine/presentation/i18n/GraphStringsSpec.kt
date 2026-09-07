@@ -26,6 +26,9 @@ class GraphStringsSpec : FunSpec({
                 strings.errorDescription,
                 strings.loading,
                 strings.head,
+                strings.rowLaneHidden,
+                strings.widthSplitter,
+                strings.lanesHidden(3),
             ).forEach {
                 it.shouldNotBeBlank()
                 it shouldNotContain MISSING_KEY_MARKER
@@ -47,6 +50,24 @@ class GraphStringsSpec : FunSpec({
         english.emptyTitle shouldBe "No commits to show"
     }
 
+    test("잘린 레인 안내는 숨은 레인 수를 문구에 넣는다") {
+        val korean = catalog.stringsFor(Locale.KOREAN, devBuild = false).graph
+        val english = catalog.stringsFor(Locale.ENGLISH, devBuild = false).graph
+
+        korean.lanesHidden(16) shouldBe "레인 16개가 표시 폭 밖에 있습니다"
+        english.lanesHidden(16) shouldBe "16 lanes are outside the graph column"
+    }
+
+    test("행 수준 잘림 안내와 폭 조절 손잡이 문구는 로케일마다 다르다") {
+        val korean = catalog.stringsFor(Locale.KOREAN, devBuild = false).graph
+        val english = catalog.stringsFor(Locale.ENGLISH, devBuild = false).graph
+
+        korean.rowLaneHidden shouldBe "이 커밋의 레인이 표시 폭 밖에 있습니다"
+        english.rowLaneHidden shouldBe "The lane for this commit is outside the graph column"
+        korean.widthSplitter shouldBe "그래프 열 폭 조절"
+        english.widthSplitter shouldBe "Resize graph column"
+    }
+
     test("graph 키는 graph 네임스페이스 접두사를 쓴다") {
         listOf(
             GraphKeys.emptyTitle,
@@ -55,6 +76,9 @@ class GraphStringsSpec : FunSpec({
             GraphKeys.errorDescription,
             GraphKeys.loading,
             GraphKeys.head,
+            GraphKeys.lanesHidden,
+            GraphKeys.rowLaneHidden,
+            GraphKeys.widthSplitter,
         ).forEach {
             it.id.startsWith("graph.") shouldBe true
         }

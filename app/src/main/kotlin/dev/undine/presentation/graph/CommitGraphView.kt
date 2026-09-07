@@ -2,11 +2,16 @@ package dev.undine.presentation.graph
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -21,6 +26,9 @@ import dev.undine.presentation.i18n.Strings
 import dev.undine.presentation.i18n.graph
 import dev.undine.presentation.i18n.strings
 import dev.undine.presentation.i18n.time
+import dev.undine.presentation.shell.ShellSplitDefaults
+import dev.undine.presentation.shell.ShellSplitter
+import dev.undine.presentation.shell.ShellSplitterOrientation
 import java.time.Instant
 
 /**
@@ -46,6 +54,8 @@ fun CommitGraphView(
     onCommitSelected: (Commit) -> Unit = {},
 ) {
     val listState = rememberLazyListState()
+    // 상태를 목록 밖에서 기억한다 — 빈/실패 상태를 오갈 때 사용자가 맞춘 폭이 사라지면 안 된다.
+    val columnState = rememberGraphColumnState()
 
     LaunchedEffect(state) { state.loadInitialPage() }
     LaunchedEffect(state, listState) { state.loadWhenScrolledToBottom(listState) }
@@ -59,7 +69,8 @@ fun CommitGraphView(
         val status = state.status
         when {
             status is GraphLoadStatus.Failed -> GraphStatusMessage(GraphTags.ERROR, failure = true)
-            state.rows.isNotEmpty() -> CommitList(state, listState, refIndex, now, onCommitSelected, dragDropState)
+            state.rows.isNotEmpty() ->
+                CommitList(state, listState, columnState, refIndex, now, onCommitSelected, dragDropState)
             status == GraphLoadStatus.Loaded -> GraphStatusMessage(GraphTags.EMPTY, failure = false)
             else -> GraphLoadingMessage()
         }
@@ -83,11 +94,19 @@ private suspend fun GraphViewState.loadWhenScrolledToBottom(listState: LazyListS
         }
 }
 
+/**
+ * 커밋 목록과 그 위에 얹히는 폭 조절 손잡이.
+ *
+ * 폭 판정의 분모는 **그래프 열과 내용 영역이 실제로 나눠 갖는 폭** 하나다 — 분할선과 내용 영역의
+ * 좌우 여백을 먼저 뗀다. 판정하는 쪽과 배치하는 쪽이 다른 분모를 보면 내용 영역이 그 차이만큼
+ * 최소보다 작아진다 (UND-92 결정 B2). 이 화면은 가로 스크롤을 두지 않으므로 뗄 스크롤바가 없다.
+ */
 @Composable
 @Suppress("LongParameterList")
 private fun CommitList(
     state: GraphViewState,
     listState: LazyListState,
+    columnState: GraphColumnState,
     refIndex: CommitRefIndex,
     now: Instant,
     onCommitSelected: (Commit) -> Unit,
@@ -97,27 +116,74 @@ private fun CommitList(
     val laneCount = state.laneCount
     val selectedCommitId = state.selectedCommitId
 
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize().testTag(GraphTags.LIST),
-    ) {
-        // key 는 커밋 해시다 — 안정적이지 않으면 스크롤마다 목록 전체가 재구성된다 (compose-ui 규칙 3).
-        items(items = state.rows, key = { item -> item.commit.id.value }) { item ->
-            val display = remember(item, refIndex, now, currentStrings) {
-                displayOf(item, refIndex, now, currentStrings)
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val sharedWidth = GraphColumnDefaults.sharedWidth(
+            totalWidth = maxWidth,
+            splitterThickness = ShellSplitDefaults.SPLITTER_THICKNESS,
+            contentPadding = UndineTokens.spacing.medium,
+        )
+        val layout = columnState.layout(sharedWidth, laneCount)
+
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize().testTag(GraphTags.LIST),
+        ) {
+            // key 는 커밋 해시다 — 안정적이지 않으면 스크롤마다 목록 전체가 재구성된다 (compose-ui 규칙 3).
+            items(items = state.rows, key = { item -> item.commit.id.value }) { item ->
+                val display = remember(item, refIndex, now, currentStrings) {
+                    displayOf(item, refIndex, now, currentStrings)
+                }
+                CommitRow(
+                    display = display,
+                    layout = layout,
+                    selected = item.commit.id == selectedCommitId,
+                    onClick = {
+                        state.selectCommit(item.commit.id)
+                        onCommitSelected(item.commit)
+                    },
+                    dragDropState = dragDropState,
+                )
             }
-            CommitRow(
-                display = display,
-                laneCount = laneCount,
-                selected = item.commit.id == selectedCommitId,
-                onClick = {
-                    state.selectCommit(item.commit.id)
-                    onCommitSelected(item.commit)
-                },
-                dragDropState = dragDropState,
+        }
+
+        // 새 손잡이를 만들지 않고 셸의 것을 그대로 부른다 — 드래그와 키보드 단계가 이미 한 경로다.
+        ShellSplitter(
+            orientation = ShellSplitterOrientation.VERTICAL,
+            label = currentStrings.graph.widthSplitter,
+            testTag = GraphTags.WIDTH_SPLITTER,
+            onResize = { delta -> columnState.resizeBy(delta, sharedWidth, laneCount) },
+            modifier = Modifier.offset(x = layout.width),
+        )
+
+        if (layout.hiddenLaneCount > 0) {
+            HiddenLanesNotice(
+                count = layout.hiddenLaneCount,
+                modifier = Modifier.align(Alignment.BottomStart),
             )
         }
     }
+}
+
+/**
+ * 표시 폭 밖으로 잘린 레인이 있다는 열 수준 안내.
+ *
+ * 조용히 잘라내면 사용자는 자기가 보는 그래프가 전부라고 믿는다. 문구는 카탈로그에서만 읽는다.
+ */
+@Composable
+private fun HiddenLanesNotice(count: Int, modifier: Modifier = Modifier) {
+    val colors = UndineTokens.color
+    val spacing = UndineTokens.spacing
+
+    BasicText(
+        text = strings.graph.lanesHidden(count),
+        modifier = modifier
+            .padding(spacing.small)
+            .background(colors.surface, RoundedCornerShape(UndineTokens.shape.cornerSmall))
+            .padding(horizontal = spacing.small, vertical = spacing.extraSmall)
+            .testTag(GraphTags.LANES_HIDDEN),
+        maxLines = 1,
+        style = UndineTokens.typography.caption.copy(color = colors.warning),
+    )
 }
 
 private fun displayOf(
