@@ -21,6 +21,8 @@ class DiffStringsSpec : FunSpec({
         strings.binaryDescription,
         strings.tooLargeNotice,
         strings.tooLargeDescription,
+        strings.lfsObjectNotice,
+        strings.lfsObjectDescription,
         strings.noChangesNotice,
         strings.stageHunk,
         strings.unifiedViewMode,
@@ -32,7 +34,7 @@ class DiffStringsSpec : FunSpec({
 
         catalog.supportedLocales.forEach { locale ->
             val strings = catalog.stringsFor(locale, devBuild = true).diff
-            textsOf(strings) shouldHaveSize 8
+            textsOf(strings) shouldHaveSize 10
             textsOf(strings).forEach {
                 it.shouldNotBeBlank()
                 it shouldNotContain MISSING_KEY_MARKER
@@ -40,12 +42,15 @@ class DiffStringsSpec : FunSpec({
         }
     }
 
-    test("이진 파일과 임계치 초과는 서로 다른 사유 문구로 구분된다") {
+    test("이진 파일·임계치 초과·LFS 객체는 서로 다른 사유 문구로 구분된다") {
         val korean = catalog.stringsFor(Locale.KOREAN, devBuild = false).diff
 
         korean.binaryNotice shouldNotBe korean.tooLargeNotice
         korean.binaryNotice shouldNotBe korean.noChangesNotice
         korean.tooLargeNotice shouldNotBe korean.noChangesNotice
+        korean.lfsObjectNotice shouldNotBe korean.binaryNotice
+        korean.lfsObjectNotice shouldNotBe korean.tooLargeNotice
+        korean.lfsObjectNotice shouldNotBe korean.noChangesNotice
     }
 
     test("사유 문구는 로케일마다 다르게 나온다") {
@@ -53,11 +58,12 @@ class DiffStringsSpec : FunSpec({
         val english = catalog.stringsFor(Locale.ENGLISH, devBuild = false).diff
 
         korean.binaryNotice shouldNotBe english.binaryNotice
+        korean.lfsObjectNotice shouldNotBe english.lfsObjectNotice
         korean.stageHunk shouldNotBe english.stageHunk
     }
 
     test("diff 키는 diff 네임스페이스 접두사를 쓴다") {
         DiffKeys.all.forEach { it.id.startsWith("diff.") shouldBe true }
-        DiffKeys.all shouldHaveSize 8
+        DiffKeys.all shouldHaveSize 10
     }
 })

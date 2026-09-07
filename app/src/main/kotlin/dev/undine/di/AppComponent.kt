@@ -22,6 +22,15 @@ import dev.undine.application.externaltool.ExternalToolUseCases
 import dev.undine.application.externaltool.OpenDiffToolUseCase
 import dev.undine.application.externaltool.OpenMergeToolUseCase
 import dev.undine.application.gitconfig.ReadEffectiveConfigUseCase
+import dev.undine.application.lfs.DownloadLfsObjectsUseCase
+import dev.undine.application.lfs.EstimateLfsDownloadUseCase
+import dev.undine.application.lfs.LfsUseCases
+import dev.undine.application.lfs.LoadLfsInstallationUseCase
+import dev.undine.application.lfs.LoadLfsLocksUseCase
+import dev.undine.application.lfs.LoadLfsObjectsUseCase
+import dev.undine.application.lfs.LoadLfsTrackingRulesUseCase
+import dev.undine.application.lfs.TrackLfsPatternUseCase
+import dev.undine.application.lfs.UntrackLfsPatternUseCase
 import dev.undine.application.graphops.ExecuteGraphOperationUseCase
 import dev.undine.application.graph.LoadCommitHistoryUseCase
 import dev.undine.application.identity.ApplyProfileUseCase
@@ -91,6 +100,7 @@ import dev.undine.domain.diagnostics.DiagnosticsGateway
 import dev.undine.domain.externaltool.ExternalToolGateway
 import dev.undine.domain.gitconfig.GitConfigGateway
 import dev.undine.domain.identity.IdentityGateway
+import dev.undine.domain.lfs.LfsGateway
 import dev.undine.domain.identity.IdentityService
 import dev.undine.domain.merge.MergeGateway
 import dev.undine.domain.patch.PatchGateway
@@ -108,6 +118,7 @@ import dev.undine.infrastructure.git.bisect.BisectGatewayImpl
 import dev.undine.infrastructure.git.blame.BlameGatewayImpl
 import dev.undine.infrastructure.git.conflict.ConflictGatewayImpl
 import dev.undine.infrastructure.git.config.GitConfigGatewayImpl
+import dev.undine.infrastructure.git.lfs.LfsGatewayImpl
 import dev.undine.infrastructure.git.merge.MergeGatewayImpl
 import dev.undine.infrastructure.git.patch.PatchGatewayImpl
 import dev.undine.infrastructure.git.rebase.InteractiveRebaseGatewayImpl
@@ -193,6 +204,12 @@ class AppComponent(
     private val identityGateway: IdentityGateway = IdentityGatewayImpl(gitAccess, settingsGateway)
     private val externalToolGateway: ExternalToolGateway = ExternalToolGatewayImpl(gitAccess, settingsGateway)
 
+    /**
+     * Git LFS. `git-lfs` 가 없어도 조립은 성립한다 — 미설치는 조회 결과 값으로 올라오고,
+     * 추적 규칙 조회·편집은 `.gitattributes` 만 보므로 CLI 없이도 동작한다.
+     */
+    private val lfsGateway: LfsGateway = LfsGatewayImpl(gitAccess)
+
     // ── Gateway (infrastructure) — 환경설정이 소비하는 읽기 전용 계약 ──
     /**
      * 셋 다 [gitAccess] 를 쓰지 않는다 — 저장소가 열려 있지 않아도 답할 수 있어야 하는 조회다.
@@ -271,6 +288,21 @@ class AppComponent(
         openDiff = OpenDiffToolUseCase(externalToolGateway),
         openMerge = OpenMergeToolUseCase(externalToolGateway),
         checkAvailability = CheckToolAvailabilityUseCase(externalToolGateway),
+    )
+
+    /**
+     * LFS 조회·편집 묶음. 이 티켓은 화면을 만들지 않으므로 소비자는 아직 없지만, 여기에 등록해야
+     * 기능이 **도달 가능한 상태로** 머지된다 — 등록하지 않은 Gateway 는 만든 적 없는 것과 같다.
+     */
+    val lfsUseCases = LfsUseCases(
+        installation = LoadLfsInstallationUseCase(lfsGateway),
+        trackingRules = LoadLfsTrackingRulesUseCase(lfsGateway),
+        track = TrackLfsPatternUseCase(lfsGateway),
+        untrack = UntrackLfsPatternUseCase(lfsGateway),
+        objects = LoadLfsObjectsUseCase(lfsGateway),
+        estimateDownload = EstimateLfsDownloadUseCase(lfsGateway),
+        download = DownloadLfsObjectsUseCase(lfsGateway),
+        locks = LoadLfsLocksUseCase(lfsGateway),
     )
 
     /** Blame·파일 이력 화면이 쓰는 세 동작. 이력 간 비교는 기존 diff 경로를 그대로 쓴다. */
