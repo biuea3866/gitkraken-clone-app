@@ -2,6 +2,7 @@ package dev.undine.infrastructure.git.diff
 
 import dev.undine.domain.DiffHunk
 import dev.undine.domain.DiffResult
+import dev.undine.infrastructure.git.lfs.isLfsPointerBlob
 import org.eclipse.jgit.diff.DiffEntry
 import org.eclipse.jgit.diff.HistogramDiff
 import org.eclipse.jgit.diff.RawText
@@ -34,6 +35,11 @@ internal fun hunksOfEntry(reader: ObjectReader, entry: DiffEntry): DiffResult {
 internal fun hunksOfBlobs(reader: ObjectReader, oldBlob: ObjectId?, newBlob: ObjectId?): DiffResult {
     val sides = listOfNotNull(oldBlob, newBlob)
     return when {
+        // LFS 포인터가 먼저다. 포인터는 작은 텍스트라 뒤의 두 판정을 모두 통과해 **원문이 그려진다** —
+        // 사용자는 그 몇 줄을 파일 내용으로 읽고 파일이 깨졌다고 오해한다.
+        sides.any { blob -> reader.isLfsPointerBlob(blob) } ->
+            DiffResult.NotComputed(DiffResult.Reason.LFS_POINTER)
+
         sides.any { blob -> reader.isBinaryBlob(blob) } ->
             DiffResult.NotComputed(DiffResult.Reason.BINARY)
 

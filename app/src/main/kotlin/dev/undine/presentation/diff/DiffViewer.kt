@@ -89,6 +89,8 @@ private fun NotComputedNotice(reason: DiffResult.Reason, diffStrings: DiffString
     val notice = when (reason) {
         DiffResult.Reason.BINARY -> diffStrings.binaryNotice to diffStrings.binaryDescription
         DiffResult.Reason.TOO_LARGE -> diffStrings.tooLargeNotice to diffStrings.tooLargeDescription
+        // 포인터 원문을 그리지 않는다 — 사용자가 그 몇 줄을 파일 내용으로 읽고 오해한다 (UND-61).
+        DiffResult.Reason.LFS_POINTER -> diffStrings.lfsObjectNotice to diffStrings.lfsObjectDescription
     }
     UndineEmptyState(
         message = notice.first,

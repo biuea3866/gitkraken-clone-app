@@ -13,6 +13,8 @@ object DiffKeys {
     val binaryDescription = StringKey("$NAMESPACE.notice.binaryDescription")
     val tooLargeNotice = StringKey("$NAMESPACE.notice.tooLarge")
     val tooLargeDescription = StringKey("$NAMESPACE.notice.tooLargeDescription")
+    val lfsObjectNotice = StringKey("$NAMESPACE.notice.lfsObject")
+    val lfsObjectDescription = StringKey("$NAMESPACE.notice.lfsObjectDescription")
     val noChangesNotice = StringKey("$NAMESPACE.notice.noChanges")
     val stageHunk = StringKey("$NAMESPACE.hunk.stage")
     val unifiedViewMode = StringKey("$NAMESPACE.viewMode.unified")
@@ -24,6 +26,8 @@ object DiffKeys {
         binaryDescription,
         tooLargeNotice,
         tooLargeDescription,
+        lfsObjectNotice,
+        lfsObjectDescription,
         noChangesNotice,
         stageHunk,
         unifiedViewMode,
@@ -43,6 +47,8 @@ value class DiffStrings internal constructor(private val strings: Strings) {
     val binaryDescription: String get() = strings.text(DiffKeys.binaryDescription)
     val tooLargeNotice: String get() = strings.text(DiffKeys.tooLargeNotice)
     val tooLargeDescription: String get() = strings.text(DiffKeys.tooLargeDescription)
+    val lfsObjectNotice: String get() = strings.text(DiffKeys.lfsObjectNotice)
+    val lfsObjectDescription: String get() = strings.text(DiffKeys.lfsObjectDescription)
     val noChangesNotice: String get() = strings.text(DiffKeys.noChangesNotice)
     val stageHunk: String get() = strings.text(DiffKeys.stageHunk)
     val unifiedViewMode: String get() = strings.text(DiffKeys.unifiedViewMode)
@@ -58,6 +64,8 @@ internal val diffTranslations: Map<Locale, Map<StringKey, String>> = mapOf(
         DiffKeys.binaryDescription to "변경 여부는 파일 목록에서 확인하세요.",
         DiffKeys.tooLargeNotice to "파일이 너무 커서 diff 를 계산하지 않았습니다",
         DiffKeys.tooLargeDescription to "임계치를 넘는 파일은 화면이 멈추지 않도록 건너뜁니다.",
+        DiffKeys.lfsObjectNotice to "LFS 객체라 diff 를 계산하지 않았습니다",
+        DiffKeys.lfsObjectDescription to "이 파일은 Git LFS 로 관리되며 저장소에는 포인터만 들어 있습니다.",
         DiffKeys.noChangesNotice to "이 파일에는 표시할 변경이 없습니다",
         DiffKeys.stageHunk to "이 hunk 스테이징",
         DiffKeys.unifiedViewMode to "통합 보기",
@@ -68,6 +76,8 @@ internal val diffTranslations: Map<Locale, Map<StringKey, String>> = mapOf(
         DiffKeys.binaryDescription to "Check the file list to see whether it changed.",
         DiffKeys.tooLargeNotice to "Diff not computed — file is too large",
         DiffKeys.tooLargeDescription to "Files over the threshold are skipped to keep the view responsive.",
+        DiffKeys.lfsObjectNotice to "Diff not computed — LFS object",
+        DiffKeys.lfsObjectDescription to "This file is managed by Git LFS; the repository holds only a pointer.",
         DiffKeys.noChangesNotice to "This file has no changes to show",
         DiffKeys.stageHunk to "Stage this hunk",
         DiffKeys.unifiedViewMode to "Unified",

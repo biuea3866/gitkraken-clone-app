@@ -170,6 +170,18 @@ class DiffViewerSpec : FunSpec({
         }
     }
 
+    test("LFS 포인터는 포인터 원문 대신 LFS 객체 안내가 표시된다") {
+        runComposeUiTest {
+            setContent { ViewerUnderTest(DiffResult.NotComputed(DiffResult.Reason.LFS_POINTER)) }
+
+            onNodeWithTag(DiffTags.NOTICE).assertIsDisplayed()
+            onNodeWithText(diffStrings.lfsObjectNotice).assertIsDisplayed()
+            onNodeWithText(diffStrings.lfsObjectDescription).assertIsDisplayed()
+            // 포인터 원문이 한 줄이라도 그려지면 사용자는 그것을 파일 내용으로 읽는다.
+            onAllNodesWithTag(DiffTags.LINE).fetchSemanticsNodes().size shouldBe 0
+        }
+    }
+
     test("변경이 없는 파일은 변경 없음 안내가 표시된다") {
         runComposeUiTest {
             setContent { ViewerUnderTest(DiffResult.Computed(emptyList())) }

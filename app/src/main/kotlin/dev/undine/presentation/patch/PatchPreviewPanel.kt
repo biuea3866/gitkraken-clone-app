@@ -24,6 +24,8 @@ import dev.undine.presentation.diff.SplitLineRow
 import dev.undine.presentation.diff.UnifiedLineRow
 import dev.undine.presentation.diff.diffRowsOf
 import dev.undine.presentation.i18n.PatchStrings
+import dev.undine.presentation.i18n.diff
+import dev.undine.presentation.i18n.strings
 
 /** 미리보기 목록의 최대 높이. 토큰을 조합해 만든다 — 화면 고유 dp 리터럴을 두지 않는다. */
 private val previewMaxHeight: Dp
@@ -83,6 +85,9 @@ private fun NotComputedNotice(reason: DiffResult.Reason, copy: PatchStrings) {
     val message = when (reason) {
         DiffResult.Reason.BINARY -> copy.previewBinary
         DiffResult.Reason.TOO_LARGE -> copy.previewTooLarge
+        // 패치 미리보기는 패치 텍스트에서 만들어져 이 사유가 나올 경로가 없다. 그래도 `when` 을
+        // else 로 열지 않고, 문구는 diff 네임스페이스의 같은 안내를 그대로 쓴다 (UND-61).
+        DiffResult.Reason.LFS_POINTER -> strings.diff.lfsObjectNotice
     }
     UndineEmptyState(
         message = message,

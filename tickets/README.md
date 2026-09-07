@@ -63,7 +63,7 @@ Undine 구현을 **60개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2
 | [UND-29](UND-29-blame-file-history.md) | Blame · 파일 이력 조회 | M | 7 | UND-01 · UND-05 | `domain/blame/` · `infrastructure/git/blame/` |
 | [UND-30](UND-30-reflog-recovery.md) | Reflog 조회 · 복구 | M | 7 | UND-01 | `domain/reflog/` · `infrastructure/git/reflog/` |
 | [UND-60](UND-60-patch-apply-transaction.md) | Patch 생성 · 적용 (트리 트랜잭션 복원) | M | 7 | UND-05 | `domain/patch/` · `infrastructure/git/patch/` |
-| [UND-61](UND-61-git-lfs.md) | Git LFS 연동 (출처를 사실로 판정) | M | 7 | UND-08 | `domain/lfs/` · `infrastructure/git/lfs/` |
+| [UND-61](UND-61-git-lfs.md) | Git LFS 연동 (출처를 사실로 판정) | M | 7 | UND-08 | `domain/lfs/` · `application/lfs/` · `infrastructure/git/lfs/` · `di/AppComponent.kt` · `domain/DiffResult.kt` · `infrastructure/git/diff/DiffContent.kt` · `presentation/diff/DiffViewer.kt` · `presentation/i18n/DiffStrings.kt` |
 | [UND-32](UND-32-submodule-management.md) | Submodule 관리 | M | 7 | UND-02 · UND-59 | `domain/submodule/` · `infrastructure/git/submodule/` |
 | [UND-34](UND-34-worktree-management.md) | Worktree 관리 | M | 7 | UND-02 · UND-59 | `domain/worktree/` · `infrastructure/git/worktree/` |
 | [UND-35](UND-35-bisect-session.md) | Bisect 세션 | M | 7 | UND-03 · UND-59 | `domain/bisect/` · `application/bisect/` · `infrastructure/git/bisect/` |
