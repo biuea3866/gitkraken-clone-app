@@ -1,5 +1,6 @@
 package dev.undine.presentation.preferences
 
+import dev.undine.application.preferences.AppliedSettings
 import dev.undine.application.preferences.LoadPreferencesUseCase
 import dev.undine.application.preferences.UpdatePreferencesUseCase
 import dev.undine.domain.AutomaticFetchSettings
@@ -70,7 +71,7 @@ private class GitTabFixture(initial: Settings = STORED) {
     fun state(): PreferencesState = PreferencesState(
         scope = scope,
         loadPreferences = LoadPreferencesUseCase(gateway),
-        updatePreferences = UpdatePreferencesUseCase(gateway),
+        updatePreferences = UpdatePreferencesUseCase(gateway, AppliedSettings()),
     ).also(PreferencesState::refresh)
 }
 

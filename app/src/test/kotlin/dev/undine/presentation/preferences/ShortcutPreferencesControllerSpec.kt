@@ -1,6 +1,7 @@
 package dev.undine.presentation.preferences
 
 import androidx.compose.ui.input.key.Key
+import dev.undine.application.preferences.AppliedSettings
 import dev.undine.application.preferences.LoadPreferencesUseCase
 import dev.undine.application.preferences.UpdatePreferencesUseCase
 import dev.undine.domain.Settings
@@ -81,7 +82,7 @@ private class ShortcutFixture(
     val preferences = PreferencesState(
         scope = CoroutineScope(Dispatchers.Unconfined + Job()),
         loadPreferences = LoadPreferencesUseCase(gateway),
-        updatePreferences = UpdatePreferencesUseCase(gateway),
+        updatePreferences = UpdatePreferencesUseCase(gateway, AppliedSettings()),
     )
     val controller = ShortcutPreferencesController(preferences, registry)
 

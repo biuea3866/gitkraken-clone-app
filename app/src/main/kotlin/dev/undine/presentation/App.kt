@@ -13,6 +13,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -65,9 +66,10 @@ import dev.undine.presentation.graph.GraphOperationCallbacks
 import dev.undine.presentation.graph.GraphViewState
 import dev.undine.presentation.graph.rememberGraphViewState
 import dev.undine.presentation.i18n.LocalStrings
+import dev.undine.presentation.i18n.builtInStringCatalog
 import dev.undine.presentation.i18n.common
 import dev.undine.presentation.i18n.strings
-import dev.undine.presentation.i18n.systemStrings
+import dev.undine.presentation.i18n.stringsForLanguageTag
 import dev.undine.presentation.i18n.tabs
 import dev.undine.presentation.palette.CommandPalette
 import dev.undine.presentation.palette.CommandRegistry
@@ -237,10 +239,17 @@ internal fun AppRoot(
     windowScope: FrameWindowScope? = null,
     onAssembled: ((AppWiring) -> Unit)? = null,
 ) {
-    // 기본은 다크다. Git 클라이언트는 이력·diff 를 오래 들여다보는 화면이고, 설정 화면이 저장한
-    // 테마를 읽어 오기 전까지 기본값이 곧 유일한 선택이다.
-    UndineTheme(themeMode = ThemeMode.DARK) {
-        CompositionLocalProvider(LocalStrings provides systemStrings()) {
+    // 지금 적용된 설정 하나만 본다 — 시작 시 읽은 값도 설정 화면이 바꾼 값도 여기로 온다.
+    // 아직 읽지 못했거나 읽기에 실패했으면 `null` 이라 시스템 로케일·다크로 그리고, 읽은 뒤 **한 번**
+    // 바뀐다. 로딩 화면을 따로 두지 않는다 — 깜빡임 한 번이 빈 화면보다 낫다. 기본이 다크인 것은
+    // Git 클라이언트가 이력·diff 를 오래 들여다보는 화면이기 때문이다.
+    val applied by component.appliedSettings.current.collectAsState()
+
+    // 카탈로그는 한 번만 만든다 — `systemStrings()` 는 부를 때마다 카탈로그를 새로 만든다.
+    val catalog = remember { builtInStringCatalog() }
+
+    UndineTheme(themeMode = applied?.theme ?: ThemeMode.DARK) {
+        CompositionLocalProvider(LocalStrings provides catalog.stringsForLanguageTag(applied?.language)) {
             Box(modifier = modifier.fillMaxSize().background(UndineTokens.color.background)) {
                 AppContent(
                     component = component,
@@ -455,12 +464,15 @@ private fun AppContent(
         }
     }
 
-    // 저장된 단축키 오버라이드를 **시작 시** 얹는다. 묶지 못한 id 는 설정의 단축키 탭이 목록과 경고로
-    // 보여 준다 (결정 G20) — 여기서 대화상자를 띄우지 않는다. 설정을 읽지 못한 것은 다른 문제라
-    // 조용히 넘기지 않고 전역 안내로 올린다.
+    // 저장된 설정을 **시작 시 한 번** 읽어 적용 설정으로 싣고, 그 값으로 단축키 오버라이드를 얹는다.
+    // 언어·테마를 위해 따로 한 번 더 읽지 않는다 — 두 읽기가 갈리면 어느 쪽이 적용됐는지 알 수 없다.
+    // 묶지 못한 id 는 설정의 단축키 탭이 목록과 경고로 보여 준다 (결정 G20) — 여기서 대화상자를
+    // 띄우지 않는다. 설정을 읽지 못한 것은 다른 문제라 조용히 넘기지 않고 전역 안내로 올린다.
+    // 읽지 못하면 적용 설정이 비어 화면은 시스템 로케일·다크로 뜬다.
     LaunchedEffect(registry) {
         try {
-            registry.applyShortcutOverrides(component.loadPreferences.execute().shortcutOverrides.toShortcutOverrides())
+            val settings = component.appliedSettings.publish { component.loadPreferences.execute() }
+            registry.applyShortcutOverrides(settings.shortcutOverrides.toShortcutOverrides())
         } catch (failure: IOException) {
             errors.report(failure, logPath = null)
         }

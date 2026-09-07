@@ -1,5 +1,6 @@
 package dev.undine.presentation.preferences
 
+import dev.undine.application.preferences.AppliedSettings
 import dev.undine.application.preferences.LoadPreferencesUseCase
 import dev.undine.application.preferences.LoadSigningPreferencesUseCase
 import dev.undine.application.preferences.UpdatePreferencesUseCase
@@ -170,7 +171,7 @@ private class GatedLoadFixture {
     fun state(): PreferencesState = PreferencesState(
         scope = scope,
         loadPreferences = LoadPreferencesUseCase(gateway),
-        updatePreferences = UpdatePreferencesUseCase(gateway),
+        updatePreferences = UpdatePreferencesUseCase(gateway, AppliedSettings()),
     )
 }
 
@@ -182,7 +183,7 @@ private class GatedStateFixture {
     fun state(): PreferencesState = PreferencesState(
         scope = scope,
         loadPreferences = LoadPreferencesUseCase(gateway),
-        updatePreferences = UpdatePreferencesUseCase(gateway),
+        updatePreferences = UpdatePreferencesUseCase(gateway, AppliedSettings()),
     )
 
     /**
@@ -212,7 +213,7 @@ private class PreferencesStateFixture(initial: Settings = STORED) {
     fun state(withSigning: Boolean = false) = PreferencesState(
         scope = scope,
         loadPreferences = LoadPreferencesUseCase(gateway),
-        updatePreferences = UpdatePreferencesUseCase(gateway),
+        updatePreferences = UpdatePreferencesUseCase(gateway, AppliedSettings()),
         loadSigningPreferences = if (withSigning) LoadSigningPreferencesUseCase(signingGateway) else null,
     )
 }

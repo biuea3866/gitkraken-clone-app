@@ -5,6 +5,7 @@ import dev.undine.domain.SettingsPreference
 import dev.undine.domain.ThemeMode
 import dev.undine.presentation.i18n.PreferencesStrings
 import dev.undine.presentation.i18n.StringCatalog
+import dev.undine.presentation.i18n.localeForLanguageTag
 import java.util.Locale
 
 /**
@@ -39,8 +40,8 @@ internal fun themeChoices(
 /**
  * 언어 행 — 저장된 BCP 47 태그가 실제로 어떤 로케일로 보이는지를 표시한다.
  *
- * 카탈로그에 없는 태그는 [StringCatalog.resolveLocale] 계약대로 기본 로케일로 **보이기만** 한다.
- * 저장값을 그 로케일로 바꾸지 않는다 — 나중에 그 번역이 더해지면 저장해 둔 태그가 되살아난다.
+ * 해석은 [localeForLanguageTag] 하나가 한다 — **배선(`AppRoot`)이 실제로 그리는 그 규칙**이라,
+ * 여기 보이는 언어와 화면에 그려지는 언어가 갈리지 않는다.
  */
 internal fun languagePreferencesRow(
     settings: Settings,
@@ -48,7 +49,7 @@ internal fun languagePreferencesRow(
     texts: PreferencesStrings,
 ): PreferencesRow = appPreferencesRow(
     label = texts.language,
-    value = displayedLocale(settings, catalog).labelIn(texts),
+    value = catalog.localeForLanguageTag(settings.language).labelIn(texts),
     preference = SettingsPreference.LANGUAGE,
     texts = texts,
 )
@@ -103,10 +104,6 @@ internal fun reopenLastRepositoryChoices(
         selected = reopen == settings.reopenLastRepository,
     )
 }
-
-/** 저장된 언어 태그가 실제로 그려질 로케일. `null` 은 **시스템 로케일을 따른다**는 뜻이라 그대로 둔다. */
-private fun displayedLocale(settings: Settings, catalog: StringCatalog): Locale? =
-    settings.language?.let { tag -> catalog.resolveLocale(Locale.forLanguageTag(tag)) }
 
 /** 로케일 이름은 **그 로케일의 말로** 보여준다 — 화면 언어를 바꾸려는 사람이 읽을 수 있어야 한다. */
 private fun Locale?.labelIn(texts: PreferencesStrings): String =

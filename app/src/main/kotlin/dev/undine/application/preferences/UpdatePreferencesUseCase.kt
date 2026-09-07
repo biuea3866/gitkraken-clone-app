@@ -12,14 +12,22 @@ import dev.undine.domain.SettingsGateway
  *
  * 전체 초기화도 이 경로를 쓴다 — 초기화는 `Settings.withDefaultPreferences()` 를 넘긴 변경일 뿐이다.
  * 설정 변경은 Git 연산이 아니므로 Undo 스택에 기록하지 않는다.
+ *
+ * 저장에 성공한 값은 [appliedSettings] 에 발행한다 — 설정 화면에는 저장 버튼이 없고 이 경로
+ * 하나만 있으므로, 여기서 발행하면 화면 쪽 코드를 손대지 않고 언어·테마가 즉시 반영된다.
+ *
+ * @param appliedSettings 배선(`AppRoot`)이 구독하는 **바로 그 인스턴스**여야 한다. 따로 만들면
+ *   발행이 구독에 닿지 않는 — 조용히 안 되는 — 배선이 된다.
  */
 class UpdatePreferencesUseCase(
     private val settingsGateway: SettingsGateway,
+    private val appliedSettings: AppliedSettings,
 ) {
     /** @return 저장된 값에 [change] 를 적용한 결과. 화면은 이 값으로 자기 상태를 맞춘다. */
-    suspend fun execute(change: (Settings) -> Settings): Settings {
-        var applied: Settings? = null
-        settingsGateway.update { stored -> change(stored).also { applied = it } }
-        return requireNotNull(applied) { "설정 갱신이 새 값을 만들지 않았습니다" }
-    }
+    suspend fun execute(change: (Settings) -> Settings): Settings =
+        appliedSettings.publish {
+            var applied: Settings? = null
+            settingsGateway.update { stored -> change(stored).also { applied = it } }
+            requireNotNull(applied) { "설정 갱신이 새 값을 만들지 않았습니다" }
+        }
 }

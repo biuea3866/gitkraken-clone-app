@@ -33,6 +33,7 @@ import dev.undine.application.identity.LoadProfilesUseCase
 import dev.undine.application.identity.ProfileUsageUseCase
 import dev.undine.application.identity.SaveProfileUseCase
 import dev.undine.application.identity.UpdateProfileUseCase
+import dev.undine.application.preferences.AppliedSettings
 import dev.undine.application.preferences.LoadPreferencesUseCase
 import dev.undine.application.preferences.LoadSigningPreferencesUseCase
 import dev.undine.application.preferences.UpdatePreferencesUseCase
@@ -150,8 +151,15 @@ import java.nio.file.Path
  * @param settingsFile 설정 영속화 위치. 창 소유자가 정한다 — 컴포넌트가 경로 정책을 만들지 않는다.
  * @param appDirectory 로그·설정이 함께 놓이는 앱 디렉터리. [settingsFile] 에서 되짚어 계산하지
  *   않는다 — 경로 정책은 창 소유자 한 곳에만 둔다 (결정 G35 UND-78).
+ * @param settingsGateway 설정 영속화. 기본은 [settingsFile] 에 붙는 실제 구현이다. 실제 구현은
+ *   읽기 실패를 기본값으로 접어 예외를 올리지 않으므로([SettingsGatewayImpl]), **시작 읽기가
+ *   늦거나 실패하는 경로**는 여기에 다른 구현을 넣어야만 태울 수 있다 — 테스트가 쓰는 통로다.
  */
-class AppComponent(settingsFile: Path, appDirectory: Path) {
+class AppComponent(
+    settingsFile: Path,
+    appDirectory: Path,
+    private val settingsGateway: SettingsGateway = SettingsGatewayImpl(settingsFile),
+) {
 
     private val gitAccess = GitAccess()
 
@@ -166,7 +174,7 @@ class AppComponent(settingsFile: Path, appDirectory: Path) {
     private val conflictGateway: ConflictGateway = ConflictGatewayImpl(gitAccess)
     private val mergeGateway: MergeGateway = MergeGatewayImpl(gitAccess)
     private val rebaseGateway: InteractiveRebaseGateway = InteractiveRebaseGatewayImpl(gitAccess)
-    private val settingsGateway: SettingsGateway = SettingsGatewayImpl(settingsFile)
+    // settingsGateway 는 생성자가 받는다 — 기본값이 실제 구현이라 조립 결과는 같다.
 
     /**
      * 탭 세션 전이의 경계. **[gitAccess] 를 [repositoryGateway] 와 공유해야** 다른 Gateway 가 보는
@@ -224,9 +232,15 @@ class AppComponent(settingsFile: Path, appDirectory: Path) {
 
     // ── 2차 UseCase (application) ──
 
+    /**
+     * 지금 화면에 적용된 설정. **배선(`AppRoot`)과 [updatePreferences] 가 같은 인스턴스를 본다** —
+     * 따로 만들면 갱신 발행이 구독에 닿지 않아 언어·테마가 재기동 전까지 그대로 남는다.
+     */
+    val appliedSettings = AppliedSettings()
+
     /** 환경설정 화면이 쓰는 세 동작. 서명 실효값은 저장소가 열려 있을 때만 읽힌다. */
     val loadPreferences = LoadPreferencesUseCase(settingsGateway)
-    val updatePreferences = UpdatePreferencesUseCase(settingsGateway)
+    val updatePreferences = UpdatePreferencesUseCase(settingsGateway, appliedSettings)
     val loadSigningPreferences = LoadSigningPreferencesUseCase(signingGateway)
 
     /** 설정 저장 경로 **밖**을 다루는 두 탭(계정·도구)의 의존. 단축키 탭의 레지스트리는 배선이 준다. */
