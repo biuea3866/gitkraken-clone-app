@@ -3,6 +3,9 @@
 네이티브 배포본을 만들고 설치하는 절차. 설정의 SSOT 는 `app/build.gradle.kts` 의
 `nativeDistributions` 블록이고, 버전은 `gradle.properties` 의 `undine.version` 하나다.
 
+여기서 만든 산출물을 **GitHub Release 로 발행하는 계약**은 [`RELEASE-CONTRACT.md`](RELEASE-CONTRACT.md)
+가 정본이다 — 자산 이름·체크섬 형식·조회 좌표. 자동 업데이트(UND-48)가 그 계약을 코드로 읽는다.
+
 ## 만들기
 
 ```bash
