@@ -1,6 +1,8 @@
 # [UND-64] 릴리즈 발행 파이프라인 — 자동 업데이트가 조회할 대상을 만든다
 
-> wave 8 · 사이즈 S · 의존 UND-25 · 소유 `.github/workflows/` (릴리즈 워크플로) · `packaging/`(체크섬 산출)
+> wave 8 · 사이즈 S · 의존 UND-25 · 소유 `.github/workflows/release.yml` ·
+> `packaging/release-assets.sh` · `packaging/publish-release.sh` · `packaging/RELEASE-CONTRACT.md` ·
+> `packaging/README.md`(발행 계약 가리키기) · `app/src/test/kotlin/dev/undine/packaging/`(스크립트 검증 Kotest)
 
 ## 작업 내용 (설계 의도)
 
@@ -42,6 +44,13 @@ UND-48 이 코드로 읽을 대상이므로 **자산 이름 규칙·체크섬 �
 - **앱 쪽 업데이트 확인·다운로드·설치** — UND-48 이다.
 - 코드 서명·공증 — UND-25 가 이미 범위 밖으로 선언했다. 이 티켓이 되살리지 않는다.
 - 실행 중인 설치본 교체 방식 — UND-48 이 이 티켓의 발행 형식을 보고 정한다.
+
+### 미검증 면적 (PR 본문에 명시할 것)
+
+**릴리즈 워크플로를 실제 태그로 실행해 본 적이 없다.** 태그 push 는 외부에 공개하는 행위라
+승인 없이 밀지 않았다. 계약 판단(태그 대조·자산명·체크섬·멱등 발행)은 `packaging/` 스크립트로
+빼서 Kotest 가 실제로 실행해 검증하지만, GitHub Actions 배선(러너·아티팩트 전달·`gh` 인증)은
+첫 태그 push 에서 처음 돈다.
 
 ### 롤백
 
