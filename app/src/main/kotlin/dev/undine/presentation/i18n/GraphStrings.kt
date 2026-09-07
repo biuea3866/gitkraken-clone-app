@@ -12,6 +12,9 @@ object GraphKeys {
     val errorDescription = StringKey("$NAMESPACE.error.description")
     val loading = StringKey("$NAMESPACE.loading")
     val head = StringKey("$NAMESPACE.head")
+    val lanesHidden = StringKey("$NAMESPACE.lanesHidden")
+    val rowLaneHidden = StringKey("$NAMESPACE.rowLaneHidden")
+    val widthSplitter = StringKey("$NAMESPACE.widthSplitter")
 }
 
 /**
@@ -30,6 +33,15 @@ value class GraphStrings internal constructor(private val strings: Strings) {
 
     /** HEAD 칩 라벨. git 용어를 그대로 쓰지만 표기는 로케일이 정한다. */
     val head: String get() = strings.text(GraphKeys.head)
+
+    /** 자기 노드가 표시 폭 밖에 있는 행의 안내. 그 행을 조용히 빈 줄로 두지 않는다. */
+    val rowLaneHidden: String get() = strings.text(GraphKeys.rowLaneHidden)
+
+    /** 그래프 열 폭 조절 손잡이의 접근성 설명. */
+    val widthSplitter: String get() = strings.text(GraphKeys.widthSplitter)
+
+    /** 표시 폭 밖으로 잘린 레인이 [count] 개 있다는 안내. */
+    fun lanesHidden(count: Int): String = strings.text(GraphKeys.lanesHidden, count)
 }
 
 /** 그래프 문구 네임스페이스 진입점. */
@@ -43,6 +55,9 @@ internal val graphTranslations: Map<Locale, Map<StringKey, String>> = mapOf(
         GraphKeys.errorDescription to "저장소 상태를 확인한 뒤 다시 시도하세요.",
         GraphKeys.loading to "이력을 불러오는 중",
         GraphKeys.head to "HEAD",
+        GraphKeys.lanesHidden to "레인 {0}개가 표시 폭 밖에 있습니다",
+        GraphKeys.rowLaneHidden to "이 커밋의 레인이 표시 폭 밖에 있습니다",
+        GraphKeys.widthSplitter to "그래프 열 폭 조절",
     ),
     Locale.ENGLISH to mapOf(
         GraphKeys.emptyTitle to "No commits to show",
@@ -51,5 +66,8 @@ internal val graphTranslations: Map<Locale, Map<StringKey, String>> = mapOf(
         GraphKeys.errorDescription to "Check the repository state and try again.",
         GraphKeys.loading to "Loading history",
         GraphKeys.head to "HEAD",
+        GraphKeys.lanesHidden to "{0} lanes are outside the graph column",
+        GraphKeys.rowLaneHidden to "The lane for this commit is outside the graph column",
+        GraphKeys.widthSplitter to "Resize graph column",
     ),
 )

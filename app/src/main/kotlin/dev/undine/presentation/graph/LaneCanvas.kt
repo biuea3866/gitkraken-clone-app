@@ -22,8 +22,11 @@ private const val HALF = 2f
 /**
  * 커밋 한 행의 레인 그림 — 통과선·커밋 노드·부모 연결선.
  *
- * 좌표 변환은 [GraphLaneGeometry] 가 소유한다. 행마다 폭이 흔들리지 않도록 [laneCount] 는
- * 목록 전체 기준값을 받는다.
+ * 좌표 변환은 [GraphLaneGeometry] 가 소유한다. 레인 폭은 **[GraphLaneGeometry.LANE_WIDTH] 고정**이고
+ * 주어진 폭을 레인 수로 나누지 않는다 — 나누면 그래프 열에 상한이 걸린 순간 레인이 좁은 폭에
+ * 뭉개져, 잘라서 그리는 대신 다 그리되 읽을 수 없게 된다 (UND-92 결정 A1).
+ *
+ * 그래서 [visibleLaneCount] 밖의 레인은 **그리지 않는다.** 그 사실은 열·행 수준 표시가 알린다.
  *
  * 부모 연결선은 커밋 노드에서 대각선으로 목표 레인까지 간 뒤 **수직으로 행 아래 끝까지** 내려간다.
  * 대각선만으로 바닥에 닿게 하면 다음 행의 선과 x 가 어긋난다.
@@ -34,33 +37,38 @@ private const val HALF = 2f
 @Composable
 internal fun LaneCanvas(
     row: GraphRow,
-    laneCount: Int,
+    visibleLaneCount: Int,
     modifier: Modifier = Modifier,
 ) {
     val palette = UndineTokens.color.lanePalette
 
     Canvas(modifier = modifier) {
-        val laneWidth = size.width / maxOf(laneCount, 1)
+        val laneWidth = GraphLaneGeometry.LANE_WIDTH.toPx()
         val stroke = LANE_STROKE.toPx()
         val centerY = size.height / HALF
         val commitX = GraphLaneGeometry.laneCenterX(row.lane, laneWidth)
         val commitColor = GraphLaneGeometry.laneColor(palette, row.colorSlot)
 
-        row.passThrough.forEach { segment ->
-            val x = GraphLaneGeometry.laneCenterX(segment.lane, laneWidth)
-            drawLine(
-                color = GraphLaneGeometry.laneColor(palette, segment.colorSlot),
-                start = Offset(x, 0f),
-                end = Offset(x, size.height),
-                strokeWidth = stroke,
-            )
-        }
+        row.passThrough
+            .filter { it.lane < visibleLaneCount }
+            .forEach { segment ->
+                val x = GraphLaneGeometry.laneCenterX(segment.lane, laneWidth)
+                drawLine(
+                    color = GraphLaneGeometry.laneColor(palette, segment.colorSlot),
+                    start = Offset(x, 0f),
+                    end = Offset(x, size.height),
+                    strokeWidth = stroke,
+                )
+            }
+
+        // 자기 레인이 표시 폭 밖이면 이 행에는 아무 선도 그리지 않는다 — 잘렸다는 사실은 표식이 알린다.
+        if (row.lane >= visibleLaneCount) return@Canvas
 
         // 위쪽(더 최신 커밋)에서 내려오는 선은 노드까지만 온다.
         drawLine(commitColor, Offset(commitX, 0f), Offset(commitX, centerY), stroke)
 
         row.parents
-            .filter(GraphLaneGeometry::isDrawable)
+            .filter { GraphLaneGeometry.isDrawable(it) && it.toLane < visibleLaneCount }
             .forEach { drawParentEdge(it, laneWidth, stroke, commitColor) }
 
         // 점을 채운다 — 속을 배경색으로 비우면 얇은 링만 남아 레인 색이 눈에 들어오지 않는다.

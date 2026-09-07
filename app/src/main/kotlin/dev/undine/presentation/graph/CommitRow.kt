@@ -3,8 +3,11 @@ package dev.undine.presentation.graph
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -14,8 +17,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import dev.undine.domain.CommitId
 import dev.undine.presentation.design.UndineTokens
+import dev.undine.presentation.i18n.graph
+import dev.undine.presentation.i18n.strings
+import dev.undine.presentation.shell.ShellSplitDefaults
 import dev.undine.domain.graphops.GraphDragSource
 import dev.undine.domain.graphops.GraphDropTarget
 
@@ -24,11 +33,13 @@ import dev.undine.domain.graphops.GraphDropTarget
  *
  * 레인 열에는 세로 여백을 주지 않는다 — 여백이 있으면 행 사이에서 통과선이 끊겨 보인다.
  * 그래서 [dev.undine.presentation.design.component.UndineListRow] 대신 직접 구성한다.
+ *
+ * 레인 열의 폭과 그릴 레인 수는 [layout] 이 정한다 — 열 수준 판정과 같은 값을 본다.
  */
 @Composable
 internal fun CommitRow(
     display: GraphRowDisplay,
-    laneCount: Int,
+    layout: GraphColumnLayout,
     selected: Boolean,
     onClick: () -> Unit,
     dragDropState: GraphDragDropState? = null,
@@ -48,14 +59,9 @@ internal fun CommitRow(
             .testTag(GraphTags.row(display.item.commit.id)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LaneCanvas(
-            row = display.item.row,
-            laneCount = laneCount,
-            modifier = Modifier
-                .width(GraphLaneGeometry.columnWidth(laneCount))
-                .fillMaxHeight()
-                .testTag(GraphTags.lanes(display.item.commit.id)),
-        )
+        LaneColumn(display = display, layout = layout)
+        // 조절 손잡이가 놓이는 자리. 손잡이는 목록 위에 얹히므로 행이 그만큼을 비워 둔다.
+        Spacer(modifier = Modifier.width(ShellSplitDefaults.SPLITTER_THICKNESS))
         Row(
             modifier = Modifier.weight(1f).padding(horizontal = spacing.medium),
             horizontalArrangement = Arrangement.spacedBy(spacing.small),
@@ -88,4 +94,44 @@ internal fun CommitRow(
             )
         }
     }
+}
+
+/** 이 행의 레인 열 — 표시 폭만큼의 그림과, 자기 노드가 잘렸을 때의 표식. */
+@Composable
+private fun LaneColumn(display: GraphRowDisplay, layout: GraphColumnLayout) {
+    Box(modifier = Modifier.width(layout.width).fillMaxHeight()) {
+        LaneCanvas(
+            row = display.item.row,
+            visibleLaneCount = layout.visibleLaneCount,
+            modifier = Modifier
+                .fillMaxSize()
+                .testTag(GraphTags.lanes(display.item.commit.id)),
+        )
+        if (!layout.isLaneVisible(display.item.row.lane)) {
+            HiddenLaneMarker(
+                commitId = display.item.commit.id,
+                modifier = Modifier.align(Alignment.CenterEnd),
+            )
+        }
+    }
+}
+
+/**
+ * 자기 노드가 표시 폭 밖에 있는 행의 가장자리 표식.
+ *
+ * 열 수준 안내만으로는 부족하다 — 이 행은 선도 점도 그려지지 않으므로, 표식이 없으면 사용자는
+ * 그 커밋이 어디 있는지 알 수 없다 (결정 A5). 문구는 카탈로그에서만 읽는다.
+ */
+@Composable
+private fun HiddenLaneMarker(commitId: CommitId, modifier: Modifier = Modifier) {
+    val description = strings.graph.rowLaneHidden
+
+    Box(
+        modifier = modifier
+            .width(UndineTokens.spacing.extraSmall)
+            .fillMaxHeight()
+            .background(UndineTokens.color.warning)
+            .semantics { contentDescription = description }
+            .testTag(GraphTags.laneHidden(commitId)),
+    )
 }

@@ -1,6 +1,6 @@
 # [UND-92] 그래프 열이 커밋 메시지를 밀어내지 않게 한다
 
-> wave 14 · 사이즈 M · 의존 UND-14 · 소유 `presentation/graph/`
+> wave 14 · 사이즈 M · 의존 UND-14 · 소유 `presentation/graph/` · `presentation/i18n/GraphStrings.kt`
 
 ## 작업 내용 (설계 의도)
 
