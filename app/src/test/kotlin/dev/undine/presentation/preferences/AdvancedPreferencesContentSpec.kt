@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import dev.undine.application.diagnostics.DiagnosticsUseCases
 import dev.undine.application.diagnostics.LocateLogDirectoryUseCase
 import dev.undine.application.diagnostics.OpenLogDirectoryUseCase
+import dev.undine.application.preferences.AppliedSettings
 import dev.undine.application.preferences.LoadPreferencesUseCase
 import dev.undine.application.preferences.UpdatePreferencesUseCase
 import dev.undine.domain.Settings
@@ -99,7 +100,7 @@ private class AdvancedFixture(
     fun state(): PreferencesState = PreferencesState(
         scope = scope,
         loadPreferences = LoadPreferencesUseCase(gateway),
-        updatePreferences = UpdatePreferencesUseCase(gateway),
+        updatePreferences = UpdatePreferencesUseCase(gateway, AppliedSettings()),
     ).also(PreferencesState::refresh)
 }
 

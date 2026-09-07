@@ -26,6 +26,7 @@ import dev.undine.application.identity.LoadProfilesUseCase
 import dev.undine.application.identity.ProfileUsageUseCase
 import dev.undine.application.identity.SaveProfileUseCase
 import dev.undine.application.identity.UpdateProfileUseCase
+import dev.undine.application.preferences.AppliedSettings
 import dev.undine.application.preferences.LoadPreferencesUseCase
 import dev.undine.application.preferences.UpdatePreferencesUseCase
 import dev.undine.domain.Settings
@@ -120,7 +121,7 @@ private class ScreenFixture(initial: Settings = Settings.DEFAULTS.copy(theme = T
     fun state(): PreferencesState = PreferencesState(
         scope = scope,
         loadPreferences = LoadPreferencesUseCase(gateway),
-        updatePreferences = UpdatePreferencesUseCase(gateway),
+        updatePreferences = UpdatePreferencesUseCase(gateway, AppliedSettings()),
     ).also(PreferencesState::refresh)
 }
 

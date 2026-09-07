@@ -22,6 +22,7 @@ import dev.undine.presentation.i18n.builtInStringCatalog
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import dev.undine.application.externaltool.CheckToolAvailabilityUseCase
+import dev.undine.application.preferences.AppliedSettings
 import dev.undine.application.preferences.LoadPreferencesUseCase
 import dev.undine.application.typography.LoadMonospaceFontsUseCase
 import dev.undine.application.preferences.UpdatePreferencesUseCase
@@ -95,7 +96,7 @@ private class ToolFixture(initial: Settings = Settings.DEFAULTS) {
     fun state(): PreferencesState = PreferencesState(
         scope = scope,
         loadPreferences = LoadPreferencesUseCase(gateway),
-        updatePreferences = UpdatePreferencesUseCase(gateway),
+        updatePreferences = UpdatePreferencesUseCase(gateway, AppliedSettings()),
     ).also(PreferencesState::refresh)
 
     /** 서체 경로를 보는 테스트가 쓰는 도구 묶음. 이 경로에서는 도구 판정이 관심 밖이다. */

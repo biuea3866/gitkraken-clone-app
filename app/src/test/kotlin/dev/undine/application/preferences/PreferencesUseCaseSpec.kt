@@ -24,7 +24,10 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.confirmVerified
 import io.mockk.mockk
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
 import java.awt.event.KeyEvent
 import java.io.IOException
 
@@ -58,6 +61,43 @@ private val STORED = Settings.DEFAULTS.copy(
     ),
 )
 
+/** 뒤따르는 코루틴이 막히는 지점까지 진행할 기회. 막히지 않으면 그 사이에 gateway 에 닿는다. */
+private const val YIELD_ROUNDS = 3
+
+/**
+ * 읽기·갱신이 임계구역에 **들어온 사실을 알리고** 밖에서 열어 줄 때까지 멈추는 가짜.
+ *
+ * 겹친 갱신을 재현하려면 "한 갱신이 gateway 안에 머무는 동안 다른 갱신이 시작한다" 를 만들어야
+ * 하는데, 시간에 기대면 결정적이지 않다. 진입 신호와 통과 신호를 밖에서 쥔다.
+ */
+private class GatedSettingsGateway(initial: Settings) : SettingsGateway {
+
+    var stored: Settings = initial
+        private set
+
+    /** 임계구역 진입 신호. 호출마다 하나씩 쌓인다. */
+    val entered = Channel<Unit>(Channel.UNLIMITED)
+
+    /** 통과 허가. 하나 보낼 때마다 대기 중인 호출 하나가 진행한다. */
+    val gate = Channel<Unit>(Channel.UNLIMITED)
+
+    override suspend fun load(): Settings {
+        entered.send(Unit)
+        gate.receive()
+        return stored
+    }
+
+    override suspend fun save(settings: Settings) {
+        stored = settings
+    }
+
+    override suspend fun update(transform: (Settings) -> Settings) {
+        entered.send(Unit)
+        gate.receive()
+        stored = transform(stored)
+    }
+}
+
 /** `update(transform)` 계약을 그대로 흉내 내는 가짜 — 읽기·변환·쓰기가 한 호출 안에서 끝난다. */
 private class FakeSettingsGateway(initial: Settings) : SettingsGateway {
 
@@ -85,7 +125,7 @@ class PreferencesUseCaseSpec : FunSpec({
         val gateway = FakeSettingsGateway(STORED)
 
         val applied = runBlocking {
-            UpdatePreferencesUseCase(gateway).execute { it.copy(theme = ThemeMode.LIGHT) }
+            UpdatePreferencesUseCase(gateway, AppliedSettings()).execute { it.copy(theme = ThemeMode.LIGHT) }
         }
 
         applied.theme shouldBe ThemeMode.LIGHT
@@ -100,7 +140,9 @@ class PreferencesUseCaseSpec : FunSpec({
         gateway.failWith = IOException("디스크가 가득 찼습니다")
 
         shouldThrow<IOException> {
-            runBlocking { UpdatePreferencesUseCase(gateway).execute { it.copy(theme = ThemeMode.LIGHT) } }
+            runBlocking {
+                UpdatePreferencesUseCase(gateway, AppliedSettings()).execute { it.copy(theme = ThemeMode.LIGHT) }
+            }
         }
 
         gateway.stored shouldBe STORED
@@ -115,7 +157,7 @@ class PreferencesUseCaseSpec : FunSpec({
     test("전체 초기화는 화면·동작 취향과 탭 세션만 되돌린다") {
         val gateway = FakeSettingsGateway(STORED)
 
-        runBlocking { UpdatePreferencesUseCase(gateway).execute { it.withDefaultPreferences() } }
+        runBlocking { UpdatePreferencesUseCase(gateway, AppliedSettings()).execute { it.withDefaultPreferences() } }
 
         gateway.stored.theme shouldBe Settings.DEFAULT_THEME
         gateway.stored.language shouldBe null
@@ -128,7 +170,7 @@ class PreferencesUseCaseSpec : FunSpec({
     test("전체 초기화는 identity 프로필·외부 도구·최근 목록을 건드리지 않는다") {
         val gateway = FakeSettingsGateway(STORED)
 
-        runBlocking { UpdatePreferencesUseCase(gateway).execute { it.withDefaultPreferences() } }
+        runBlocking { UpdatePreferencesUseCase(gateway, AppliedSettings()).execute { it.withDefaultPreferences() } }
 
         gateway.stored.identityProfiles shouldContainExactly listOf(PROFILE)
         gateway.stored.externalTools shouldBe TOOLS
@@ -144,7 +186,9 @@ class PreferencesUseCaseSpec : FunSpec({
             Unit
         }
 
-        runBlocking { UpdatePreferencesUseCase(settingsGateway).execute { it.withDefaultPreferences() } }
+        runBlocking {
+            UpdatePreferencesUseCase(settingsGateway, AppliedSettings()).execute { it.withDefaultPreferences() }
+        }
 
         coVerify(exactly = 1) { settingsGateway.update(any()) }
         confirmVerified(settingsGateway)
@@ -161,5 +205,98 @@ class PreferencesUseCaseSpec : FunSpec({
         coEvery { signingGateway.settings() } returns signing
 
         runBlocking { LoadSigningPreferencesUseCase(signingGateway).execute() } shouldBe signing
+    }
+
+    test("시작 읽기는 읽은 설정을 적용-설정 홀더에 싣는다") {
+        val gateway = FakeSettingsGateway(STORED)
+        val applied = AppliedSettings()
+
+        // 배선(App)이 시작 시 하는 것과 같은 호출 — 읽기도 홀더의 직렬화 경로를 지난다.
+        runBlocking { applied.publish { LoadPreferencesUseCase(gateway).execute() } } shouldBe STORED
+
+        applied.current.value shouldBe STORED
+    }
+
+    test("적용-설정 홀더는 아직 아무것도 읽지 않았으면 비어 있다") {
+        // 첫 프레임이 시스템 로케일·다크로 그려지는 근거다 — 배선은 값이 없을 때 기본값을 쓴다.
+        AppliedSettings().current.value shouldBe null
+    }
+
+    test("성공한 갱신은 적용된 Settings 를 홀더에 발행한다") {
+        val gateway = FakeSettingsGateway(STORED)
+        val applied = AppliedSettings()
+
+        runBlocking {
+            UpdatePreferencesUseCase(gateway, applied).execute { it.copy(theme = ThemeMode.LIGHT, language = "en") }
+        }
+
+        applied.current.value?.theme shouldBe ThemeMode.LIGHT
+        applied.current.value?.language shouldBe "en"
+    }
+
+    test("저장에 실패하면 새 값을 발행하지 않고 이전 적용값을 유지한다") {
+        val gateway = FakeSettingsGateway(STORED)
+        val applied = AppliedSettings()
+        runBlocking { applied.publish { LoadPreferencesUseCase(gateway).execute() } }
+        gateway.failWith = IOException("디스크가 가득 찼습니다")
+
+        shouldThrow<IOException> {
+            runBlocking { UpdatePreferencesUseCase(gateway, applied).execute { it.copy(theme = ThemeMode.LIGHT) } }
+        }
+
+        // 저장되지 않은 값을 화면에 적용하면 재기동 후 되돌아가 사용자가 이유를 알 수 없다.
+        applied.current.value shouldBe STORED
+    }
+
+    test("겹친 두 갱신은 커밋 순서대로 발행되어 마지막 커밋만 최종 적용값으로 남는다") {
+        runBlocking {
+            val gateway = GatedSettingsGateway(STORED)
+            val applied = AppliedSettings()
+            val useCase = UpdatePreferencesUseCase(gateway, applied)
+
+            val first = launch { useCase.execute { it.copy(language = "ko") } }
+            gateway.entered.receive()
+            // 첫 갱신이 gateway 안에 머무는 동안 두 번째가 시작한다.
+            val second = launch { useCase.execute { it.copy(language = "en") } }
+            repeat(YIELD_ROUNDS) { yield() }
+
+            // 두 번째는 첫 갱신이 발행을 끝낼 때까지 gateway 에 닿지 못한다 — 직렬화가 없으면
+            // 여기서 이미 들어와 있고, 커밋 순서와 발행 순서가 어긋날 창이 열린다.
+            gateway.entered.tryReceive().isFailure shouldBe true
+
+            gateway.gate.send(Unit)
+            first.join()
+            applied.current.value?.language shouldBe "ko"
+
+            gateway.gate.send(Unit)
+            second.join()
+            applied.current.value?.language shouldBe "en"
+            gateway.stored.language shouldBe "en"
+        }
+    }
+
+    test("갱신과 겹친 시작 읽기는 늦게 끝나도 새 적용값을 덮지 않는다") {
+        runBlocking {
+            val gateway = GatedSettingsGateway(STORED)
+            val applied = AppliedSettings()
+
+            // 읽기가 먼저 임계구역을 잡는다 — 갱신은 읽기가 발행을 끝낼 때까지 시작하지 못한다.
+            val load = launch { applied.publish { LoadPreferencesUseCase(gateway).execute() } }
+            gateway.entered.receive()
+            val update = launch {
+                UpdatePreferencesUseCase(gateway, applied).execute { it.copy(theme = ThemeMode.LIGHT) }
+            }
+            repeat(YIELD_ROUNDS) { yield() }
+
+            // 읽기가 발행을 끝내기 전에는 갱신이 저장을 시작하지 못한다 — 두 경로가 같은 직렬화를 지난다.
+            gateway.entered.tryReceive().isFailure shouldBe true
+
+            gateway.gate.send(Unit)
+            load.join()
+            gateway.gate.send(Unit)
+            update.join()
+
+            applied.current.value?.theme shouldBe ThemeMode.LIGHT
+        }
     }
 })
