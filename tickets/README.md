@@ -107,8 +107,8 @@ Undine 구현을 **60개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2
 | [UND-91](UND-91-settings-applied-to-ui.md) | 저장한 언어·테마를 화면에 적용한다 | M | 14 | UND-40 · UND-63 | `presentation/App.kt` · `application/preferences/` · `presentation/i18n/` · `presentation/preferences/GeneralPreferencesState.kt` · `di/AppComponent.kt` |
 | [UND-92](UND-92-graph-column-bound.md) | 그래프 열이 커밋 메시지를 밀어내지 않게 한다 | M | 14 | UND-14 | `presentation/graph/` · `presentation/i18n/GraphStrings.kt` |
 | [UND-93](UND-93-lfs-fetch-integration.md) | fetch/pull 뒤 LFS 객체 동반 다운로드 | M | 15 | UND-61 | `application/toolbar/FetchRemoteUseCase.kt` · `application/toolbar/PullRemoteUseCase.kt` · `presentation/toolbar/` |
-| [UND-94](UND-94-context-menu-entry-points.md) | 우클릭으로 조작에 닿게 한다 | M | 16 | UND-42 · UND-51 | `presentation/contextmenu/` · `presentation/sidebar/SidebarRows.kt` · `presentation/graph/CommitRow.kt` · `presentation/i18n/ContextMenuStrings.kt` |
-| [UND-95](UND-95-branch-scoped-remote-ops.md) | 브랜치를 지목해 pull·push 한다 | M | 16 | UND-08 · UND-57 | `application/toolbar/` · `presentation/sidebar/SidebarRows.kt` · `presentation/i18n/SidebarStrings.kt` |
+| [UND-94](UND-94-context-menu-entry-points.md) | 우클릭으로 조작에 닿게 한다 (동작 안 하던 진입점 둘 포함) | L | 16 | UND-42 · UND-51 | `presentation/contextmenu/` · `presentation/sidebar/SidebarRows.kt` · `presentation/sidebar/SidebarState.kt` · `presentation/sidebar/SidebarTree.kt` · `presentation/sidebar/SidebarMergeBinding.kt` · `presentation/graph/CommitRow.kt` · `presentation/graph/RefChip.kt` · `presentation/graph/CommitGraphView.kt` · `presentation/graph/CommitRefIndex.kt` · `presentation/graph/GraphTags.kt` · `presentation/graph/GraphOperationCommands.kt` · `presentation/App.kt` · `presentation/AppCommands.kt` · `presentation/AppDestinationScreens.kt` · `presentation/i18n/ContextMenuStrings.kt` · `presentation/i18n/BuiltInStrings.kt` · `domain/graphops/GraphDragDrop.kt` · `presentation/graph/GraphDragDropState.kt` · `presentation/i18n/GraphDragDropStrings.kt` |
+| [UND-95](UND-95-branch-scoped-remote-ops.md) | 브랜치를 지목해 pull·push 한다 | M | 17 | UND-08 · UND-57 · UND-94 | `application/toolbar/` · `presentation/sidebar/SidebarRows.kt` · `presentation/i18n/SidebarStrings.kt` |
 | [UND-52](UND-52-e2e-scenario-phase2.md) | 2차 E2E 시나리오 테스트 | M | 10 | UND-51 | `app/src/test/kotlin/.../scenario2/` |
 | [UND-54](UND-54-merge-start-state-guard.md) | merge/rebase 시작 경로 상태 가드 완결 | S | 4 | UND-21 | `infrastructure/git/merge/` (가드 추가) |
 | [UND-56](UND-56-gitkraken-visual-tuning.md) | GitKraken 계열 시각 튜닝 · 렌더 확인 수단 | S | 5 | UND-26 · UND-10 | `presentation/design/` · `presentation/graph/`(그리기) · `presentation/shell/`(분할선) |
@@ -229,10 +229,11 @@ flowchart LR
 | 13 | UND-90 | 1 |
 | 14 | UND-91, UND-92 | 2 |
 | 15 | UND-93 | 1 |
-| 16 | UND-94, UND-95 | 2 |
+| 16 | UND-94 | 1 |
+| 17 | UND-95 | 1 |
 
-- **너비 분포**: [1, 11, 11, 5, 3, 1, 8, 5, 3, 1, 9, 6, 1, 1, 1, 1, 2]
-- **평균 wave 너비**: 4.06
+- **너비 분포**: [1, 11, 11, 5, 3, 1, 8, 5, 3, 9, 6, 5, 1, 1, 1, 1, 1, 2, 3, 2, 1, 1, 2, 1, 1, 1]
+- **평균 wave 너비**: 3.35
 - **wave 9b~9d 가 직렬인 이유**: 셋 다 `GitAccess.kt` 와 그 위의 세션 범위를 건드린다 — Single Writer per File 이 같은 wave 배치를 막는다. 나눌 수 있는 결합이 아니다.
 - **판정: 통과** — 모든 wave 너비가 1~2 인 직선형 DAG 가 아니다.
   wave 2·3·7a·8b·8c 에서 각각 11·11·8·9·6 개가 동시에 열린다.

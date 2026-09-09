@@ -1,6 +1,6 @@
 # [UND-95] 브랜치를 지목해 pull·push 한다
 
-> wave 16 · 사이즈 M · 의존 UND-08 · UND-57 · 소유 `application/toolbar/`(브랜치 지목 경로) · `presentation/sidebar/SidebarRows.kt` · `presentation/i18n/SidebarStrings.kt`
+> wave 17 · 사이즈 M · 의존 UND-08 · UND-57 · UND-94 · 소유 `application/toolbar/`(브랜치 지목 경로) · `presentation/sidebar/SidebarRows.kt` · `presentation/i18n/SidebarStrings.kt`
 
 ## 작업 내용 (설계 의도)
 
@@ -44,7 +44,7 @@ GitKraken 은 브랜치를 우클릭해 그 브랜치로 pull·push 한다. 지�
 
 ## 의존
 
-- UND-08 · UND-57
+- UND-08 · UND-57 · UND-94
 
 ## 다이어그램
 
