@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.window.FrameWindowScope
@@ -71,6 +72,7 @@ import dev.undine.presentation.i18n.common
 import dev.undine.presentation.i18n.strings
 import dev.undine.presentation.i18n.stringsForLanguageTag
 import dev.undine.presentation.i18n.tabs
+import dev.undine.presentation.i18n.update
 import dev.undine.presentation.palette.CommandPalette
 import dev.undine.presentation.palette.CommandRegistry
 import dev.undine.presentation.palette.commandShortcuts
@@ -104,6 +106,8 @@ import dev.undine.presentation.toolbar.RemoteToolbar
 import dev.undine.presentation.toolbar.rememberRemoteToolbarState
 import dev.undine.presentation.undo.UndoPanel
 import dev.undine.presentation.undo.UndoState
+import dev.undine.presentation.update.UpdateNoticeBanner
+import dev.undine.presentation.update.UpdateNoticeState
 import dev.undine.presentation.welcome.WelcomeCloneEvents
 import dev.undine.presentation.welcome.WelcomeEvents
 import dev.undine.presentation.welcome.WelcomeScreen
@@ -248,18 +252,47 @@ internal fun AppRoot(
     // 카탈로그는 한 번만 만든다 — `systemStrings()` 는 부를 때마다 카탈로그를 새로 만든다.
     val catalog = remember { builtInStringCatalog() }
 
+    // 화면 전환 상태를 **여기서** 만든다. 업데이트 안내가 설치를 미룰지 판단할 때 화면 이동·저장소
+    // 전환과 **같은 판정**(`activeJobBlockedReason`)을 봐야 하고 (결정 C6·D11), 그 배너는 아래 Box 의
+    // 형제라 이 자리에 홀더가 있어야 한다. 인스턴스는 하나뿐이라 판정이 갈리지 않는다.
+    val navigation = remember { AppNavigationState() }
+
+    // 자동 업데이트 안내. 확인만 자동이고 설치는 사용자가 누른 뒤에만 일어난다 (결정 D12).
+    val updateScope = rememberCoroutineScope()
+    val updateNotice = remember(component, updateScope) {
+        UpdateNoticeState(
+            scope = updateScope,
+            updates = component.updateUseCases,
+            installBlockedReason = navigation::activeJobBlockedReason,
+        )
+    }
+    // **앱 전역 수명이다** (결정 D14) — 특정 화면에 매달면 그 화면을 열지 않는 한 확인이 돌지 않는다.
+    // 설정을 아직 읽지 못했으면(`null`) 확인하지 않는다: 사용자가 꺼 둔 확인을 기본값으로 돌리지 않기
+    // 위해서다. 설정이 도착하거나 바뀌면 이 효과가 다시 시작해 즉시 한 번 + 이후 주기로 확인한다.
+    LaunchedEffect(updateNotice, applied?.updateCheck) {
+        applied?.updateCheck?.let { updateCheck -> updateNotice.runChecks(updateCheck) }
+    }
+
     UndineTheme(themeMode = applied?.theme ?: ThemeMode.DARK) {
         CompositionLocalProvider(LocalStrings provides catalog.stringsForLanguageTag(applied?.language)) {
             Box(modifier = modifier.fillMaxSize().background(UndineTokens.color.background)) {
                 AppContent(
                     component = component,
                     errors = errors,
+                    navigation = navigation,
                     windowScope = windowScope,
                     onAssembled = onAssembled,
                 )
                 errors.failure?.let { failure ->
                     GlobalFailureBanner(failure = failure, onDismiss = errors::dismiss)
                 }
+                // 실패 안내와 **같은 조립 지점의 형제**다 (결정 D16). 겹치지 않게 아래쪽에 놓는다 —
+                // 둘 다 떠 있을 때 한쪽이 다른 쪽을 가리면 사용자가 읽을 수 없다.
+                UpdateNoticeBanner(
+                    state = updateNotice,
+                    texts = strings.update,
+                    modifier = Modifier.align(Alignment.BottomStart),
+                )
             }
         }
     }
@@ -270,12 +303,12 @@ internal fun AppRoot(
 private fun AppContent(
     component: AppComponent,
     errors: AppErrorState,
+    navigation: AppNavigationState,
     windowScope: FrameWindowScope?,
     onAssembled: ((AppWiring) -> Unit)?,
 ) {
     val scope = rememberCoroutineScope()
     val shellState = rememberAppShellState()
-    val navigation = remember { AppNavigationState() }
     val selection = shellState.selection
 
     // 저장소를 열면 채워지는 컨텍스트. 단일 활성 저장소가 바뀌면 이전 참조를 함께 비운다.

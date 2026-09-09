@@ -82,7 +82,7 @@ Undine 구현을 **60개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2
 | [UND-45](UND-45-submodule-worktree-panel.md) | Submodule · Worktree 패널 | M | 8 | UND-10 · UND-32 · UND-34 · UND-63 | `presentation/submodule/` · `application/submodule/` · `application/worktree/` |
 | [UND-46](UND-46-reflog-bisect-screen.md) | Reflog · Bisect 화면 | M | 8 | UND-10 · UND-30 · UND-35 · UND-63 | `presentation/recovery/` · `application/reflog/` |
 | [UND-47](UND-47-patch-screen.md) | Patch 화면 | M | 8 | UND-10 · UND-60 · UND-63 | `presentation/patch/` · `application/patch/` · `presentation/i18n/PatchStrings.kt` · 배선(`AppNavigation.kt` · `AppDestinationScreens.kt` · `di/` · `i18n/BuiltInStrings.kt` 등록) |
-| [UND-48](UND-48-auto-update.md) | 자동 업데이트 | M | 8 | UND-25 · UND-63 · UND-64 | `domain/update/` · `application/update/` · `infrastructure/update/` · `build.gradle.kts` |
+| [UND-48](UND-48-auto-update.md) | 자동 업데이트 | M | 8 | UND-25 · UND-63 · UND-64 | `domain/update/` · `application/update/` · `infrastructure/update/` · `di/AppComponent.kt` · `presentation/App.kt` · `presentation/update/` · `presentation/i18n/UpdateStrings.kt` · `presentation/preferences/UpdateCheckPreferenceRows.kt` · `app/build.gradle.kts` · 배선(`presentation/preferences/GeneralPreferencesContent.kt` · `presentation/preferences/PreferencesScreen.kt` · `presentation/i18n/BuiltInStrings.kt` 등록) |
 | [UND-75](UND-75-git-config-effective-values.md) | 저장소 git 설정의 실효값 조회 | M | 9 | UND-66 | `domain/gitconfig/` · `application/gitconfig/` · `infrastructure/git/config/` |
 | [UND-76](UND-76-identity-usage-and-validation.md) | Identity — 사용 저장소 집계 · 이메일 검증 | M | 9 | UND-37 · UND-67 | `domain/identity/` · `application/identity/` · `infrastructure/identity/` |
 | [UND-77](UND-77-monospace-font-enumeration.md) | 고정폭 서체 열거 | S | 9 | UND-68 | `domain/typography/` · `infrastructure/typography/` |
@@ -289,8 +289,8 @@ flowchart LR
 | 파일 | 최초 | 재수정 |
 |---|---|---|
 | `build.gradle.kts` | UND-01 (w1) | UND-25 (w4) · UND-48 (w8) |
-| `presentation/App.kt` | UND-01 최소 형태 (w1) | UND-26 최종 형태 (w5) · UND-51 (w9) |
-| `di/` | UND-26 (w5) | UND-51 (w9) |
+| `presentation/App.kt` | UND-01 최소 형태 (w1) | UND-26 최종 형태 (w5) · UND-48 전역 배너 (w8) · UND-51 (w9) |
+| `di/` | UND-26 (w5) | UND-61 (w7) · UND-48 (w8) · UND-51 (w9) |
 | `presentation/shell/` | UND-12 (w3) | UND-44 (w8) |
 | `presentation/graph/` | UND-14 (w3) | UND-42 (w8) |
 | `presentation/palette/` | UND-22 (w3) | UND-51 등록 (w9) |
