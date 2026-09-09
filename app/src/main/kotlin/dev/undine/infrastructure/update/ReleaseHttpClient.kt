@@ -68,6 +68,7 @@ interface ReleaseHttpClient {
  */
 class JdkReleaseHttpClient(
     private val client: HttpClient = defaultReleaseHttpClient(),
+    private val requestTimeout: Duration = REQUEST_TIMEOUT,
 ) : ReleaseHttpClient {
 
     override suspend fun getText(uri: URI): ReleaseHttpResponse = withContext(Dispatchers.IO) {
@@ -84,7 +85,7 @@ class JdkReleaseHttpClient(
     }
 
     private fun requestFor(uri: URI): HttpRequest = HttpRequest.newBuilder(uri)
-        .timeout(REQUEST_TIMEOUT)
+        .timeout(requestTimeout)
         .header(HEADER_USER_AGENT, USER_AGENT)
         .header(HEADER_ACCEPT, GITHUB_JSON_MEDIA_TYPE)
         .GET()
