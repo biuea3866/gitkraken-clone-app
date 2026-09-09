@@ -75,11 +75,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.undine.domain.DiffResult
+import dev.undine.presentation.contextmenu.GraphContextMenuBinding
+import dev.undine.presentation.contextmenu.GraphContextSelection
+import dev.undine.presentation.contextmenu.GraphContextTarget
+import dev.undine.presentation.contextmenu.GraphOperationKind
+import dev.undine.presentation.contextmenu.graphMenuEntryOf
 import dev.undine.presentation.graph.CommitGraphView
 import dev.undine.presentation.graph.CommitRefIndex
+import dev.undine.presentation.graph.GraphOperationCallbacks
 import dev.undine.presentation.search.SearchPanel
 import dev.undine.presentation.shell.AppShell
 import dev.undine.presentation.shell.AppShellSlots
+import dev.undine.presentation.sidebar.SidebarMergeBinding
 import dev.undine.presentation.sidebar.SidebarTree
 import dev.undine.presentation.toolbar.RemoteToolbar
 import dev.undine.presentation.toolbar.rememberRemoteToolbarState
@@ -479,8 +486,45 @@ private fun RepositoryArea(
     tabsSlot: @Composable () -> Unit,
 ) {
     val selection = shellState.selection
+    // 배선 람다가 조립 시점의 컨텍스트를 붙잡지 않게 통로로 읽는다 — 붙잡으면 체크아웃이 바뀐 뒤에도
+    // 옛 브랜치로 "자기 자신인가" 를 판정한다.
+    val latestContextBranch = rememberUpdatedState(context.opened?.currentBranch)
     val refIndex = remember(context) {
         CommitRefIndex.of(context.branches, context.tags, context.opened?.currentBranch)
+    }
+    // 우클릭 메뉴가 고른 조작은 **기존 실행 경로**로 간다 — 드래그&드롭과 같은 확인창·Undo 기록을
+    // 지나므로 진입 경로만 늘고 결과는 같다 (결정 D1).
+    val graphCallbacks = remember(screens.dragDrop) { GraphOperationCallbacks(screens.dragDrop) }
+    // 조작 산출·가용성 판정의 **입력도 한 곳에서 만든다** — 진입점마다 선택을 따로 조립하면 같은
+    // 판정 함수를 써도 서로 다른 값을 넣어 답이 갈린다 (결정 D2·D17).
+    val graphSelection = remember(shellState) {
+        {
+            GraphContextSelection(
+                commit = shellState.selection.commit,
+                currentBranch = latestContextBranch.value,
+            )
+        }
+    }
+    val contextMenuBinding = remember(screens.contextMenu, graphCallbacks, graphSelection) {
+        GraphContextMenuBinding(
+            state = screens.contextMenu,
+            selection = graphSelection,
+            onOperation = graphCallbacks::request,
+        )
+    }
+    // 사이드바의 병합도 **같은 판정**을 읽는다. 확인창을 띄우기 전에 항목의 가용성을 보므로,
+    // detached HEAD 에서 눌러 본 다음 실행이 StateViolation 으로 끝나는 일이 없다 (결정 D17).
+    val mergeBinding = remember(graphCallbacks, graphSelection) {
+        SidebarMergeBinding(
+            entryOf = { branch ->
+                graphMenuEntryOf(
+                    kind = GraphOperationKind.MERGE,
+                    target = GraphContextTarget.Branch(branch.name, branch.target, branch.isRemote),
+                    selection = graphSelection(),
+                )
+            },
+            onRequest = graphCallbacks::request,
+        )
     }
     val toolbarState = rememberRemoteToolbarState(
         fetchRemote = component.fetchRemote,
@@ -512,6 +556,10 @@ private fun RepositoryArea(
             sidebar = {
                 SidebarTree(
                     state = screens.sidebar,
+                    // 고른 병합 대상을 **실제로** 병합 경로에 넘긴다. 이 배선이 없어 기본값 `{}` 가
+                    // 쓰이던 동안 사이드바의 병합은 눌러도 아무 일이 없었다 (결정 D9-1). 수행 브랜치는
+                    // 이름 스냅샷이 아니라 공용 판정이 만든 `BranchTarget.Current` 다.
+                    merge = mergeBinding,
                     opened = context.opened,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -525,7 +573,10 @@ private fun RepositoryArea(
                     SearchPanel(
                         state = screens.search,
                         modifier = Modifier.fillMaxWidth().weight(SEARCH_WEIGHT),
-                        onCommitSelected = { commit -> shellState.selectCommit(commit.id) },
+                        onCommitSelected = { commit ->
+                            shellState.selectCommit(commit.id)
+                            screens.contextMenu.select(GraphContextTarget.Commit(commit.id))
+                        },
                     )
                     CommitGraphView(
                         state = screens.graph,
@@ -533,7 +584,11 @@ private fun RepositoryArea(
                         modifier = Modifier.fillMaxWidth().weight(GRAPH_WEIGHT),
                         refIndex = refIndex,
                         dragDropState = screens.dragDrop,
-                        onCommitSelected = { commit -> shellState.selectCommit(commit.id) },
+                        contextMenu = contextMenuBinding,
+                        onCommitSelected = { commit ->
+                            shellState.selectCommit(commit.id)
+                            screens.contextMenu.select(GraphContextTarget.Commit(commit.id))
+                        },
                     )
                 }
             },

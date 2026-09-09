@@ -18,6 +18,8 @@ enum class GraphRefKind {
  *
  * @property refName 브랜치·태그의 참조 이름. HEAD 칩은 `null` 이다 — HEAD 표기는 데이터가 아니라
  *   로케일이 정하므로 라벨을 여기 담지 않고 렌더 시점에 `graph.head` 에서 읽는다 ([RefChip]).
+ * @property isRemote 원격 추적 브랜치 칩인가. 우클릭 메뉴가 로컬 전용 조작(reset)을 가르는 데 쓴다 —
+ *   짧은 이름은 로컬과 원격 사이에서 겹치므로 이름으로는 판정할 수 없다.
  */
 @Immutable
 data class GraphRefChip(
@@ -25,6 +27,7 @@ data class GraphRefChip(
     val kind: GraphRefKind,
     val target: CommitId? = null,
     val isAnnotated: Boolean = false,
+    val isRemote: Boolean = false,
 )
 
 /**
@@ -61,7 +64,12 @@ class CommitRefIndex private constructor(
             }
             branches.forEach { branch ->
                 grouped.getOrPut(branch.target) { mutableListOf() } +=
-                    GraphRefChip(branch.name.value, GraphRefKind.BRANCH, target = branch.target)
+                    GraphRefChip(
+                        refName = branch.name.value,
+                        kind = GraphRefKind.BRANCH,
+                        target = branch.target,
+                        isRemote = branch.isRemote,
+                    )
             }
             tags.forEach { tag ->
                 grouped.getOrPut(tag.target) { mutableListOf() } +=

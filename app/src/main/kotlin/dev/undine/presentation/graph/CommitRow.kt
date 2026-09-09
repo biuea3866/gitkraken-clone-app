@@ -27,6 +27,9 @@ import dev.undine.presentation.i18n.strings
 import dev.undine.presentation.shell.ShellSplitDefaults
 import dev.undine.domain.graphops.GraphDragSource
 import dev.undine.domain.graphops.GraphDropTarget
+import dev.undine.presentation.contextmenu.GraphContextMenuBinding
+import dev.undine.presentation.contextmenu.GraphContextTarget
+import dev.undine.presentation.contextmenu.contextMenuTrigger
 
 /**
  * 커밋 목록의 한 행 — 레인 그림 + 참조 칩 + 요약 · 작성자 · 상대 시각 · 짧은 해시.
@@ -35,14 +38,19 @@ import dev.undine.domain.graphops.GraphDropTarget
  * 그래서 [dev.undine.presentation.design.component.UndineListRow] 대신 직접 구성한다.
  *
  * 레인 열의 폭과 그릴 레인 수는 [layout] 이 정한다 — 열 수준 판정과 같은 값을 본다.
+ *
+ * 행 우클릭은 그 커밋을 대상으로 조작 메뉴를 연다. 칩 우클릭은 칩이 가로채므로([RefChip]) 참조를
+ * 지목한 메뉴가 뜬다 — 같은 자리에서 두 대상이 겹치지 않는다.
  */
 @Composable
+@Suppress("LongParameterList") // 행 하나가 그리기·선택·드래그·메뉴 배선을 함께 받는다.
 internal fun CommitRow(
     display: GraphRowDisplay,
     layout: GraphColumnLayout,
     selected: Boolean,
     onClick: () -> Unit,
     dragDropState: GraphDragDropState? = null,
+    contextMenu: GraphContextMenuBinding? = null,
 ) {
     val colors = UndineTokens.color
     val spacing = UndineTokens.spacing
@@ -53,6 +61,7 @@ internal fun CommitRow(
             .fillMaxWidth()
             .height(GraphLaneGeometry.ROW_HEIGHT)
             .background(if (selected) colors.surface else colors.background)
+            .commitContextMenu(display.item.commit.id, contextMenu)
             .graphDragSource(dragDropState) { GraphDragSource.Commit(display.item.commit.id) }
             .graphDropTarget(dragDropState) { GraphDropTarget.Commit(display.item.commit.id) }
             .clickable(onClick = onClick)
@@ -67,7 +76,9 @@ internal fun CommitRow(
             horizontalArrangement = Arrangement.spacedBy(spacing.small),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            display.chips.forEach { RefChip(chip = it, dragDropState = dragDropState) }
+            display.chips.forEach { chip ->
+                RefChip(chip = chip, dragDropState = dragDropState, contextMenu = contextMenu)
+            }
             BasicText(
                 text = display.item.summary,
                 modifier = Modifier.weight(1f),
@@ -95,6 +106,15 @@ internal fun CommitRow(
         }
     }
 }
+
+/** 배선이 없으면 아무 것도 얹지 않는다 — 행 자체는 메뉴 없이도 그려져야 한다. */
+@Composable
+private fun Modifier.commitContextMenu(commit: CommitId, contextMenu: GraphContextMenuBinding?): Modifier =
+    if (contextMenu == null) {
+        this
+    } else {
+        contextMenuTrigger { position -> contextMenu.state.open(GraphContextTarget.Commit(commit), position) }
+    }
 
 /** 이 행의 레인 열 — 표시 폭만큼의 그림과, 자기 노드가 잘렸을 때의 표식. */
 @Composable

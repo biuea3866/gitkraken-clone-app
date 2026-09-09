@@ -50,6 +50,8 @@ internal fun builtInTranslationSources(
         patchTranslations,
         // 자동 업데이트(UND-48). 배너와 일반 탭의 확인 설정이 같은 네임스페이스를 쓴다.
         updateTranslations,
+        // 우클릭 메뉴(UND-94). 항목 이름과 비활성 사유 표시가 이 네임스페이스에 있다.
+        contextMenuTranslations,
     )
 
 /** 네임스페이스별 번역을 로케일 단위로 합친다. 같은 키가 겹치면 뒤에 오는 쪽이 이긴다. */

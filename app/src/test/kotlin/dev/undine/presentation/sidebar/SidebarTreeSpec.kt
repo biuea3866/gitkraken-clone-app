@@ -11,6 +11,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
@@ -19,17 +21,21 @@ import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.undine.application.sidebar.SidebarRefs
-import dev.undine.domain.Branch
+import dev.undine.domain.BranchTarget
 import dev.undine.domain.DeleteBranchResult
 import dev.undine.domain.OpenedRepository
 import dev.undine.domain.RefName
 import dev.undine.domain.RepositoryState
 import dev.undine.domain.ThemeMode
 import dev.undine.domain.UndineException
+import dev.undine.domain.graphops.GraphOperation
 import dev.undine.presentation.design.UndineTheme
 import dev.undine.presentation.i18n.DEFAULT_LOCALE
 import dev.undine.presentation.i18n.LocalStrings
 import dev.undine.presentation.i18n.StringCatalog
+import dev.undine.presentation.i18n.contextMenuTranslations
+import dev.undine.presentation.i18n.graphDragDropTranslations
+import dev.undine.presentation.i18n.mergeTranslations
 import dev.undine.presentation.i18n.sidebar
 import dev.undine.presentation.i18n.sidebarTranslations
 import io.kotest.core.spec.style.FunSpec
@@ -40,15 +46,24 @@ import io.mockk.coVerify
 private val SIDEBAR_WIDTH = 320.dp
 private val SIDEBAR_HEIGHT = 700.dp
 
-/** shell 과 마찬가지로 sidebar 네임스페이스는 아직 내장 목록에 없어 자기 맵으로 만든다 (결정 A3). */
-private val CATALOG = StringCatalog(translations = sidebarTranslations, defaultLocale = DEFAULT_LOCALE)
+/**
+ * shell 과 마찬가지로 sidebar 네임스페이스는 자기 맵으로 만든다 (결정 A3). 병합 항목이 비활성 사유를
+ * 컨텍스트 메뉴·드래그와 **같은 문장**으로 내므로 그 두 네임스페이스도 함께 싣는다 (결정 D2).
+ */
+private val CATALOG = StringCatalog(
+    translations = mergeTranslations(
+        listOf(sidebarTranslations, contextMenuTranslations, graphDragDropTranslations),
+    ),
+    defaultLocale = DEFAULT_LOCALE,
+)
 private val SIDEBAR_STRINGS = CATALOG.stringsFor(DEFAULT_LOCALE, devBuild = false).sidebar
 
 @Composable
 private fun SidebarHost(
     state: SidebarState,
     opened: OpenedRepository? = OpenedRepository(RepositoryState.NORMAL, RefName("main")),
-    onMergeSourceSelected: (Branch) -> Unit = {},
+    // 화면이 받은 `opened` 와 판정 입력이 어긋나지 않게 같은 값에서 뽑는다.
+    merge: SidebarMergeBinding = mergeBinding(currentBranch = opened?.currentBranch),
 ) {
     UndineTheme(themeMode = ThemeMode.LIGHT) {
         CompositionLocalProvider(
@@ -56,9 +71,9 @@ private fun SidebarHost(
         ) {
             SidebarTree(
                 state = state,
+                merge = merge,
                 modifier = Modifier.size(SIDEBAR_WIDTH, SIDEBAR_HEIGHT),
                 opened = opened,
-                onMergeSourceSelected = onMergeSourceSelected,
             )
         }
     }
@@ -224,6 +239,52 @@ class SidebarTreeSpec : FunSpec({
         }
     }
 
+    // 두 진입점이 다른 목록을 보이면 사용자는 어느 쪽이 전부인지 알 수 없다 (UND-94 결정 D2).
+    test("브랜치 행을 우클릭하면 `...` 버튼이 여는 것과 같은 항목이 나온다") {
+        runComposeUiTest {
+            val state = SidebarStateHarness().loaded()
+            setContent { SidebarHost(state) }
+
+            onNodeWithTag(SidebarTags.branchRow(SAMPLE_FEATURE)).performMouseInput { rightClick() }
+            waitForIdle()
+
+            onNodeWithTag(SidebarTags.MENU_CHECKOUT).assertIsDisplayed()
+            onNodeWithTag(SidebarTags.MENU_RENAME).assertIsDisplayed()
+            onNodeWithTag(SidebarTags.MENU_DELETE).assertIsDisplayed()
+            onNodeWithTag(SidebarTags.MENU_MERGE).assertIsDisplayed()
+        }
+    }
+
+    test("우클릭은 여는 동작이라 같은 행을 다시 우클릭해도 메뉴가 닫히지 않는다") {
+        runComposeUiTest {
+            val state = SidebarStateHarness().loaded()
+            setContent { SidebarHost(state) }
+
+            onNodeWithTag(SidebarTags.branchRow(SAMPLE_FEATURE)).performMouseInput { rightClick() }
+            waitForIdle()
+            onNodeWithTag(SidebarTags.branchRow(SAMPLE_FEATURE)).performMouseInput { rightClick() }
+            waitForIdle()
+
+            // 토글이면 두 번째 우클릭에서 사라져, 사용자는 우클릭이 동작하지 않는다고 읽는다.
+            onNodeWithTag(SidebarTags.MENU_CHECKOUT).assertIsDisplayed()
+        }
+    }
+
+    // 태그 조작(생성·삭제)이 아직 없어 낼 항목이 없다 — 빈 메뉴를 열지 않는다 (UND-94 결정 D11).
+    test("태그 행을 우클릭해도 메뉴가 생기지 않는다") {
+        runComposeUiTest {
+            val state = SidebarStateHarness().loaded()
+            setContent { SidebarHost(state) }
+
+            onNodeWithText("v1.0.0").performMouseInput { rightClick() }
+            waitForIdle()
+
+            state.openMenu shouldBe null
+            onNodeWithTag(SidebarTags.MENU_CHECKOUT).assertDoesNotExist()
+            onNodeWithTag(SidebarTags.MENU_MERGE).assertDoesNotExist()
+        }
+    }
+
     test("원격 추적 브랜치 메뉴에는 로컬 전용 이름 변경·삭제가 없다") {
         runComposeUiTest {
             val state = SidebarStateHarness().loaded()
@@ -258,18 +319,21 @@ class SidebarTreeSpec : FunSpec({
         }
     }
 
-    test("병합 대상 선택은 고른 브랜치를 콜백으로 넘긴다") {
+    test("병합 대상 선택은 고른 브랜치의 조작을 실행 경로로 넘긴다") {
         runComposeUiTest {
             val state = SidebarStateHarness().loaded()
-            var selected: Branch? = null
-            setContent { SidebarHost(state, onMergeSourceSelected = { selected = it }) }
+            val requested = mutableListOf<GraphOperation>()
+            setContent {
+                SidebarHost(state, merge = mergeBinding { requested += it })
+            }
 
             onNodeWithTag(SidebarTags.menuButton(SAMPLE_FEATURE)).performClick()
             waitForIdle()
             onNodeWithTag(SidebarTags.MENU_MERGE).performClick()
             waitForIdle()
 
-            selected?.name shouldBe RefName("feature/login")
+            // 수행 브랜치는 이름 스냅샷이 아니라 실행 시점에 판정되는 현재 브랜치다 (결정 G6).
+            requested shouldBe listOf(GraphOperation.Merge(RefName("feature/login"), BranchTarget.Current))
         }
     }
 

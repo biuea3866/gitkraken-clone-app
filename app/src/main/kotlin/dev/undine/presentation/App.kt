@@ -63,6 +63,11 @@ import dev.undine.presentation.diff.rememberDiffViewerState
 import dev.undine.presentation.graph.CommitGraphView
 import dev.undine.presentation.graph.CommitRefIndex
 import dev.undine.presentation.graph.GraphDragDropState
+import dev.undine.presentation.contextmenu.GraphContextMenuState
+import dev.undine.presentation.contextmenu.GraphContextSelection
+import dev.undine.presentation.contextmenu.GraphContextTarget
+import dev.undine.presentation.contextmenu.graphMenuEntriesForPicked
+import dev.undine.presentation.contextmenu.rememberGraphContextMenuState
 import dev.undine.presentation.graph.GraphOperationCallbacks
 import dev.undine.presentation.graph.GraphViewState
 import dev.undine.presentation.graph.rememberGraphViewState
@@ -168,6 +173,7 @@ internal class RepositoryScreens(
     val rebase: RebasePlanState,
     val sidebar: SidebarState,
     val dragDrop: GraphDragDropState,
+    val contextMenu: GraphContextMenuState,
 )
 
 /** 설정·로그를 두는 사용자 디렉터리. 앱 전용 하위 디렉터리 하나만 쓴다. */
@@ -373,8 +379,13 @@ private fun AppContent(
         )
     }
     val graphCallbacks = remember(dragDrop) { GraphOperationCallbacks(dragDrop) }
-    // 저장소가 바뀌면 열려 있던 확인창을 접는다 — 이전 저장소의 ref 를 대상으로 한 확인이다.
-    LaunchedEffect(selection.repository) { dragDrop.cancelConfirmation() }
+    // 메뉴 홀더도 앱 수명이다 — 팔레트가 시작 시 등록한 명령이 **지목한 대상**을 이 홀더에서 읽는다.
+    val graphContextMenu = rememberGraphContextMenuState()
+    // 저장소가 바뀌면 열려 있던 확인창과 지목한 그래프 대상을 버린다 — 둘 다 이전 저장소의 ref 다.
+    LaunchedEffect(selection.repository) {
+        dragDrop.cancelConfirmation()
+        graphContextMenu.reset()
+    }
 
     // 탭 전이가 비워 둔 컨텍스트를 **활성 탭 저장소의 값으로** 채운다. 다시 열면 활성 핸들을
     // 불필요하게 교체하므로 조회만 한다. 실패를 빈 값으로 위장하지 않고 전역 안내로 보낸다.
@@ -410,7 +421,8 @@ private fun AppContent(
         if (shellState.selection.repository == target) context = loaded
     }
 
-    val screens = rememberRepositoryScreens(component, undo.scope, shellState, latestContext, errors, dragDrop)
+    val screens =
+        rememberRepositoryScreens(component, undo.scope, shellState, latestContext, errors, dragDrop, graphContextMenu)
     val latestScreens = rememberUpdatedState(screens)
 
     // 팔레트 열기 요청. 커맨드 action 은 non-composable 이라 여기서 신호만 세우고 열기는 효과가 한다.
@@ -466,10 +478,21 @@ private fun AppContent(
                     activeJobBlockedReason = navigation::activeJobBlockedReason,
                 ),
                 graphCallbacks = graphCallbacks,
-                // 드래그가 없을 때 선택만으로 만들 수 있는 조작은 하나다 — 고른 커밋을 현재 브랜치에
-                // 얹는 것. 나머지 넷은 출발 ref 가 필요해 드래그·컨텍스트 메뉴가 제공한다.
-                selectedGraphOperation = {
-                    shellState.selection.commit?.let { GraphOperation.CherryPick(it, BranchTarget.Current) }
+                // 팔레트는 컨텍스트 메뉴와 **같은 산출 함수**를 쓴다 (결정 D2·D10). 그래서 브랜치 칩을
+                // 지목하면 merge·rebase 가 활성이 된다 — 예전에는 CherryPick 하나만 산출해 나머지 넷이
+                // 언제나 막혀 있었다 (결정 D9-2).
+                //
+                // **조작이 아니라 항목(가용성 포함)을 넘긴다** — 목록만 넘기면 팔레트가 "있으면 활성"
+                // 으로 다시 판정해, detached HEAD 처럼 공용 함수가 막은 상태가 팔레트에서는 활성으로
+                // 새어 나간다 (결정 D17).
+                selectedGraphEntries = {
+                    graphMenuEntriesForPicked(
+                        target = graphContextMenu.selectedTarget,
+                        selection = GraphContextSelection(
+                            commit = shellState.selection.commit,
+                            currentBranch = latestContext.value.opened?.currentBranch,
+                        ),
+                    )
                 },
             )
         }
@@ -598,6 +621,7 @@ private fun rememberRepositoryScreens(
     context: State<RepositoryContext>,
     errors: AppErrorState,
     dragDrop: GraphDragDropState,
+    contextMenu: GraphContextMenuState,
 ): RepositoryScreens {
     val scope = rememberCoroutineScope()
     val repositoryPath = shellState.selection.repository
@@ -650,7 +674,7 @@ private fun rememberRepositoryScreens(
         }
     }
 
-    return remember(graph, search, detail, diff, staging, conflict, rebase, sidebar, dragDrop) {
+    return remember(graph, search, detail, diff, staging, conflict, rebase, sidebar, dragDrop, contextMenu) {
         RepositoryScreens(
             graph = graph,
             search = search,
@@ -661,6 +685,7 @@ private fun rememberRepositoryScreens(
             rebase = rebase,
             sidebar = sidebar,
             dragDrop = dragDrop,
+            contextMenu = contextMenu,
         )
     }
 }

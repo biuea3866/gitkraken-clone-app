@@ -213,6 +213,7 @@ class GraphDragDropState(
         GraphDropRefusal.SAME_COMMIT -> copy.sameCommit
         GraphDropRefusal.ANNOTATED_TAG -> copy.annotatedTag
         GraphDropRefusal.UNSUPPORTED_COMBINATION -> copy.unsupported
+        GraphDropRefusal.NO_CURRENT_BRANCH -> copy.noCurrentBranch
     }
 
     private fun GraphOperationOutcome.toUiOutcome(): GraphDragDropUiOutcome = when (this) {

@@ -9,6 +9,7 @@ import dev.undine.domain.ShortcutBinding
 import dev.undine.domain.graphops.GraphOperation
 import dev.undine.presentation.graph.GraphDragDropState
 import dev.undine.presentation.graph.GraphOperationCallbacks
+import dev.undine.presentation.contextmenu.GraphMenuEntry
 import dev.undine.presentation.palette.Command
 import dev.undine.presentation.palette.CommandAvailability
 import dev.undine.presentation.palette.CommandId
@@ -117,7 +118,9 @@ private class RegistrationFixture(
                 activeJobBlockedReason = { activeJobBlocked },
             ),
             graphCallbacks = callbacks,
-            selectedGraphOperation = { selected },
+            // 실행할 수 있는 항목으로 넘긴다 — 가용성 판정은 그래프 조작의 공용 함수가 하고
+            // 여기서는 그 결과만 흘린다 (결정 D17).
+            selectedGraphEntries = { listOfNotNull(selected).map { GraphMenuEntry(it, blockedReason = null) } },
         )
     }
 

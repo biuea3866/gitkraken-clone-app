@@ -68,7 +68,12 @@ sealed interface GraphOperation {
     data class MoveTag(val tag: RefName, val to: CommitId) : GraphOperation
 }
 
-/** 드롭할 수 없는 이유. 화면이 사유별로 다른 문구를 보여줄 수 있도록 닫힌 목록으로 둔다. */
+/**
+ * 지금 조작할 수 없는 이유. 화면이 사유별로 다른 문구를 보여줄 수 있도록 닫힌 목록으로 둔다.
+ *
+ * 드래그&드롭과 컨텍스트 메뉴가 **같은 목록을 쓴다** — 같은 제약을 두 어휘로 말하면 사용자가
+ * 드래그에서 만난 문장과 메뉴에서 만난 문장을 다른 규칙으로 읽는다 (결정 D2).
+ */
 enum class GraphDropRefusal {
 
     /** 자기 자신 위에 놓았다. */
@@ -82,6 +87,12 @@ enum class GraphDropRefusal {
 
     /** 지원하는 네 조합(브랜치→브랜치·커밋→브랜치·브랜치→커밋·태그→커밋) 밖이다. */
     UNSUPPORTED_COMBINATION,
+
+    /**
+     * detached HEAD 라 수행할 브랜치가 없다. [BranchTarget.Current] 위에서 도는 조작에만 걸린다 —
+     * 이름으로 지목한 브랜치를 옮기는 조작(reset·태그 이동)은 detached 여도 성립한다.
+     */
+    NO_CURRENT_BRANCH,
 }
 
 /**

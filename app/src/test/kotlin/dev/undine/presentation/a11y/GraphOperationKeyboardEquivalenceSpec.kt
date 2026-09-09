@@ -5,6 +5,7 @@ import dev.undine.domain.BranchTarget
 import dev.undine.domain.CommitId
 import dev.undine.domain.RefName
 import dev.undine.domain.graphops.GraphOperation
+import dev.undine.presentation.contextmenu.GraphMenuEntry
 import dev.undine.presentation.graph.GraphDragDropState
 import dev.undine.presentation.graph.GraphOperationCallbacks
 import dev.undine.presentation.graph.graphOperationCommands
@@ -52,7 +53,9 @@ class GraphOperationKeyboardEquivalenceSpec : FunSpec({
     test("드래그로 만들 수 있는 조작마다 실행 가능한 등가 Command 가 정확히 하나 있다") {
         SAMPLES.forEach { (type, operation) ->
             val callbacks = GraphOperationCallbacks(dragDropState())
-            val commands = graphOperationCommands(callbacks) { operation }
+            val commands = graphOperationCommands(callbacks) {
+                listOf(GraphMenuEntry(operation, blockedReason = null))
+            }
             val available = commands.filter { it.availability() == CommandAvailability.Available }
 
             withClue(type) {
@@ -65,7 +68,7 @@ class GraphOperationKeyboardEquivalenceSpec : FunSpec({
 
     test("선택이 없으면 다섯 명령 모두 사유와 함께 막힌다 — 조용히 아무 일도 하지 않지 않는다") {
         val callbacks = GraphOperationCallbacks(dragDropState())
-        val commands = graphOperationCommands(callbacks) { null }
+        val commands = graphOperationCommands(callbacks) { emptyList() }
 
         commands shouldHaveSize SAMPLES.size
         commands.forEach { command ->

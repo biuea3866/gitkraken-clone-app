@@ -18,7 +18,6 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import dev.undine.domain.Branch
 import dev.undine.domain.OpenedRepository
 import dev.undine.domain.UndineException
 import dev.undine.presentation.design.UndineTokens
@@ -37,14 +36,15 @@ import dev.undine.presentation.i18n.strings
  *
  * @param opened 저장소를 연 결과. `currentBranch == null` 이면 detached HEAD 로 보고 트리 상단에
  *   그 사실을 명시한다. 상시 갱신 경로 배선은 UND-26 소유이고 이 화면은 **받은 값을 표시**만 한다.
- * @param onMergeSourceSelected 병합 대상으로 고른 브랜치. 실제 병합 화면(UND-21) 연결은 UND-26 이 한다.
+ * @param merge 병합 항목의 가용성과 실행 통로. **기본값을 두지 않는다** — 기본 no-op 이 쓰이던 동안
+ *   사이드바의 병합은 눌러도 아무 일이 없었다 (결정 D9-1). 배선을 빼먹으면 컴파일이 막는다.
  */
 @Composable
 fun SidebarTree(
     state: SidebarState,
+    merge: SidebarMergeBinding,
     modifier: Modifier = Modifier,
     opened: OpenedRepository? = null,
-    onMergeSourceSelected: (Branch) -> Unit = {},
 ) {
     val spacing = UndineTokens.spacing
 
@@ -54,7 +54,7 @@ fun SidebarTree(
                 DetachedHeadNotice()
             }
             SidebarFilterField(filter = state.filter, onFilterChange = state::updateFilter)
-            SidebarBody(state = state, onMergeSourceSelected = onMergeSourceSelected)
+            SidebarBody(state = state, merge = merge)
         }
         state.confirmation?.let { pending ->
             SidebarConfirmationPanel(
@@ -85,7 +85,7 @@ fun SidebarTree(
  * 말하지 않는다.
  */
 @Composable
-private fun ColumnScope.SidebarBody(state: SidebarState, onMergeSourceSelected: (Branch) -> Unit) {
+private fun ColumnScope.SidebarBody(state: SidebarState, merge: SidebarMergeBinding) {
     when (val status = state.status) {
         is SidebarStatus.Failed -> LoadFailureNotice(failure = status.cause)
 
@@ -95,7 +95,7 @@ private fun ColumnScope.SidebarBody(state: SidebarState, onMergeSourceSelected: 
             }
             SidebarRefList(
                 state = state,
-                onMergeSourceSelected = onMergeSourceSelected,
+                merge = merge,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -107,7 +107,7 @@ private fun ColumnScope.SidebarBody(state: SidebarState, onMergeSourceSelected: 
 @Composable
 private fun SidebarRefList(
     state: SidebarState,
-    onMergeSourceSelected: (Branch) -> Unit,
+    merge: SidebarMergeBinding,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(modifier = modifier.fillMaxWidth().testTag(SidebarTags.LIST)) {
@@ -121,7 +121,7 @@ private fun SidebarRefList(
                 is SidebarNode.BranchRow -> SidebarBranchItem(
                     branch = node.branch,
                     state = state,
-                    onMergeSourceSelected = onMergeSourceSelected,
+                    merge = merge,
                 )
 
                 is SidebarNode.TagRow -> SidebarTagRow(tag = node.tag)
