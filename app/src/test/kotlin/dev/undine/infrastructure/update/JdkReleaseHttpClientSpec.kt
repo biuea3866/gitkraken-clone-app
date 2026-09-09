@@ -7,6 +7,7 @@ import io.kotest.engine.spec.tempdir
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import java.io.IOException
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -14,11 +15,18 @@ import java.net.ServerSocket
 import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.time.Duration
 
 private const val LOOPBACK = "127.0.0.1"
 private const val ANY_FREE_PORT = 0
 private const val NO_BACKLOG = 0
 private const val NO_DELAY_SECONDS = 0
+
+/** 제품 기본값은 10분이라 그대로 두면 테스트가 10분 걸린다. 짧게 주입해 같은 계약을 본다. */
+private const val TEST_REQUEST_TIMEOUT_MILLIS = 300L
+
+/** 타임아웃이 사라졌을 때 테스트가 매달리지 않도록 두는 상한. 여유는 크게 준다. */
+private const val HANG_GUARD_MILLIS = 8_000L
 
 private const val HTTP_OK = 200
 private const val HTTP_MOVED = 302
@@ -41,6 +49,25 @@ private fun HttpExchange.redirectTo(location: String) {
     responseHeaders.add("Location", location)
     sendResponseHeaders(HTTP_MOVED, NO_RESPONSE_BODY)
     responseBody.close()
+}
+
+/**
+ * **붙기는 하는데 응답하지 않는** 서버. 연결만 받아 두고 아무것도 쓰지 않는다.
+ *
+ * 이것이 연결 타임아웃으로는 못 막는 상황이다 — TCP 는 성립했으므로 `connectTimeout` 이 걸리지
+ * 않는다. 요청 타임아웃이 없으면 호출이 영영 돌아오지 않는다.
+ */
+private fun withSilentServer(block: (URI) -> Unit) {
+    val server = ServerSocket(ANY_FREE_PORT, NO_BACKLOG, InetAddress.getByName(LOOPBACK))
+    val accepting = Thread {
+        runCatching { while (true) server.accept() }
+    }.apply { isDaemon = true; start() }
+    try {
+        block(URI.create("http://$LOOPBACK:${server.localPort}"))
+    } finally {
+        runCatching { server.close() }
+        accepting.interrupt()
+    }
 }
 
 /**
@@ -104,6 +131,23 @@ class JdkReleaseHttpClientSpec : FunSpec({
             val response = runBlocking { JdkReleaseHttpClient().getText(base.resolve("/latest")) }
 
             response.statusCode shouldBe HTTP_NOT_FOUND
+        }
+    }
+
+    test("붙기만 하고 응답하지 않는 서버에 매달리지 않는다") {
+        withSilentServer { base ->
+            val client = JdkReleaseHttpClient(requestTimeout = Duration.ofMillis(TEST_REQUEST_TIMEOUT_MILLIS))
+
+            val failure = runCatching {
+                runBlocking {
+                    // 요청 타임아웃이 없으면 호출이 돌아오지 않는다. 그때 먼저 터지는 것은
+                    // TimeoutCancellationException 이고, IOException 이 아니라 이 단언이 실패한다 —
+                    // 테스트가 매달리는 대신 사유를 밝히며 빨간불이 된다.
+                    withTimeout(HANG_GUARD_MILLIS) { client.getText(base.resolve("/latest")) }
+                }
+            }.exceptionOrNull()
+
+            failure.shouldBeInstanceOf<IOException>()
         }
     }
 
