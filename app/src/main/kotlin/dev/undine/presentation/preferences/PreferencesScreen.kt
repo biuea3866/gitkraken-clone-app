@@ -3,6 +3,8 @@ package dev.undine.presentation.preferences
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -50,10 +52,15 @@ fun PreferencesScreen(
     val colors = UndineTokens.color
     val spacing = UndineTokens.spacing
 
+    // **세로로 스크롤한다.** 탭 내용이 창보다 길어지면 Column 은 남은 공간이 0 인 자식을 높이 0 으로
+    // 재고, 그 노드는 화면에서 **사라진다** — 큰 글꼴(WCAG 1.4.4 의 200%)에서 전체 초기화 버튼이
+    // 그렇게 없어졌다 (결정 G45-2 의 판정 기준 "사라지지 않는다"). 탭이 행을 더할 때마다 이 문제가
+    // 다시 생기지 않도록, 잘라 내는 대신 넘치면 스크롤한다.
     Column(
         modifier = modifier
             .fillMaxWidth()
             .background(colors.background)
+            .verticalScroll(rememberScrollState())
             .padding(spacing.large)
             .testTag(PreferencesTags.ROOT),
         verticalArrangement = Arrangement.spacedBy(spacing.medium),

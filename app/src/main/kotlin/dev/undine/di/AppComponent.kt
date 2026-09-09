@@ -74,6 +74,9 @@ import dev.undine.application.toolbar.FetchRemoteUseCase
 import dev.undine.application.toolbar.PullRemoteUseCase
 import dev.undine.application.toolbar.PushRemoteUseCase
 import dev.undine.application.typography.LoadMonospaceFontsUseCase
+import dev.undine.application.update.CheckUpdateUseCase
+import dev.undine.application.update.InstallUpdateUseCase
+import dev.undine.application.update.UpdateUseCases
 import dev.undine.application.undo.DiscardBlockedUndoEntryUseCase
 import dev.undine.application.undo.LoadUndoHistoryUseCase
 import dev.undine.application.undo.OperationRecorder
@@ -87,6 +90,7 @@ import dev.undine.application.worktree.RemoveWorktreeUseCase
 import dev.undine.application.welcome.ForgetRecentRepositoryUseCase
 import dev.undine.application.welcome.LoadRecentRepositoriesUseCase
 import dev.undine.application.welcome.OpenRepositoryUseCase
+import dev.undine.BuildInfo
 import dev.undine.domain.OpenedRepository
 import dev.undine.domain.RefGateway
 import dev.undine.domain.RepositoryGateway
@@ -110,6 +114,7 @@ import dev.undine.domain.reflog.ReflogGateway
 import dev.undine.domain.signing.SigningGateway
 import dev.undine.domain.submodule.SubmoduleGateway
 import dev.undine.domain.typography.MonospaceFontGateway
+import dev.undine.domain.update.UpdateGateway
 import dev.undine.domain.undo.UndoStack
 import dev.undine.domain.worktree.WorktreeGateway
 import dev.undine.infrastructure.diagnostics.DiagnosticsGatewayImpl
@@ -139,6 +144,7 @@ import dev.undine.infrastructure.git.worktreeops.WorktreeOpsGatewayImpl
 import dev.undine.infrastructure.identity.IdentityGatewayImpl
 import dev.undine.infrastructure.settings.SettingsGatewayImpl
 import dev.undine.infrastructure.typography.MonospaceFontGatewayImpl
+import dev.undine.infrastructure.update.UpdateGatewayImpl
 import dev.undine.presentation.conflict.ConflictActions
 import dev.undine.presentation.rebase.RebaseActions
 import dev.undine.presentation.submodule.SubmodulePanelActions
@@ -165,11 +171,15 @@ import java.nio.file.Path
  * @param settingsGateway 설정 영속화. 기본은 [settingsFile] 에 붙는 실제 구현이다. 실제 구현은
  *   읽기 실패를 기본값으로 접어 예외를 올리지 않으므로([SettingsGatewayImpl]), **시작 읽기가
  *   늦거나 실패하는 경로**는 여기에 다른 구현을 넣어야만 태울 수 있다 — 테스트가 쓰는 통로다.
+ * @param updateGateway 릴리즈 확인·다운로드. 기본은 [BuildInfo] 좌표에 붙는 실제 구현이다.
+ *   **조립이 자동 확인을 실제로 돌리는지**는 여기에 다른 구현을 넣어야만 볼 수 있다 —
+ *   [settingsGateway] 와 같은 통로다. 실제 구현은 github.com 을 부르므로 테스트가 쓸 수 없다 (결정 D3).
  */
 class AppComponent(
     settingsFile: Path,
     appDirectory: Path,
     private val settingsGateway: SettingsGateway = SettingsGatewayImpl(settingsFile),
+    updateGateway: UpdateGateway = defaultUpdateGateway(appDirectory),
 ) {
 
     private val gitAccess = GitAccess()
@@ -218,6 +228,7 @@ class AppComponent(
     private val gitConfigGateway: GitConfigGateway = GitConfigGatewayImpl()
     private val monospaceFontGateway: MonospaceFontGateway = MonospaceFontGatewayImpl()
     private val diagnosticsGateway: DiagnosticsGateway = DiagnosticsGatewayImpl(appDirectory)
+
 
     /** 병합·리베이스의 규칙(시작 전 검사·진행 중 검사·확인 대조)을 갖는 도메인 서비스. */
     private val mergeService = MergeService(repositoryGateway, mergeGateway)
@@ -282,6 +293,15 @@ class AppComponent(
     val diagnosticsUseCases = DiagnosticsUseCases(
         locateLogDirectory = LocateLogDirectoryUseCase(diagnosticsGateway),
         openLogDirectory = OpenLogDirectoryUseCase(diagnosticsGateway),
+    )
+
+    /**
+     * 업데이트 확인·설치 묶음. 배선(`AppRoot`)이 전역 배너에 넘긴다 — 화면은 UseCase 만 받고
+     * Gateway 를 알지 못한다.
+     */
+    val updateUseCases = UpdateUseCases(
+        check = CheckUpdateUseCase(updateGateway),
+        install = InstallUpdateUseCase(updateGateway),
     )
 
     val externalToolUseCases = ExternalToolUseCases(
@@ -460,3 +480,16 @@ class AppComponent(
      */
     suspend fun closeRepository() = repositoryGateway.close()
 }
+
+/**
+ * 자동 업데이트의 실제 Gateway. 릴리즈 좌표와 지금 버전은 **빌드가 심은 [BuildInfo] 한 곳**에서만
+ * 온다 (`packaging/RELEASE-CONTRACT.md`) — 문자열을 여러 파일에 흩으면 저장소를 옮길 때 하나가 남는다.
+ *
+ * 받는 파일은 [appDirectory] 아래 update 하위 디렉터리에만 만든다 (결정 D15). 앱 설치본은 건드리지
+ * 않는다 — 검증을 통과한 파일을 OS 설치 관리자에게 넘기는 데까지가 이 경로의 끝이다.
+ */
+private fun defaultUpdateGateway(appDirectory: Path): UpdateGateway = UpdateGatewayImpl(
+    releaseRepository = BuildInfo.RELEASE_REPOSITORY,
+    currentVersion = BuildInfo.VERSION,
+    appDirectory = appDirectory,
+)

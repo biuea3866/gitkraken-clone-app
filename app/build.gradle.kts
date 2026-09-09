@@ -13,6 +13,15 @@ plugins {
 val undineVersion: String = providers.gradleProperty("undine.version").get()
 
 /**
+ * 자동 업데이트가 릴리즈를 조회할 저장소 좌표 (`packaging/RELEASE-CONTRACT.md` "조회 좌표").
+ *
+ * **클라이언트에서 이 문자열이 나오는 곳은 여기 하나다.** 실행 중인 앱은 자기가 어느 저장소에서
+ * 왔는지 모르므로 좌표가 빌드에 심겨야 하고, 여러 파일에 흩으면 저장소를 옮길 때 하나가 남는다.
+ * 발행 쪽(워크플로·스크립트)은 `github.repository` 를 쓰므로 이 값을 쓰지 않는다.
+ */
+val undineReleaseRepository: String = "biuea3866/gitkraken-clone-app"
+
+/**
  * 앱이 자기 버전을 알 수 있게 상수를 생성한다.
  *
  * 버전을 코드에 또 적으면 릴리즈마다 두 곳을 고쳐야 하고, 한쪽을 잊으면 **앱이 거짓 버전을**
@@ -20,8 +29,10 @@ val undineVersion: String = providers.gradleProperty("undine.version").get()
  */
 val generateBuildInfo by tasks.registering {
     val version = undineVersion
+    val releaseRepository = undineReleaseRepository
     val outputDirectory = layout.buildDirectory.dir("generated/buildinfo")
     inputs.property("version", version)
+    inputs.property("releaseRepository", releaseRepository)
     outputs.dir(outputDirectory)
     doLast {
         val target = outputDirectory.get().asFile.resolve("dev/undine/BuildInfo.kt")
@@ -33,6 +44,9 @@ val generateBuildInfo by tasks.registering {
             /** 빌드가 심는 값. 손으로 고치지 않는다 — gradle.properties 의 undine.version 이 SSOT 다. */
             object BuildInfo {
                 const val VERSION: String = "$version"
+
+                /** 자동 업데이트가 릴리즈를 조회할 저장소. packaging/RELEASE-CONTRACT.md 의 좌표다. */
+                const val RELEASE_REPOSITORY: String = "$releaseRepository"
             }
 
             """.trimIndent(),
@@ -118,6 +132,9 @@ compose.desktop {
                 "java.sql",
                 "jdk.unsupported",
                 "jdk.crypto.ec",
+                // 자동 업데이트가 쓰는 JDK 내장 HTTP 클라이언트(UND-48). jdk.crypto.ec 와 같은 이유로
+                // 적어 둔다 — 빠지면 패키징된 앱에서만, 그것도 업데이트 확인 시점에 실패한다.
+                "java.net.http",
             )
 
             macOS {

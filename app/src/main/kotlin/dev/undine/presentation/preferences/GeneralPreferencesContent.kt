@@ -11,6 +11,8 @@ import dev.undine.presentation.design.UndineTokens
 import dev.undine.presentation.design.component.UndineToolbarButton
 import dev.undine.presentation.i18n.PreferencesStrings
 import dev.undine.presentation.i18n.builtInStringCatalog
+import dev.undine.presentation.i18n.strings
+import dev.undine.presentation.i18n.update
 
 /**
  * 일반 탭 — 테마·언어·시작할 때 마지막 저장소 열기.
@@ -54,6 +56,9 @@ fun GeneralPreferencesContent(
                 state::selectReopenLastRepository,
             )
         }
+        // 자동 업데이트 확인(UND-48). 일반 탭이 담는 "사용자가 보는 앱 동작" 과 같은 성격이라 여기다
+        // (결정 D17) — 전용 탭을 만들지 않는다. 문구는 `update.*` 네임스페이스가 소유한다.
+        UpdateCheckPreferenceRows(state = state, texts = texts, updateTexts = strings.update)
     }
 }
 
