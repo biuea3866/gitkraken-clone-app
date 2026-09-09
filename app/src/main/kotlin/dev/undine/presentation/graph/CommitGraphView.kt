@@ -21,6 +21,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import dev.undine.domain.Commit
 import dev.undine.presentation.design.UndineTokens
+import dev.undine.presentation.contextmenu.GraphContextMenuBinding
+import dev.undine.presentation.contextmenu.GraphContextMenuOverlay
 import dev.undine.presentation.design.component.UndineEmptyState
 import dev.undine.presentation.i18n.Strings
 import dev.undine.presentation.i18n.graph
@@ -42,6 +44,8 @@ import java.time.Instant
  *
  * @param now 상대 시각의 기준 시각. 내부에서 `Instant.now()` 를 부르지 않으므로 표시가 결정적이다.
  * @param refIndex 커밋에 붙일 HEAD·브랜치·태그 칩. 참조를 아직 모르면 [CommitRefIndex.EMPTY] 다.
+ * @param contextMenu 우클릭 메뉴 배선. `null` 이면 행·칩에 메뉴가 붙지 않는다 — 배선 전에도 그래프는
+ *   그려져야 한다.
  */
 @Composable
 @Suppress("LongParameterList")
@@ -51,6 +55,7 @@ fun CommitGraphView(
     modifier: Modifier = Modifier,
     refIndex: CommitRefIndex = CommitRefIndex.EMPTY,
     dragDropState: GraphDragDropState? = null,
+    contextMenu: GraphContextMenuBinding? = null,
     onCommitSelected: (Commit) -> Unit = {},
 ) {
     val listState = rememberLazyListState()
@@ -70,11 +75,22 @@ fun CommitGraphView(
         when {
             status is GraphLoadStatus.Failed -> GraphStatusMessage(GraphTags.ERROR, failure = true)
             state.rows.isNotEmpty() ->
-                CommitList(state, listState, columnState, refIndex, now, onCommitSelected, dragDropState)
+                CommitList(
+                    state = state,
+                    listState = listState,
+                    columnState = columnState,
+                    refIndex = refIndex,
+                    now = now,
+                    onCommitSelected = onCommitSelected,
+                    dragDropState = dragDropState,
+                    contextMenu = contextMenu,
+                )
             status == GraphLoadStatus.Loaded -> GraphStatusMessage(GraphTags.EMPTY, failure = false)
             else -> GraphLoadingMessage()
         }
         dragDropState?.let { GraphDragDropOverlay(state = it) }
+        // 메뉴는 목록 위에 얹힌다 — 아래를 덮는 영역이 메뉴 밖 클릭을 가로채 행으로 새지 않게 한다.
+        contextMenu?.let { GraphContextMenuOverlay(binding = it) }
     }
 }
 
@@ -111,6 +127,7 @@ private fun CommitList(
     now: Instant,
     onCommitSelected: (Commit) -> Unit,
     dragDropState: GraphDragDropState?,
+    contextMenu: GraphContextMenuBinding?,
 ) {
     val currentStrings = strings
     val laneCount = state.laneCount
@@ -142,6 +159,7 @@ private fun CommitList(
                         onCommitSelected(item.commit)
                     },
                     dragDropState = dragDropState,
+                    contextMenu = contextMenu,
                 )
             }
         }

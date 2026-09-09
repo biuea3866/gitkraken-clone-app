@@ -1,5 +1,6 @@
 package dev.undine.presentation.i18n
 
+import dev.undine.domain.graphops.GraphDropRefusal
 import java.util.Locale
 
 /**
@@ -32,6 +33,7 @@ object GraphDragDropKeys {
     val sameRef = StringKey("$GRAPH_DRAG_DROP_NAMESPACE.sameRef")
     val sameCommit = StringKey("$GRAPH_DRAG_DROP_NAMESPACE.sameCommit")
     val annotatedTag = StringKey("$GRAPH_DRAG_DROP_NAMESPACE.annotatedTag")
+    val noCurrentBranch = StringKey("$GRAPH_DRAG_DROP_NAMESPACE.noCurrentBranch")
     val conflict = StringKey("$GRAPH_DRAG_DROP_NAMESPACE.conflict")
     val unavailableCommand = StringKey("$GRAPH_DRAG_DROP_NAMESPACE.unavailableCommand")
     val currentBranch = StringKey("$GRAPH_DRAG_DROP_NAMESPACE.currentBranch")
@@ -59,6 +61,7 @@ value class GraphDragDropStrings internal constructor(private val strings: Strin
     val sameRef: String get() = strings.text(GraphDragDropKeys.sameRef)
     val sameCommit: String get() = strings.text(GraphDragDropKeys.sameCommit)
     val annotatedTag: String get() = strings.text(GraphDragDropKeys.annotatedTag)
+    val noCurrentBranch: String get() = strings.text(GraphDragDropKeys.noCurrentBranch)
     fun conflict(paths: String): String = strings.text(GraphDragDropKeys.conflict, paths)
     val unavailableCommand: String get() = strings.text(GraphDragDropKeys.unavailableCommand)
     val currentBranch: String get() = strings.text(GraphDragDropKeys.currentBranch)
@@ -71,6 +74,18 @@ value class GraphDragDropStrings internal constructor(private val strings: Strin
 
     /** 저장소는 바뀌었는데 Undo 항목만 남지 않은 경우의 안내 — 앱이 되돌릴 수 없다는 사실과 대안 경로. */
     val undoRecordFailed: String get() = strings.text(GraphDragDropKeys.undoRecordFailed)
+
+    /**
+     * 지금 조작할 수 없는 사유 문장. **드래그·컨텍스트 메뉴·팔레트가 이 하나를 읽는다** — 같은 사유를
+     * 표면마다 따로 번역하면 하나가 곧 어긋나고, 사용자는 같은 제약을 다른 규칙으로 읽는다 (결정 D2).
+     */
+    fun refusal(refusal: GraphDropRefusal): String = when (refusal) {
+        GraphDropRefusal.SAME_REF -> sameRef
+        GraphDropRefusal.SAME_COMMIT -> sameCommit
+        GraphDropRefusal.ANNOTATED_TAG -> annotatedTag
+        GraphDropRefusal.UNSUPPORTED_COMBINATION -> unsupported
+        GraphDropRefusal.NO_CURRENT_BRANCH -> noCurrentBranch
+    }
 }
 
 /** 그래프 드래그&드롭 문구 네임스페이스 진입점. */
@@ -89,6 +104,7 @@ internal val graphDragDropTranslations: Map<Locale, Map<StringKey, String>> = ma
         GraphDragDropKeys.sameRef to "같은 브랜치에는 놓을 수 없습니다",
         GraphDragDropKeys.sameCommit to "이미 같은 커밋을 가리키고 있습니다",
         GraphDragDropKeys.annotatedTag to "annotated 태그는 이동할 수 없습니다",
+        GraphDragDropKeys.noCurrentBranch to "체크아웃된 브랜치가 없습니다(detached HEAD). 브랜치를 먼저 체크아웃하세요",
         GraphDragDropKeys.conflict to "충돌을 해결한 뒤 계속하거나 중단하세요: {0}",
         GraphDragDropKeys.unavailableCommand to "선택한 그래프 항목으로는 실행할 수 없습니다",
         GraphDragDropKeys.currentBranch to "현재 브랜치",
@@ -114,6 +130,7 @@ internal val graphDragDropTranslations: Map<Locale, Map<StringKey, String>> = ma
         GraphDragDropKeys.sameRef to "You cannot drop onto the same branch",
         GraphDragDropKeys.sameCommit to "It already points to that commit",
         GraphDragDropKeys.annotatedTag to "Annotated tags cannot be moved",
+        GraphDragDropKeys.noCurrentBranch to "No branch is checked out (detached HEAD). Check out a branch first",
         GraphDragDropKeys.conflict to "Resolve the conflict, then continue or abort: {0}",
         GraphDragDropKeys.unavailableCommand to "The selected graph item cannot run this command",
         GraphDragDropKeys.currentBranch to "Current branch",

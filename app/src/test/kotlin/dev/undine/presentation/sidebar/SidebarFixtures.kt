@@ -14,9 +14,14 @@ import dev.undine.domain.RefName
 import dev.undine.domain.StashEntry
 import dev.undine.domain.Tag
 import dev.undine.domain.WorktreeOpsGateway
+import dev.undine.domain.graphops.GraphOperation
 import dev.undine.domain.submodule.Submodule
 import dev.undine.domain.undo.UndoStack
 import dev.undine.domain.worktree.Worktree
+import dev.undine.presentation.contextmenu.GraphContextSelection
+import dev.undine.presentation.contextmenu.GraphContextTarget
+import dev.undine.presentation.contextmenu.GraphOperationKind
+import dev.undine.presentation.contextmenu.graphMenuEntryOf
 import dev.undine.testsupport.baselineOf
 import dev.undine.testsupport.commitId
 import dev.undine.testsupport.recorderOf
@@ -43,6 +48,26 @@ internal fun branchOf(
     upstream = if (isRemote) null else RefName("origin/$name"),
     ahead = ahead,
     behind = behind,
+)
+
+/**
+ * 화면 배선과 **같은 방식**으로 만드는 병합 통로 — 가용성을 스텁으로 흉내내지 않고 그래프 조작의
+ * 공용 판정([graphMenuEntryOf])에 묻는다 (결정 D17). 스텁으로 대신하면 진입점이 판정을 우회해도
+ * 테스트가 초록불이 된다.
+ */
+internal fun mergeBinding(
+    currentBranch: RefName? = RefName("main"),
+    selectedCommit: CommitId? = commitId("f"),
+    onRequest: (GraphOperation) -> Unit = {},
+): SidebarMergeBinding = SidebarMergeBinding(
+    entryOf = { branch ->
+        graphMenuEntryOf(
+            kind = GraphOperationKind.MERGE,
+            target = GraphContextTarget.Branch(branch.name, branch.target, branch.isRemote),
+            selection = GraphContextSelection(commit = selectedCommit, currentBranch = currentBranch),
+        )
+    },
+    onRequest = onRequest,
 )
 
 internal fun tagOf(name: String): Tag = Tag(

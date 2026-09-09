@@ -21,11 +21,16 @@ object GraphTags {
 
     private const val LANES_PREFIX = "graph.lanes."
 
+    private const val CHIP_PREFIX = "graph.chip."
+
     private const val LANE_HIDDEN_PREFIX = "graph.laneHidden."
 
     fun row(commit: CommitId): String = "$ROW_PREFIX$commit"
 
     fun lanes(commit: CommitId): String = "$LANES_PREFIX$commit"
+
+    /** 참조 칩. 라벨(참조 이름 또는 HEAD 표기)로 만든다 — 한 커밋에 칩이 여럿 붙는다. */
+    fun chip(label: String): String = "$CHIP_PREFIX$label"
 
     /** 자기 노드가 표시 폭 밖에 있는 행의 표식. */
     fun laneHidden(commit: CommitId): String = "$LANE_HIDDEN_PREFIX$commit"

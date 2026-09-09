@@ -19,6 +19,9 @@ import dev.undine.domain.Tag
 import dev.undine.presentation.design.UndineTokens
 import dev.undine.presentation.design.component.UndineListRow
 import dev.undine.presentation.design.component.UndineToolbarButton
+import dev.undine.presentation.contextmenu.GraphMenuEntry
+import dev.undine.presentation.contextmenu.contextMenuTrigger
+import dev.undine.presentation.i18n.contextMenu
 import dev.undine.presentation.i18n.sidebar
 import dev.undine.presentation.i18n.strings
 import dev.undine.presentation.i18n.submoduleWorktree
@@ -72,12 +75,16 @@ private fun groupLabel(group: SidebarGroup): String {
  * 브랜치 한 행과 그 행에서 열리는 컨텍스트 메뉴.
  *
  * 배지 값은 [branch] 에 이미 실려 있어 **행 렌더링 중 추가 조회를 하지 않는다.**
+ *
+ * **우클릭과 `⋯` 버튼이 같은 [SidebarBranchMenu] 를 연다** — 두 진입점이 다른 목록을 보이면
+ * 사용자는 어느 쪽이 전부인지 알 수 없다 (결정 D2). 우클릭은 여는 것이지 접는 것이 아니라서
+ * 토글이 아니라 열기로 둔다.
  */
 @Composable
 internal fun SidebarBranchItem(
     branch: Branch,
     state: SidebarState,
-    onMergeSourceSelected: (Branch) -> Unit,
+    merge: SidebarMergeBinding,
 ) {
     val colors = UndineTokens.color
     val typography = UndineTokens.typography
@@ -86,7 +93,9 @@ internal fun SidebarBranchItem(
     Column(modifier = Modifier.fillMaxWidth()) {
         UndineListRow(
             onClick = { state.toggleMenu(branch) },
-            modifier = Modifier.testTag(SidebarTags.branchRow(branch)),
+            modifier = Modifier
+                .contextMenuTrigger { state.showMenu(branch) }
+                .testTag(SidebarTags.branchRow(branch)),
             selected = branch.isCurrent,
         ) {
             if (branch.isCurrent) {
@@ -117,7 +126,7 @@ internal fun SidebarBranchItem(
             )
         }
         if (state.isMenuOpen(branch)) {
-            SidebarBranchMenu(branch = branch, state = state, onMergeSourceSelected = onMergeSourceSelected)
+            SidebarBranchMenu(branch = branch, state = state, merge = merge)
         }
     }
 }
@@ -161,7 +170,7 @@ private fun AheadBehindBadge(name: RefName, badge: SidebarBadge) {
 private fun SidebarBranchMenu(
     branch: Branch,
     state: SidebarState,
-    onMergeSourceSelected: (Branch) -> Unit,
+    merge: SidebarMergeBinding,
 ) {
     val spacing = UndineTokens.spacing
     val sidebarStrings = strings.sidebar
@@ -191,18 +200,48 @@ private fun SidebarBranchMenu(
                 modifier = Modifier.testTag(SidebarTags.MENU_DELETE),
             )
         }
-        UndineToolbarButton(
-            label = sidebarStrings.menuMerge,
-            onClick = {
-                state.toggleMenu(branch)
-                onMergeSourceSelected(branch)
-            },
-            modifier = Modifier.testTag(SidebarTags.MENU_MERGE),
-        )
+        MergeMenuItem(branch = branch, state = state, merge = merge)
     }
 }
 
-/** 태그 행. 태그 조작(생성·삭제)은 이 티켓 범위 밖이라 행에 동작이 없다. */
+/**
+ * 병합 항목. **가용성을 사이드바가 판정하지 않는다** — 그래프 조작의 공용 판정이 돌려준 항목의
+ * 사유를 그대로 읽는다 (결정 D17). 그래서 detached HEAD 에서는 여기서도 비활성이 되고, 확인창을
+ * 띄운 뒤 실행에서 실패하는 일이 없다.
+ *
+ * **막혀도 항목을 숨기지 않는다** — 사라지면 사용자는 병합이 없는 브랜치라고 읽는다 (결정 D3).
+ */
+@Composable
+private fun MergeMenuItem(branch: Branch, state: SidebarState, merge: SidebarMergeBinding) {
+    val contextMenuStrings = strings.contextMenu
+    val label = strings.sidebar.menuMerge
+    val entry = merge.entryOf(branch)
+    val reason = entry?.blockedReason
+    val text = reason?.let { refusal ->
+        contextMenuStrings.blockedItem(label, contextMenuStrings.reason(refusal))
+    } ?: label
+
+    UndineToolbarButton(
+        label = text,
+        onClick = {
+            state.toggleMenu(branch)
+            // 비활성이면 클릭이 여기까지 오지 않는다. 그래도 다시 확인해 실행이 판정을 앞서지
+            // 않게 한다 — 조작은 여기서 짓지 않고 항목이 들고 온 것을 그대로 넘긴다.
+            entry?.takeIf(GraphMenuEntry::enabled)?.let { available -> merge.onRequest(available.operation) }
+        },
+        modifier = Modifier
+            .semantics { contentDescription = text }
+            .testTag(SidebarTags.MENU_MERGE),
+        enabled = entry?.enabled == true,
+    )
+}
+
+/**
+ * 태그 행. 태그 조작(생성·삭제)은 아직 없어 행에 동작이 없다.
+ *
+ * **우클릭 메뉴를 붙이지 않는다** — 낼 항목이 없으므로 빈 메뉴가 열리면 사용자는 조작이 사라진
+ * 것으로 읽는다 (결정 D11). 그래프의 태그 칩 우클릭이 태그 이동 하나를 낸다.
+ */
 @Composable
 internal fun SidebarTagRow(tag: Tag) {
     val colors = UndineTokens.color

@@ -150,6 +150,15 @@ class SidebarState(
         openMenu = if (openMenu == key) null else key
     }
 
+    /**
+     * [branch] 행의 메뉴를 연다. 이미 열려 있으면 그대로 둔다 — **우클릭은 여는 동작이지 접는
+     * 동작이 아니다.** 토글로 두면 같은 행을 다시 우클릭했을 때 메뉴가 사라져, 사용자는 우클릭이
+     * 동작하지 않는다고 읽는다.
+     */
+    fun showMenu(branch: Branch) {
+        openMenu = branch.refKey()
+    }
+
     /** [branch] 행의 메뉴가 열려 있는지 — 화면이 이름이 아니라 종류까지 대조하게 한다. */
     fun isMenuOpen(branch: Branch): Boolean = openMenu == branch.refKey()
 

@@ -1,9 +1,9 @@
 package dev.undine.presentation
 
 import androidx.compose.ui.input.key.Key
+import dev.undine.presentation.contextmenu.GraphMenuEntry
 import dev.undine.presentation.graph.GraphOperationCallbacks
 import dev.undine.presentation.graph.graphOperationCommands
-import dev.undine.domain.graphops.GraphOperation
 import dev.undine.presentation.palette.Command
 import dev.undine.presentation.palette.CommandAvailability
 import dev.undine.presentation.palette.CommandId
@@ -83,14 +83,17 @@ fun registerAppCommands(registry: CommandRegistry, handlers: AppCommandHandlers)
  *
  * @param handlers 명령이 부를 동작. 저장소가 필요한 화면의 가용성 판정도 여기서 받는다.
  * @param graphCallbacks 그래프 조작 명령이 실행할 콜백 (UND-42 가 정의한 다섯 명령).
- * @param selectedGraphOperation 지금 선택으로 만들 수 있는 그래프 조작 하나. 없으면 다섯 명령 모두
- *   막힌 상태로 보인다 — 목록에서 숨기지 않는 이유는 사용자가 왜 못 쓰는지 알아야 하기 때문이다.
+ * @param selectedGraphEntries 지금 지목한 그래프 대상의 메뉴 항목 **전부** — 조작과 그 가용성을
+ *   함께 들고 있다. 비면 다섯 명령 모두 막힌 상태로 보인다 — 목록에서 숨기지 않는 이유는 사용자가
+ *   왜 못 쓰는지 알아야 하기 때문이다. 대상 하나에서 조작 하나만 나온다는 전제로는 브랜치의
+ *   merge·rebase 를 함께 낼 수 없다 (결정 D10). 가용성까지 함께 받는 이유는 팔레트가 판정을
+ *   두 번째로 하지 않아야 하기 때문이다 (결정 D17).
  */
 fun registerSecondaryCommands(
     registry: CommandRegistry,
     handlers: SecondaryCommandHandlers,
     graphCallbacks: GraphOperationCallbacks,
-    selectedGraphOperation: () -> GraphOperation?,
+    selectedGraphEntries: () -> List<GraphMenuEntry>,
 ) {
     AppDestination.entries.forEach { destination ->
         registry.register(
@@ -119,7 +122,7 @@ fun registerSecondaryCommands(
             action = handlers.onUndoLast,
         ).blockedBy(handlers.repositoryChangeBlockedReason),
     )
-    graphOperationCommands(graphCallbacks, selectedOperation = selectedGraphOperation)
+    graphOperationCommands(graphCallbacks, selectedEntries = selectedGraphEntries)
         .map { command -> command.blockedBy(handlers.repositoryChangeBlockedReason) }
         .forEach(registry::register)
 }
