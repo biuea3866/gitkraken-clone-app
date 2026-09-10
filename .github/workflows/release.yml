@@ -62,6 +62,31 @@ jobs:
       - name: Package for current OS
         run: ./gradlew packageDistributionForCurrentOS --no-daemon --stacktrace
 
+      # 실패하면 jpackage 는 이유를 **자기 로그 파일에만** 쓴다 — Gradle 은 그 파일 경로만 남기고,
+      # 파일은 러너와 함께 사라진다. v1.0.0 이 `:app:packageMsi FAILED` 한 줄만 남기고 죽어
+      # 원인(WiX light.exe 의 LGHT0311)을 볼 수 없었다. 그래서 꺼내 둔다.
+      #
+      # 로그에 찍고 아티팩트로도 올린다 — 찍은 것은 로그 보존 기간이 지나면 사라지고,
+      # 아티팩트는 한 파일로 내려받아 볼 수 있다.
+      - name: Dump jpackage logs on failure
+        if: failure()
+        run: |
+          find app/build/compose/logs -type f 2>/dev/null || echo "(jpackage 로그가 없습니다)"
+          echo
+          for log in $(find app/build/compose/logs -type f -name '*.txt' 2>/dev/null); do
+            echo "===== $log ====="
+            cat "$log"
+            echo
+          done
+
+      - name: Upload jpackage logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jpackage-logs-${{ matrix.os }}
+          path: app/build/compose/logs/
+          if-no-files-found: warn
+
       - name: Stage asset under contract name
         run: bash packaging/release-assets.sh stage "${{ matrix.os }}" app/build/compose/binaries/main staged
 
