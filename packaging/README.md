@@ -68,6 +68,14 @@ jpackage 가 한참 뒤 알아보기 어려운 오류로 실패하는 것을 막
 두 방법 모두 **자기가 빌드한 앱**에만 쓴다. 출처를 모르는 앱에 격리 속성을 지우는 것은 Gatekeeper 를
 끄는 것과 같다.
 
+## MSI 문자열은 코드페이지 1252 안에서만 쓴다
+
+jpackage 는 MSI 문자열(`packageName`·`description`·`vendor`·`copyright`)을 코드페이지 1252 로
+넣는다. 표현 못 하는 문자가 하나라도 있으면 WiX 링커 `light.exe` 가 `LGHT0311`(exit 311) 로 죽는다 —
+**한글은 여기 들어갈 수 없다.** macOS·Linux 는 UTF-8 이라 통과하므로 Windows 러너에서만 드러난다.
+
+`app/build.gradle.kts` 의 `msiSafe` 가 설정 시점에 막는다. Linux 에서 `./gradlew build` 만 해도 걸린다.
+
 ## 버전
 
 `gradle.properties` 의 `undine.version` 이 SSOT 다. 빌드가 이 값으로

@@ -1,12 +1,31 @@
 import io.gitlab.arturbosch.detekt.Detekt
 import io.gitlab.arturbosch.detekt.DetektCreateBaselineTask
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import java.nio.charset.Charset
 
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.compose)
     alias(libs.plugins.detekt)
+}
+
+/**
+ * MSI 설치 프로그램에 들어갈 문자열인지 확인하고 그대로 돌려준다.
+ *
+ * **jpackage 는 MSI 문자열을 코드페이지 1252 로 넣는다.** 표현 못 하는 문자가 하나라도 있으면 WiX
+ * 링커 `light.exe` 가 `LGHT0311`(exit 311) 로 죽고, jpackage 는 그 이유를 자기 로그 파일에만 남긴다.
+ * 이 실패는 **Windows 러너에서만** 드러나는데 CI 는 Linux 전용이라, 태그를 밀어 릴리즈 워크플로가
+ * 돌 때까지 아무도 보지 못한다 — v1.0.0 이 실제로 그렇게 실패했다(설명이 한글이었다).
+ *
+ * 그래서 판정을 **모든 플랫폼의 설정 시점**으로 끌어온다. Linux 에서 `./gradlew build` 만 해도 걸린다.
+ */
+fun msiSafe(field: String, value: String): String {
+    require(Charset.forName("windows-1252").newEncoder().canEncode(value)) {
+        "nativeDistributions.$field 에 코드페이지 1252 로 표현할 수 없는 문자가 있습니다: \"$value\" — " +
+            "MSI 링크(light.exe)가 LGHT0311 로 실패합니다. ASCII·Latin-1 범위로 적으세요."
+    }
+    return value
 }
 
 /** 배포 버전. gradle.properties 한 곳에서만 읽는다 — 태그·번들·앱 표시가 어긋나지 않게. */
@@ -111,11 +130,12 @@ compose.desktop {
         nativeDistributions {
             // 현재 OS 에 해당하는 포맷만 생성된다 (jpackage 가 크로스 빌드를 하지 않는다).
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "Undine"
+            // 설치 프로그램 문자열은 전부 msiSafe 를 지난다 — 한글을 넣으면 설정 시점에 걸린다.
+            packageName = msiSafe("packageName", "Undine")
             packageVersion = undineVersion
-            description = "Kotlin · Compose Desktop · JGit 으로 만든 Git 클라이언트"
-            vendor = "Undine"
-            copyright = "© Undine"
+            description = msiSafe("description", "Git client built with Kotlin · Compose Desktop · JGit")
+            vendor = msiSafe("vendor", "Undine")
+            copyright = msiSafe("copyright", "© Undine")
 
             /*
              * 런타임 모듈. 빠지면 **빌드가 아니라 실행 시점에** 실패하므로 근거를 남긴다.
