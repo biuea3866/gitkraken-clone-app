@@ -124,13 +124,21 @@ class RemoteGatewayImpl(
     }
 
     /**
-     * 현재 브랜치의 업스트림 원격으로 [ref] 를 보낸다 — 인자 없는 `git push` 와 같은 대상 결정이다.
+     * [ref] 를 **[remote] 로** 보낸다 — 대상을 여기서 정하지 않고 받는다.
+     *
+     * 예전에는 현재 브랜치의 업스트림에서 풀었다. 미는 대상이 현재 브랜치가 아니면 **확인 문장이
+     * 말한 원격과 다른 곳**으로 나가고, force push 면 남의 이력을 덮어쓴다 (UND-95).
+     *
      * 원격이 거절한 것은 실패가 아니라 결과이므로 [PushResult.Rejected] 로 돌려준다.
      */
-    override suspend fun push(ref: RefName, force: Boolean, onProgress: (Progress) -> Unit): PushResult {
-        var identity = RemoteIdentity(label = DEFAULT_REMOTE, url = null)
+    override suspend fun push(
+        ref: RefName,
+        remote: String,
+        force: Boolean,
+        onProgress: (Progress) -> Unit,
+    ): PushResult {
+        var identity = RemoteIdentity(label = remote, url = null)
         return runOnRepository("remote.push", { identity }, onProgress) { repository, monitor ->
-            val remote = upstreamRemoteOf(repository)
             identity = repository.identityOf(remote)
             Git(repository).use { git ->
                 val destination = destinationOf(ref)
@@ -272,13 +280,6 @@ private fun requireKnownRemote(repository: Repository, remote: String) {
 private fun Repository.identityOf(remote: String): RemoteIdentity =
     RemoteIdentity(label = remote, url = config.getString("remote", remote, "url"))
 
-private fun upstreamRemoteOf(repository: Repository): String {
-    val branch = repository.branch ?: throw UndineException.StateViolation("현재 브랜치를 확인할 수 없습니다")
-    return BranchConfig(repository.config, branch).remote
-        ?: throw UndineException.StateViolation("업스트림이 설정되지 않았습니다")
-}
-
-/** 짧은 이름(`main`)으로 들어와도 원격에서는 완전한 참조 이름으로 대응된다. */
 private fun destinationOf(ref: RefName): String =
     if (ref.value.startsWith(Constants.R_REFS)) ref.value else Constants.R_HEADS + ref.value
 

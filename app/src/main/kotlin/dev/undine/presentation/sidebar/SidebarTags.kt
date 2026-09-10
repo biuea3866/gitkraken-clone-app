@@ -24,6 +24,8 @@ object SidebarTags {
     const val MENU_RENAME = "sidebar.menu.rename"
     const val MENU_DELETE = "sidebar.menu.delete"
     const val MENU_MERGE = "sidebar.menu.merge"
+    const val MENU_PULL = "sidebar.menu.pull"
+    const val MENU_PUSH = "sidebar.menu.push"
 
     const val CONFIRM_DIALOG = "sidebar.confirm"
     const val CONFIRM_ACCEPT = "sidebar.confirm.accept"

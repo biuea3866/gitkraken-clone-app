@@ -27,6 +27,13 @@ object ToolbarKeys {
     val fetched = StringKey("$NAMESPACE.result.fetched")
     val pulled = StringKey("$NAMESPACE.result.pulled")
     val pushed = StringKey("$NAMESPACE.result.pushed")
+    val branchPushed = StringKey("$NAMESPACE.result.branchPushed")
+    val branchForcePushed = StringKey("$NAMESPACE.result.branchForcePushed")
+    val branchFastForwarded = StringKey("$NAMESPACE.result.branchFastForwarded")
+    val branchUpToDate = StringKey("$NAMESPACE.result.branchUpToDate")
+    val branchNotFastForward = StringKey("$NAMESPACE.result.branchNotFastForward")
+    val branchNoUpstream = StringKey("$NAMESPACE.result.branchNoUpstream")
+    val branchIsCurrent = StringKey("$NAMESPACE.result.branchIsCurrent")
     val forcePushed = StringKey("$NAMESPACE.result.forcePushed")
     val nonFastForward = StringKey("$NAMESPACE.result.nonFastForward")
     val remoteRejected = StringKey("$NAMESPACE.result.remoteRejected")
@@ -45,6 +52,8 @@ object ToolbarKeys {
     val all: List<StringKey> = listOf(
         fetch, pull, push, moreActions, forcePush, forcePushWarning, forcePushConfirm,
         noRemote, detachedHead, noUpstream, aheadBehind, fetched, pulled, pushed, forcePushed,
+        branchPushed, branchForcePushed, branchFastForwarded, branchUpToDate, branchNotFastForward,
+        branchNoUpstream, branchIsCurrent,
         nonFastForward, remoteRejected, authenticationFailed, remoteNotFound,
         conflict, dirtyWorkingTree, unexpectedFailure,
         cancelling, cancelledFetch, cancelledPull, cancelledPush, cancelledForcePush,
@@ -93,6 +102,34 @@ value class ToolbarStrings internal constructor(private val strings: Strings) {
         strings.text(ToolbarKeys.aheadBehind, ahead, behind)
 
     fun fetched(refCount: Int): String = strings.text(ToolbarKeys.fetched, refCount)
+
+    /*
+     * 지목 조작의 결과는 **대상 브랜치 이름을 문장에 담는다** — 툴바 문구처럼 "현재 브랜치" 라고
+     * 하면 사용자가 어느 행에서 시작했는지 다시 기억해야 한다 (UND-95 의 요점).
+     */
+
+    fun branchPushed(branch: String): String = strings.text(ToolbarKeys.branchPushed, branch)
+
+    fun branchForcePushed(branch: String): String =
+        strings.text(ToolbarKeys.branchForcePushed, branch)
+
+    fun branchFastForwarded(branch: String): String =
+        strings.text(ToolbarKeys.branchFastForwarded, branch)
+
+    fun branchUpToDate(branch: String): String = strings.text(ToolbarKeys.branchUpToDate, branch)
+
+    fun branchNotFastForward(branch: String): String =
+        strings.text(ToolbarKeys.branchNotFastForward, branch)
+
+    fun branchNoUpstream(branch: String): String = strings.text(ToolbarKeys.branchNoUpstream, branch)
+
+    fun branchIsCurrent(branch: String): String = strings.text(ToolbarKeys.branchIsCurrent, branch)
+
+    /**
+     * 변경은 적용됐는데 실행 이력 항목만 남지 않은 경우의 안내. 그래프 조작이 쓰는 **같은 문장**을
+     * 그대로 읽는다 — 같은 상황을 표면마다 따로 번역하면 사용자는 둘이 다른 일인 줄 안다 (결정 D16).
+     */
+    val undoRecordFailed: String get() = strings.graphDragDrop.undoRecordFailed
 }
 
 /** 툴바 문구 네임스페이스 진입점. */
@@ -116,6 +153,16 @@ internal val toolbarTranslations: Map<Locale, Map<StringKey, String>> = mapOf(
         ToolbarKeys.fetched to "원격 참조 {0}개를 가져왔습니다.",
         ToolbarKeys.pulled to "원격 변경을 가져와 병합했습니다.",
         ToolbarKeys.pushed to "현재 브랜치를 원격에 올렸습니다.",
+        ToolbarKeys.branchPushed to "{0} 브랜치를 원격에 올렸습니다.",
+        ToolbarKeys.branchForcePushed to "{0} 브랜치로 원격 이력을 덮어썼습니다.",
+        ToolbarKeys.branchFastForwarded to
+            "{0} 브랜치를 원격 위치로 빨리 감았습니다. 체크아웃과 워킹트리는 그대로입니다.",
+        ToolbarKeys.branchUpToDate to "{0} 브랜치는 이미 원격과 같은 위치입니다.",
+        ToolbarKeys.branchNotFastForward to
+            "{0} 브랜치는 원격과 갈라져 빨리 감을 수 없습니다. 체크아웃한 뒤 가져와 병합으로 합치세요.",
+        ToolbarKeys.branchNoUpstream to "{0} 브랜치의 추적 원격을 찾지 못해 받지 않았습니다.",
+        ToolbarKeys.branchIsCurrent to
+            "{0} 브랜치는 지금 체크아웃돼 있습니다. 툴바의 가져와 병합을 쓰세요.",
         ToolbarKeys.forcePushed to "현재 브랜치로 원격 이력을 덮어썼습니다.",
         ToolbarKeys.nonFastForward to "원격에 아직 받지 않은 커밋이 있습니다. pull 로 받은 뒤 다시 시도하세요.",
         ToolbarKeys.remoteRejected to "원격이 이 요청을 거절했습니다. 원격의 쓰기 권한과 보호 규칙을 확인하세요.",
@@ -151,6 +198,15 @@ internal val toolbarTranslations: Map<Locale, Map<StringKey, String>> = mapOf(
         ToolbarKeys.fetched to "Fetched {0} remote refs.",
         ToolbarKeys.pulled to "Pulled and merged remote changes.",
         ToolbarKeys.pushed to "Pushed the current branch to the remote.",
+        ToolbarKeys.branchPushed to "Pushed {0} to the remote.",
+        ToolbarKeys.branchForcePushed to "Overwrote the remote history with {0}.",
+        ToolbarKeys.branchFastForwarded to
+            "Fast-forwarded {0} to the remote. Your checkout and working tree are unchanged.",
+        ToolbarKeys.branchUpToDate to "{0} already matches the remote.",
+        ToolbarKeys.branchNotFastForward to
+            "{0} has diverged from the remote, so it cannot fast-forward. Check it out and pull to merge.",
+        ToolbarKeys.branchNoUpstream to "No tracking remote was found for {0}, so nothing was pulled.",
+        ToolbarKeys.branchIsCurrent to "{0} is checked out right now. Use Pull in the toolbar.",
         ToolbarKeys.forcePushed to "Overwrote the remote history with the current branch.",
         ToolbarKeys.nonFastForward to "The remote has commits you do not have yet. pull them, then try again.",
         ToolbarKeys.remoteRejected to "The remote rejected this request. Check write access and branch protection.",

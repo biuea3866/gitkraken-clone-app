@@ -31,6 +31,7 @@ import org.eclipse.jgit.revwalk.RevWalk
  * 태그는 조회·생성·삭제만 제공한다. 이름 변경은 git 에서 삭제+재생성이라 이미 push 된 태그에서
  * 위험하므로 계약 자체에 없다.
  */
+@Suppress("TooManyFunctions") // 구현은 [RefGateway] 계약의 함수 수를 그대로 따른다.
 class RefGatewayImpl(private val gitAccess: GitAccess) : RefGateway {
 
     /**
@@ -175,6 +176,20 @@ class RefGatewayImpl(private val gitAccess: GitAccess) : RefGateway {
             translatingGitFailure("ref.checkout") {
                 // 이전 위치·기준 상태를 **체크아웃과 같은 구역**에서 캡처한다 (UND-73).
                 Git.wrap(repository).use { git -> git.checkoutHeld(ref, force) }
+            }
+        }
+
+    /**
+     * `RevWalk.isMergedInto(base, tip)` 이 곧 "tip 이 base 에서 이어지는가" 다 — 도달 판정을 손으로
+     * 다시 구현하지 않는다. 순회 상태가 남지 않도록 조회마다 [RevWalk] 를 새로 열고 닫는다
+     * (jgit-usage 규칙 3).
+     */
+    override suspend fun isDescendantOf(candidate: CommitId, ancestor: CommitId): Boolean =
+        gitAccess.withRepository { repository ->
+            translatingGitFailure("ref.isDescendantOf") {
+                RevWalk(repository).use { walk ->
+                    walk.isMergedInto(walk.commitOf(ancestor), walk.commitOf(candidate))
+                }
             }
         }
 

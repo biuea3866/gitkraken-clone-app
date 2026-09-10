@@ -29,19 +29,17 @@ import dev.undine.presentation.i18n.common
 import dev.undine.presentation.i18n.strings
 import dev.undine.presentation.i18n.toolbar
 
-/** 로컬 브랜치 참조의 사용자 표기 접두사. 경고 문장에 `refs/heads/` 를 그대로 보여주지 않는다. */
-private const val LOCAL_BRANCH_PREFIX = "refs/heads/"
-
 /**
  * 원격 작업 툴바 — fetch·pull·push 시작, 진행·취소, 결과 안내, force push 확인, ahead/behind 배지.
  *
  * **상태는 [state] 가 소유한다** (compose-ui 규칙 1). 이 컴포넌트가 `remember` 로 들고 있는 것은
- * 메뉴 열림·확인 대기처럼 **화면에만 존재하는 임시 표시 상태**뿐이며, 원격 작업의 진행·결과는
- * 하나도 여기에 두지 않는다 — 그래야 리컴포지션이 진행 중인 작업을 잃지 않는다.
+ * 메뉴 열림처럼 **화면에만 존재하는 임시 표시 상태**뿐이며, 원격 작업의 진행·결과와 덮어쓰기
+ * 확인 대기는 하나도 여기에 두지 않는다 — 그래야 리컴포지션이 진행 중인 작업을 잃지 않고,
+ * 사이드바에서 시작한 조작의 확인도 같은 문장으로 여기서 뜬다.
  *
- * force push 는 기본 버튼에 없다. 더 보기 메뉴 → 문장 경고 → 명시적 확인을 지나야
- * `push(force = true)` 가 나간다. 백업 ref 와 force-with-lease 는 Gateway 의 책임이라
- * 여기서 중복 구현하지 않는다.
+ * force push 는 기본 버튼에 없다. 더 보기 메뉴 → 문장 경고 → 명시적 확인을 지나야 덮어쓰기가
+ * 나가고, 지목 올리기가 non-fast-forward 로 거절돼 올라온 확인도 **같은 경고·같은 버튼**을
+ * 지난다 (결정 D11). 백업 ref 와 force-with-lease 는 Gateway 의 책임이라 여기서 중복 구현하지 않는다.
  */
 @Composable
 fun RemoteToolbar(
@@ -50,7 +48,6 @@ fun RemoteToolbar(
 ) {
     val spacing = UndineTokens.spacing
     var menuExpanded by remember { mutableStateOf(false) }
-    var forcePushPending by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -75,21 +72,21 @@ fun RemoteToolbar(
                 label = strings.toolbar.forcePush,
                 onClick = {
                     menuExpanded = false
-                    forcePushPending = true
+                    state.requestForcePush()
                 },
                 modifier = Modifier.testTag(ToolbarTags.FORCE_PUSH),
             )
         }
-        ForcePushConfirmation(
-            visible = forcePushPending,
-            branch = state.branch?.name,
-            remote = state.pushTargetRemote,
-            onConfirm = {
-                forcePushPending = false
-                state.push(force = true)
-            },
-            onDismiss = { forcePushPending = false },
-        )
+        // 확인 대기는 **상태 홀더가 소유한다** — 사이드바의 지목 올리기가 거절돼 올라온 확인도 같은
+        // 경고·같은 버튼을 지나야 하기 때문이다 (결정 D11). 화면에 두면 두 번째 기준이 생긴다.
+        state.forcePushPrompt?.let { prompt ->
+            ForcePushConfirmation(
+                branch = prompt.branch,
+                remote = prompt.remote,
+                onConfirm = state::confirmForcePush,
+                onDismiss = state::dismissForcePush,
+            )
+        }
         state.notice?.let { RemoteToolbarNoticeText(it) }
         state.outcome?.let { outcome ->
             val message = remoteOperationMessage(strings, outcome)
@@ -195,19 +192,16 @@ private fun RunningIndicator(state: RemoteToolbarState) {
 /**
  * force push 확인. 무엇이 덮어써지는지 **문장으로** 알리고 확인을 받는다.
  *
- * [branch]·[remote] 중 하나라도 없으면 올릴 대상을 문장에 적을 수 없으므로 그리지 않는다 —
- * 대상을 못 적는 경고는 확인의 근거가 되지 못한다.
+ * 대상([branch]·[remote])은 확인을 요청한 쪽이 확정해 넘긴다 — 대상을 못 적는 경고는 확인의
+ * 근거가 되지 못하므로, 확정하지 못하면 애초에 확인이 뜨지 않는다.
  */
 @Composable
 private fun ForcePushConfirmation(
-    visible: Boolean,
-    branch: RefName?,
-    remote: String?,
+    branch: RefName,
+    remote: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    if (!visible || branch == null || remote == null) return
-
     val spacing = UndineTokens.spacing
     val shape = UndineTokens.shape
     val panelShape = RoundedCornerShape(shape.cornerMedium)
@@ -255,6 +249,3 @@ private fun RemoteToolbarNoticeText(notice: RemoteToolbarNotice) {
         style = UndineTokens.typography.caption.copy(color = UndineTokens.color.foregroundSecondary),
     )
 }
-
-/** 사용자에게 보여줄 브랜치 이름. `refs/heads/main` 을 `main` 으로 줄인다. */
-private fun RefName.displayName(): String = value.removePrefix(LOCAL_BRANCH_PREFIX)

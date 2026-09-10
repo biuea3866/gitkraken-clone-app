@@ -108,7 +108,7 @@ Undine 구현을 **60개 티켓 / 10개 wave** 로 분해한 결과다 (폐기 2
 | [UND-92](UND-92-graph-column-bound.md) | 그래프 열이 커밋 메시지를 밀어내지 않게 한다 | M | 14 | UND-14 | `presentation/graph/` · `presentation/i18n/GraphStrings.kt` |
 | [UND-93](UND-93-lfs-fetch-integration.md) | fetch/pull 뒤 LFS 객체 동반 다운로드 | M | 15 | UND-61 | `application/toolbar/FetchRemoteUseCase.kt` · `application/toolbar/PullRemoteUseCase.kt` · `presentation/toolbar/` |
 | [UND-94](UND-94-context-menu-entry-points.md) | 우클릭으로 조작에 닿게 한다 (동작 안 하던 진입점 둘 포함) | L | 16 | UND-42 · UND-51 | `presentation/contextmenu/` · `presentation/sidebar/SidebarRows.kt` · `presentation/sidebar/SidebarState.kt` · `presentation/sidebar/SidebarTree.kt` · `presentation/sidebar/SidebarMergeBinding.kt` · `presentation/graph/CommitRow.kt` · `presentation/graph/RefChip.kt` · `presentation/graph/CommitGraphView.kt` · `presentation/graph/CommitRefIndex.kt` · `presentation/graph/GraphTags.kt` · `presentation/graph/GraphOperationCommands.kt` · `presentation/App.kt` · `presentation/AppCommands.kt` · `presentation/AppDestinationScreens.kt` · `presentation/i18n/ContextMenuStrings.kt` · `presentation/i18n/BuiltInStrings.kt` · `domain/graphops/GraphDragDrop.kt` · `presentation/graph/GraphDragDropState.kt` · `presentation/i18n/GraphDragDropStrings.kt` |
-| [UND-95](UND-95-branch-scoped-remote-ops.md) | 브랜치를 지목해 pull·push 한다 | M | 17 | UND-08 · UND-57 · UND-94 | `application/toolbar/` · `presentation/sidebar/SidebarRows.kt` · `presentation/i18n/SidebarStrings.kt` |
+| [UND-95](UND-95-branch-scoped-remote-ops.md) | 브랜치를 지목해 pull·push 한다 | M | 17 | UND-08 · UND-57 · UND-94 | `application/toolbar/` · `presentation/toolbar/`(지목 조작) · `presentation/sidebar/SidebarRows.kt` · `presentation/sidebar/SidebarRemoteBinding.kt` · `presentation/sidebar/SidebarTree.kt` · `presentation/sidebar/SidebarTags.kt` · `presentation/i18n/SidebarStrings.kt` · `presentation/i18n/ToolbarStrings.kt` · `domain/RefGateway.kt`(자손 판정) · `domain/undo/GitOperationKind.kt` · `domain/RepositorySessionBinding.kt`(세션 고정 계약) · `infrastructure/git/ref/RefGatewayImpl.kt` · `infrastructure/git/repository/GitAccess.kt`(세션 고정 구역 — UND-80 재수정) · `di/AppComponent.kt`(원격 묶음 조립) · `presentation/AppDestinationScreens.kt`(사이드바 배선) |
 | [UND-52](UND-52-e2e-scenario-phase2.md) | 2차 E2E 시나리오 테스트 | M | 10 | UND-51 | `app/src/test/kotlin/.../scenario2/` |
 | [UND-54](UND-54-merge-start-state-guard.md) | merge/rebase 시작 경로 상태 가드 완결 | S | 4 | UND-21 | `infrastructure/git/merge/` (가드 추가) |
 | [UND-56](UND-56-gitkraken-visual-tuning.md) | GitKraken 계열 시각 튜닝 · 렌더 확인 수단 | S | 5 | UND-26 · UND-10 | `presentation/design/` · `presentation/graph/`(그리기) · `presentation/shell/`(분할선) |
@@ -294,7 +294,8 @@ flowchart LR
 |---|---|---|
 | `build.gradle.kts` | UND-01 (w1) | UND-25 (w4) · UND-48 (w8) |
 | `presentation/App.kt` | UND-01 최소 형태 (w1) | UND-26 최종 형태 (w5) · UND-48 전역 배너 (w8) · UND-51 (w9) |
-| `di/` | UND-26 (w5) | UND-61 (w7) · UND-48 (w8) · UND-51 (w9) |
+| `di/` | UND-26 (w5) | UND-61 (w7) · UND-48 (w8) · UND-51 (w9) · UND-95 (w17) |
+| `infrastructure/git/repository/GitAccess.kt` | UND-79 · UND-80 (w9) | UND-95 세션 고정 구역 (w17) |
 | `presentation/shell/` | UND-12 (w3) | UND-44 (w8) |
 | `presentation/graph/` | UND-14 (w3) | UND-42 (w8) |
 | `presentation/palette/` | UND-22 (w3) | UND-51 등록 (w9) |

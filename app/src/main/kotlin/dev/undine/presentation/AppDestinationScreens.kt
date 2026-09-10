@@ -87,6 +87,7 @@ import dev.undine.presentation.search.SearchPanel
 import dev.undine.presentation.shell.AppShell
 import dev.undine.presentation.shell.AppShellSlots
 import dev.undine.presentation.sidebar.SidebarMergeBinding
+import dev.undine.presentation.sidebar.SidebarRemoteBinding
 import dev.undine.presentation.sidebar.SidebarTree
 import dev.undine.presentation.toolbar.RemoteToolbar
 import dev.undine.presentation.toolbar.rememberRemoteToolbarState
@@ -527,13 +528,20 @@ private fun RepositoryArea(
         )
     }
     val toolbarState = rememberRemoteToolbarState(
-        fetchRemote = component.fetchRemote,
-        pullRemote = component.pullRemote,
-        // push 는 되돌릴 수 없다는 사유와 함께 활성 저장소의 이력에 남는다 — 그래서 범위의 것을 쓴다.
-        pushRemote = undoScope.pushRemote,
+        // push·지목 받기는 되돌리기 사유와 함께 활성 저장소의 이력에 남는다 — 그래서 범위의 묶음을 쓴다.
+        actions = undoScope.remoteActions,
         remotes = context.remotes,
         branch = context.currentBranch,
     )
+    // 사이드바의 지목 조작도 **같은 홀더**를 지난다. 가용성 판정·진행·결과·한 번에 한 작업 잠금이
+    // 툴바와 한 곳에 있어야 두 진입점의 안전 기준이 갈리지 않는다 (결정 D2·D4).
+    val remoteBinding = remember(toolbarState) {
+        SidebarRemoteBinding(
+            entryOf = toolbarState::branchEntryOf,
+            onPull = toolbarState::pullBranch,
+            onPush = toolbarState::pushBranch,
+        )
+    }
 
     // 고른 커밋의 변경 파일. 커밋이 바뀌면 다시 읽는다.
     LaunchedEffect(selection.commit) {
@@ -560,6 +568,7 @@ private fun RepositoryArea(
                     // 쓰이던 동안 사이드바의 병합은 눌러도 아무 일이 없었다 (결정 D9-1). 수행 브랜치는
                     // 이름 스냅샷이 아니라 공용 판정이 만든 `BranchTarget.Current` 다.
                     merge = mergeBinding,
+                    remote = remoteBinding,
                     opened = context.opened,
                     modifier = Modifier.fillMaxSize(),
                 )

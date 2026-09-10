@@ -1,6 +1,8 @@
 package dev.undine.presentation.toolbar
 
+import dev.undine.application.toolbar.FastForwardOutcome
 import dev.undine.domain.PushResult
+import dev.undine.domain.RefName
 import dev.undine.domain.UndineException
 
 /**
@@ -22,6 +24,21 @@ sealed interface RemoteOperationOutcome {
 
     /** 원격이 push 를 거절했다. 전송 실패가 아니므로 실패로 취급하지 않는다. */
     data class PushRejected(val reason: PushResult.RejectReason) : RemoteOperationOutcome
+
+    /**
+     * 지목한 브랜치를 올렸다. 대상을 [branch] 로 싣는 이유는 **무엇을 올렸는지 화면이 말해야**
+     * 하기 때문이다 — 툴바와 달리 대상이 현재 브랜치라는 암묵 전제가 없다.
+     *
+     * [force] 는 확인을 지나 원격 이력을 덮어쓴 경우다 — 같은 문구로 알리면 사용자는 되돌릴 것이
+     * 생겼다는 사실을 놓친다.
+     */
+    data class BranchPushed(val branch: RefName, val force: Boolean = false) : RemoteOperationOutcome
+
+    /**
+     * 지목한 브랜치의 받기가 끝났다. 옮겼는지·이미 최신이었는지·거부됐는지는 [outcome] 이 갖는다 —
+     * 거부는 실패가 아니라 결과이므로 [Failed] 로 접지 않는다.
+     */
+    data class BranchPulled(val outcome: FastForwardOutcome) : RemoteOperationOutcome
 
     /**
      * 사용자가 취소해 명령이 결과를 남기지 못했다.

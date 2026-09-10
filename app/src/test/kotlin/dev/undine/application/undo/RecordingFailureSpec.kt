@@ -1,5 +1,6 @@
 package dev.undine.application.undo
 
+import dev.undine.testsupport.ORIGIN_REMOTE
 import dev.undine.domain.CheckoutResult
 import dev.undine.domain.CommitResult
 import dev.undine.domain.PushResult
@@ -111,7 +112,7 @@ class RecordingFailureSpec : BehaviorSpec({
             coEvery { harness.recorder.recordIrreversible(any(), any(), any()) } throws RECORD_FAILED
 
             then("이미 원격에 올라간 사실을 실패로 뒤집지 않는다") {
-                val outcome = harness.pushRemote.execute(RECORDED_BRANCH, force = false) { }
+                val outcome = harness.pushRemote.execute(RECORDED_BRANCH, ORIGIN_REMOTE, force = false) { }
 
                 outcome.result shouldBe PushResult.Accepted
                 outcome.undoRecordFailure shouldBe RECORD_FAILED
@@ -152,7 +153,7 @@ class RecordingFailureSpec : BehaviorSpec({
 
             then("취소를 삼키지 않는다") {
                 shouldThrow<CancellationException> {
-                    harness.pushRemote.execute(RECORDED_BRANCH, force = false) { }
+                    harness.pushRemote.execute(RECORDED_BRANCH, ORIGIN_REMOTE, force = false) { }
                 }
             }
         }
@@ -275,10 +276,10 @@ private fun recordingPaths(): List<RecordingPath> = listOf(
         operation = GitOperationKind.PUSH,
         harness = { RecordingHarness() },
         stubChange = { harness, onChange ->
-            coEvery { harness.remote.push(any(), any(), any()) } coAnswers { onChange(); PushResult.Accepted }
+            coEvery { harness.remote.push(any(), any(), any(), any()) } coAnswers { onChange(); PushResult.Accepted }
         },
-        verifyNoChange = { harness -> coVerify(exactly = 0) { harness.remote.push(any(), any(), any()) } },
-        execute = { harness -> harness.pushRemote.execute(RECORDED_BRANCH, force = false) { } },
+        verifyNoChange = { harness -> coVerify(exactly = 0) { harness.remote.push(any(), any(), any(), any()) } },
+        execute = { harness -> harness.pushRemote.execute(RECORDED_BRANCH, ORIGIN_REMOTE, force = false) { } },
     ),
     RecordingPath(
         name = "병합",

@@ -30,6 +30,13 @@ class ToolbarStringsSpec : FunSpec({
         strings.fetched(refCount = 3),
         strings.pulled,
         strings.pushed,
+        strings.branchPushed(branch = "feature"),
+        strings.branchForcePushed(branch = "feature"),
+        strings.branchFastForwarded(branch = "feature"),
+        strings.branchUpToDate(branch = "feature"),
+        strings.branchNotFastForward(branch = "feature"),
+        strings.branchNoUpstream(branch = "feature"),
+        strings.branchIsCurrent(branch = "feature"),
         strings.forcePushed,
         strings.nonFastForward,
         strings.remoteRejected,
@@ -82,5 +89,16 @@ class ToolbarStringsSpec : FunSpec({
             it shouldNotContain "{0}"
             it shouldNotContain "{1}"
         }
+    }
+
+    /**
+     * 이력 기록만 실패한 상황은 그래프 조작이 이미 다룬다. 여기서 두 번째 문장을 만들면 같은 상황에
+     * 두 안내가 생기고, 사용자는 둘이 다른 일인 줄 안다 (결정 D16).
+     */
+    test("이력 기록 실패 안내는 그래프 조작이 쓰는 문장을 그대로 읽는다") {
+        val strings = builtInStringCatalog().stringsFor(Locale.KOREAN, devBuild = false)
+
+        strings.toolbar.undoRecordFailed shouldBe strings.graphDragDrop.undoRecordFailed
+        strings.toolbar.undoRecordFailed shouldContain "reflog"
     }
 })

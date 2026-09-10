@@ -107,6 +107,11 @@ internal class FakeRemoteGateway(
     override suspend fun pull(remote: String, onProgress: (Progress) -> Unit) =
         error("이 테스트는 pull 을 쓰지 않습니다")
 
-    override suspend fun push(ref: RefName, force: Boolean, onProgress: (Progress) -> Unit): PushResult =
+    override suspend fun push(
+        ref: RefName,
+        remote: String,
+        force: Boolean,
+        onProgress: (Progress) -> Unit,
+    ): PushResult =
         error("이 테스트는 push 를 쓰지 않습니다")
 }

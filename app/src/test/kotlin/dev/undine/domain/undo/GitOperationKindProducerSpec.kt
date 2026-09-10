@@ -26,6 +26,8 @@ private val PRODUCERS: Map<GitOperationKind, String> = mapOf(
     GitOperationKind.BRANCH_MOVE to
         "ExecuteGraphOperationUseCase (GraphOperation.ResetBranch — hard reset 으로 실행한다)",
     GitOperationKind.TAG_MOVE to "ExecuteGraphOperationUseCase (태그 드롭)",
+    GitOperationKind.BRANCH_FAST_FORWARD to
+        "FastForwardBranchUseCase (사이드바 지목 받기 — ref 포인터만 옮긴다)",
     GitOperationKind.SUBMODULE_INIT to "InitializeSubmoduleUseCase",
     GitOperationKind.SUBMODULE_UPDATE to "UpdateSubmoduleUseCase",
     GitOperationKind.WORKTREE_ADD to "AddWorktreeUseCase",
@@ -113,6 +115,13 @@ class GitOperationKindProducerSpec : FunSpec({
         branchMove shouldContain "hard reset"
         branchMove shouldContain "워킹트리"
         branchMove shouldContain "유실"
+    }
+
+    test("워킹트리를 건드리지 않는 빨리 감기는 파괴적으로 표시하지 않는다") {
+        // 지목 받기는 ref 포인터만 옮긴다 — BRANCH_MOVE 의 문구를 재사용하면 없던 유실을 알린다.
+        val fastForward = GitOperationKind.BRANCH_FAST_FORWARD.label
+        fastForward shouldNotContain "hard reset"
+        fastForward shouldNotContain "유실"
     }
 
     test("파괴적이지 않은 태그 이동은 파괴적으로 표시하지 않는다") {

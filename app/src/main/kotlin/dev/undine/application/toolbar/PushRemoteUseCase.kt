@@ -49,11 +49,11 @@ class PushRemoteUseCase(
     private val operationRecorder: OperationRecorder,
 ) {
 
-    suspend fun execute(ref: RefName, force: Boolean, onProgress: (Progress) -> Unit): PushOutcome {
+    suspend fun execute(ref: RefName, remote: String, force: Boolean, onProgress: (Progress) -> Unit): PushOutcome {
         // 시작 전 취소는 그대로 존중한다 — 아직 아무것도 올리지 않았다.
         currentCoroutineContext().ensureActive()
         return operationRecorder.recordingChange {
-            val result = remoteGateway.push(ref, force, onProgress)
+            val result = remoteGateway.push(ref, remote, force, onProgress)
             withContext(NonCancellable) {
                 when (result) {
                     PushResult.Accepted -> PushOutcome(result, recordPushed(ref))
