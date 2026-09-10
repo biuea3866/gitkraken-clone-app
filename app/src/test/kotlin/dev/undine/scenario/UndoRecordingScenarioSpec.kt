@@ -1,5 +1,6 @@
 package dev.undine.scenario
 
+import dev.undine.testsupport.ORIGIN_REMOTE
 import dev.undine.application.undo.UndoExecution
 import dev.undine.application.undo.UndoTarget
 import dev.undine.domain.CommitId
@@ -282,7 +283,7 @@ class UndoRecordingScenarioSpec : FunSpec({
             }
         }
 
-        val outcome = app.pushRemote.execute(mainRef(), force = false) { }
+        val outcome = app.pushRemote.execute(mainRef(), ORIGIN_REMOTE, force = false) { }
 
         outcome.undoRecordFailure shouldBe null
         val entry = app.undoStack.history().single()

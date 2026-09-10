@@ -22,6 +22,12 @@ object SidebarKeys {
     val menuRename = StringKey("$NAMESPACE.menuRename")
     val menuDelete = StringKey("$NAMESPACE.menuDelete")
     val menuMerge = StringKey("$NAMESPACE.menuMerge")
+    val menuPull = StringKey("$NAMESPACE.menuPull")
+    val menuPush = StringKey("$NAMESPACE.menuPush")
+    val remoteBlockedNoRemote = StringKey("$NAMESPACE.remoteBlockedNoRemote")
+    val remoteBlockedNoUpstream = StringKey("$NAMESPACE.remoteBlockedNoUpstream")
+    val remoteBlockedAmbiguousRemote = StringKey("$NAMESPACE.remoteBlockedAmbiguousRemote")
+    val remoteBlockedCurrentBranch = StringKey("$NAMESPACE.remoteBlockedCurrentBranch")
     val deleteTitle = StringKey("$NAMESPACE.deleteTitle")
     val deleteMessage = StringKey("$NAMESPACE.deleteMessage")
     val unmergedTitle = StringKey("$NAMESPACE.unmergedTitle")
@@ -57,6 +63,13 @@ value class SidebarStrings internal constructor(private val strings: Strings) {
     val menuRename: String get() = strings.text(SidebarKeys.menuRename)
     val menuDelete: String get() = strings.text(SidebarKeys.menuDelete)
     val menuMerge: String get() = strings.text(SidebarKeys.menuMerge)
+    val menuPull: String get() = strings.text(SidebarKeys.menuPull)
+    val menuPush: String get() = strings.text(SidebarKeys.menuPush)
+    val remoteBlockedNoRemote: String get() = strings.text(SidebarKeys.remoteBlockedNoRemote)
+    val remoteBlockedNoUpstream: String get() = strings.text(SidebarKeys.remoteBlockedNoUpstream)
+    val remoteBlockedAmbiguousRemote: String get() = strings.text(SidebarKeys.remoteBlockedAmbiguousRemote)
+    val remoteBlockedCurrentBranch: String
+        get() = strings.text(SidebarKeys.remoteBlockedCurrentBranch)
     val deleteTitle: String get() = strings.text(SidebarKeys.deleteTitle)
     val unmergedTitle: String get() = strings.text(SidebarKeys.unmergedTitle)
     val renameTitle: String get() = strings.text(SidebarKeys.renameTitle)
@@ -98,6 +111,12 @@ internal val sidebarTranslations: Map<Locale, Map<StringKey, String>> = mapOf(
         SidebarKeys.menuRename to "이름 변경",
         SidebarKeys.menuDelete to "삭제",
         SidebarKeys.menuMerge to "병합 대상으로 선택",
+        SidebarKeys.menuPull to "이 브랜치 받기 (빨리 감기만)",
+        SidebarKeys.menuPush to "이 브랜치 올리기",
+        SidebarKeys.remoteBlockedNoRemote to "등록된 원격이 없습니다",
+        SidebarKeys.remoteBlockedNoUpstream to "추적하는 원격 브랜치가 없습니다",
+        SidebarKeys.remoteBlockedAmbiguousRemote to "추적 원격이 없고 원격이 여럿이라 어디로 올릴지 정할 수 없습니다",
+        SidebarKeys.remoteBlockedCurrentBranch to "체크아웃돼 있어 툴바의 가져와 병합을 쓰세요",
         SidebarKeys.deleteTitle to "브랜치를 삭제할까요?",
         SidebarKeys.deleteMessage to "브랜치 {0} 을(를) 삭제합니다. 병합되지 않은 커밋이 있으면 한 번 더 확인합니다.",
         SidebarKeys.unmergedTitle to "병합되지 않은 브랜치입니다",
@@ -126,6 +145,12 @@ internal val sidebarTranslations: Map<Locale, Map<StringKey, String>> = mapOf(
         SidebarKeys.menuRename to "Rename",
         SidebarKeys.menuDelete to "Delete",
         SidebarKeys.menuMerge to "Select as merge source",
+        SidebarKeys.menuPull to "Pull this branch (fast-forward only)",
+        SidebarKeys.menuPush to "Push this branch",
+        SidebarKeys.remoteBlockedNoRemote to "this repository has no remote",
+        SidebarKeys.remoteBlockedNoUpstream to "this branch tracks no remote branch",
+        SidebarKeys.remoteBlockedAmbiguousRemote to "it has no upstream and several remotes exist",
+        SidebarKeys.remoteBlockedCurrentBranch to "it is checked out — use Pull in the toolbar",
         SidebarKeys.deleteTitle to "Delete this branch?",
         SidebarKeys.deleteMessage to "Deletes branch {0}. Unmerged commits trigger one more confirmation.",
         SidebarKeys.unmergedTitle to "This branch is not merged",

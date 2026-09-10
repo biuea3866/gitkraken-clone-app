@@ -70,6 +70,7 @@ import dev.undine.application.sidebar.CheckoutBranchUseCase
 import dev.undine.application.sidebar.DeleteBranchUseCase
 import dev.undine.application.sidebar.LoadSidebarRefsUseCase
 import dev.undine.application.sidebar.RenameBranchUseCase
+import dev.undine.application.toolbar.FastForwardBranchUseCase
 import dev.undine.application.toolbar.FetchRemoteUseCase
 import dev.undine.application.toolbar.PullRemoteUseCase
 import dev.undine.application.toolbar.PushRemoteUseCase
@@ -150,6 +151,7 @@ import dev.undine.presentation.rebase.RebaseActions
 import dev.undine.presentation.submodule.SubmodulePanelActions
 import dev.undine.presentation.submodule.WorktreePanelActions
 import dev.undine.presentation.staging.StagingActions
+import dev.undine.presentation.toolbar.RemoteActions
 import dev.undine.presentation.welcome.WelcomeActions
 import java.nio.file.Path
 
@@ -408,6 +410,24 @@ class AppComponent(
         val checkoutBranch = CheckoutBranchUseCase(refGateway, operationRecorder)
 
         val pushRemote = PushRemoteUseCase(remoteGateway, operationRecorder)
+
+        /**
+         * 원격 작업 묶음 — 툴바의 현재 브랜치 조작과 사이드바의 지목 조작이 함께 쓴다.
+         *
+         * 기록 경로를 가진 둘([pushRemote]·[fastForwardBranch])이 이 범위에 있어야 하므로 묶음도
+         * 여기서 만든다. fetch·pull 은 기록이 없어 앱 수명 그대로 실어 준다.
+         */
+        val remoteActions = RemoteActions(
+            fetchRemote = fetchRemote,
+            pullRemote = pullRemote,
+            pushRemote = pushRemote,
+            fastForwardBranch = FastForwardBranchUseCase(
+                fetchRemote = fetchRemote,
+                refGateway = refGateway,
+                operationRecorder = operationRecorder,
+                sessionBinding = gitAccess,
+            ),
+        )
 
         /** 스테이징 패널이 쓰는 동작 묶음. 패널이 인덱스 상태의 단일 소유자다. */
         val stagingActions = StagingActions(

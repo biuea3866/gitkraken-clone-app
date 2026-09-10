@@ -1,5 +1,6 @@
 package dev.undine.infrastructure.git.remote
 
+import dev.undine.testsupport.ORIGIN_REMOTE
 import dev.undine.domain.Progress
 import dev.undine.domain.PushResult
 import dev.undine.domain.RefName
@@ -270,7 +271,7 @@ class RemoteGatewayImplSpec : FunSpec({
         cloneRepository(originDirectory, secondDirectory)
         Git.open(firstDirectory).use { first -> commit(first, "b.txt", "second") }
         val firstAccess = accessTo(firstDirectory)
-        gatewayOf(firstAccess).push(RefName(MAIN_REF), force = false, onProgress = NO_PROGRESS) shouldBe
+        gatewayOf(firstAccess).push(RefName(MAIN_REF), ORIGIN_REMOTE, force = false, onProgress = NO_PROGRESS) shouldBe
             PushResult.Accepted
         val acceptedHead = resolve(originDirectory, MAIN_REF)
         firstAccess.close()
@@ -278,7 +279,7 @@ class RemoteGatewayImplSpec : FunSpec({
         Git.open(secondDirectory).use { second -> commit(second, "c.txt", "third") }
         val secondAccess = accessTo(secondDirectory)
 
-        gatewayOf(secondAccess).push(RefName(MAIN_REF), force = false, onProgress = NO_PROGRESS) shouldBe
+        gatewayOf(secondAccess).push(RefName(MAIN_REF), ORIGIN_REMOTE, force = false, onProgress = NO_PROGRESS) shouldBe
             PushResult.Rejected(PushResult.RejectReason.NON_FAST_FORWARD)
 
         resolve(originDirectory, MAIN_REF) shouldBe acceptedHead
@@ -296,14 +297,14 @@ class RemoteGatewayImplSpec : FunSpec({
         cloneRepository(originDirectory, secondDirectory)
         Git.open(firstDirectory).use { first -> commit(first, "b.txt", "second") }
         val firstAccess = accessTo(firstDirectory)
-        gatewayOf(firstAccess).push(RefName(MAIN_REF), force = false, onProgress = NO_PROGRESS)
+        gatewayOf(firstAccess).push(RefName(MAIN_REF), ORIGIN_REMOTE, force = false, onProgress = NO_PROGRESS)
         firstAccess.close()
         val overwrittenHead = resolve(originDirectory, MAIN_REF)
         Git.open(secondDirectory).use { second -> commit(second, "c.txt", "third") }
         val secondAccess = accessTo(secondDirectory)
 
         val forcedHead = secondAccess.withRepository { it.resolve(MAIN_REF) }
-        gatewayOf(secondAccess).push(RefName(MAIN_REF), force = true, onProgress = NO_PROGRESS) shouldBe
+        gatewayOf(secondAccess).push(RefName(MAIN_REF), ORIGIN_REMOTE, force = true, onProgress = NO_PROGRESS) shouldBe
             PushResult.Accepted
 
         resolve(originDirectory, MAIN_REF) shouldBe forcedHead
@@ -322,7 +323,7 @@ class RemoteGatewayImplSpec : FunSpec({
         cloneRepository(originDirectory, secondDirectory)
         Git.open(firstDirectory).use { first -> commit(first, "b.txt", "second") }
         val firstAccess = accessTo(firstDirectory)
-        gatewayOf(firstAccess).push(RefName(MAIN_REF), force = false, onProgress = NO_PROGRESS)
+        gatewayOf(firstAccess).push(RefName(MAIN_REF), ORIGIN_REMOTE, force = false, onProgress = NO_PROGRESS)
         firstAccess.close()
         val remoteHeadBefore = resolve(originDirectory, MAIN_REF)
         // 백업 ref 이름을 디렉터리로 선점해 백업 생성을 실패시킨다.
@@ -336,7 +337,7 @@ class RemoteGatewayImplSpec : FunSpec({
         val secondAccess = accessTo(secondDirectory)
 
         val failure = shouldThrow<UndineException.GitOperationFailed> {
-            gatewayOf(secondAccess).push(RefName(MAIN_REF), force = true, onProgress = NO_PROGRESS)
+            gatewayOf(secondAccess).push(RefName(MAIN_REF), ORIGIN_REMOTE, force = true, onProgress = NO_PROGRESS)
         }
 
         failure.operation shouldBe "remote.push.backup"
@@ -357,7 +358,7 @@ class RemoteGatewayImplSpec : FunSpec({
         cloneRepository(originDirectory, thirdDirectory)
         Git.open(firstDirectory).use { first -> commit(first, "b.txt", "second") }
         val firstAccess = accessTo(firstDirectory)
-        gatewayOf(firstAccess).push(RefName(MAIN_REF), force = false, onProgress = NO_PROGRESS)
+        gatewayOf(firstAccess).push(RefName(MAIN_REF), ORIGIN_REMOTE, force = false, onProgress = NO_PROGRESS)
         firstAccess.close()
         Git.open(secondDirectory).use { second -> commit(second, "c.txt", "third") }
         val secondAccess = accessTo(secondDirectory)
@@ -375,7 +376,8 @@ class RemoteGatewayImplSpec : FunSpec({
             }
         }
 
-        val result = gatewayOf(secondAccess).push(RefName(MAIN_REF), force = true, onProgress = interleavingPush)
+        val result = gatewayOf(secondAccess)
+            .push(RefName(MAIN_REF), ORIGIN_REMOTE, force = true, onProgress = interleavingPush)
 
         interleaved shouldBe true
         result shouldBe PushResult.Rejected(PushResult.RejectReason.REMOTE_REJECTED)
@@ -394,7 +396,7 @@ class RemoteGatewayImplSpec : FunSpec({
         cloneRepository(originDirectory, secondDirectory)
         Git.open(firstDirectory).use { first -> commit(first, "b.txt", "second") }
         val firstAccess = accessTo(firstDirectory)
-        gatewayOf(firstAccess).push(RefName(MAIN_REF), force = false, onProgress = NO_PROGRESS)
+        gatewayOf(firstAccess).push(RefName(MAIN_REF), ORIGIN_REMOTE, force = false, onProgress = NO_PROGRESS)
         firstAccess.close()
         val remoteHeadBefore = resolve(originDirectory, MAIN_REF)
         Git.open(secondDirectory).use { second -> commit(second, "c.txt", "third") }
@@ -406,7 +408,7 @@ class RemoteGatewayImplSpec : FunSpec({
         coroutineScope {
             val caller = launch(Dispatchers.Default) {
                 try {
-                    gatewayOf(secondAccess).push(RefName(MAIN_REF), force = true) {
+                    gatewayOf(secondAccess).push(RefName(MAIN_REF), ORIGIN_REMOTE, force = true) {
                         reachedNetwork.complete(Unit)
                     }
                 } catch (thrown: Throwable) {
@@ -433,7 +435,8 @@ class RemoteGatewayImplSpec : FunSpec({
         Git.open(workDirectory).use { work -> work.branchCreate().setName("feature").call() }
         val access = accessTo(workDirectory)
 
-        gatewayOf(access).push(RefName("refs/heads/feature"), force = true, onProgress = NO_PROGRESS) shouldBe
+        gatewayOf(access)
+            .push(RefName("refs/heads/feature"), ORIGIN_REMOTE, force = true, onProgress = NO_PROGRESS) shouldBe
             PushResult.Accepted
 
         resolve(originDirectory, "refs/heads/feature") shouldNotBe null
@@ -453,20 +456,21 @@ class RemoteGatewayImplSpec : FunSpec({
         Git.open(workDirectory).use { work -> commit(work, "b.txt", "second") }
         val access = accessTo(workDirectory)
 
-        gatewayOf(access).push(RefName(MAIN_REF), force = false, onProgress = NO_PROGRESS) shouldBe
+        gatewayOf(access).push(RefName(MAIN_REF), ORIGIN_REMOTE, force = false, onProgress = NO_PROGRESS) shouldBe
             PushResult.Rejected(PushResult.RejectReason.REMOTE_REJECTED)
 
         access.close()
     }
 
-    test("업스트림이 없으면 push 는 StateViolation 이다") {
+    test("등록되지 않은 원격 이름으로 push 하면 실패한다") {
         val root = tempdir()
         val soloDirectory = File(root, "solo")
         initRepository(soloDirectory).use { solo -> commit(solo, "a.txt", "first") }
         val access = accessTo(soloDirectory)
 
-        shouldThrow<UndineException.StateViolation> {
-            gatewayOf(access).push(RefName(MAIN_REF), force = false, onProgress = NO_PROGRESS)
+        // 원격을 고르는 판단은 더 이상 게이트웨이에 없다 — 없는 이름을 받으면 실패로 드러난다.
+        shouldThrow<UndineException> {
+            gatewayOf(access).push(RefName(MAIN_REF), ORIGIN_REMOTE, force = false, onProgress = NO_PROGRESS)
         }
 
         access.close()

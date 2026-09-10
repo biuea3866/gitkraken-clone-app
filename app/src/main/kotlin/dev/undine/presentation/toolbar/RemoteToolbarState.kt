@@ -1,6 +1,7 @@
 package dev.undine.presentation.toolbar
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -8,21 +9,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import dev.undine.application.toolbar.FetchRemoteUseCase
-import dev.undine.application.toolbar.PullRemoteUseCase
-import dev.undine.application.toolbar.PushRemoteUseCase
+import dev.undine.application.toolbar.FastForwardOutcome
 import dev.undine.domain.Branch
 import dev.undine.domain.Progress
-import dev.undine.domain.RefName
 import dev.undine.domain.PushResult
+import dev.undine.domain.RefName
 import dev.undine.domain.UndineException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-
-/** 원격 추적 브랜치 참조의 접두사. `refs/remotes/origin/main` 의 `refs/remotes/` 부분이다. */
-private const val REMOTE_REF_PREFIX = "refs/remotes/"
 
 /** 원격 버튼이 왜 비활성인지 — 비활성 버튼만 두고 이유를 숨기지 않기 위해 상태로 노출한다. */
 enum class RemoteToolbarNotice {
@@ -42,6 +38,31 @@ enum class RemoteToolbarNotice {
 }
 
 /**
+ * 덮어쓸 대상이 화면에 이미 드러나 있는지 — 결과 안내가 브랜치 이름을 말할지 가른다.
+ */
+enum class ForcePushTarget {
+    /** 툴바가 올리는 현재 브랜치. 화면이 이미 그 브랜치를 보여주고 있다. */
+    CURRENT,
+
+    /** 사이드바에서 지목한 브랜치. 안내가 **어느 브랜치를** 덮어썼는지 이름으로 말해야 한다. */
+    NAMED,
+}
+
+/**
+ * 확인을 기다리는 덮어쓰기 — 아직 아무것도 보내지 않았다.
+ *
+ * 툴바의 더 보기와 지목 올리기의 non-fast-forward 거절이 **이 하나로 모인다.** 확인 문장·버튼을
+ * 경로마다 새로 만들면 그것이 두 번째 안전 기준이 되고, 사용자는 어느 쪽이 안전한지 알 수 없다
+ * (결정 D2·D11).
+ */
+@Immutable
+data class ForcePushPrompt(
+    val branch: RefName,
+    val remote: String,
+    val target: ForcePushTarget,
+)
+
+/**
  * 툴바의 원격 작업 상태 홀더 — 시작·진행·취소·결과를 소유한다 (compose-ui 규칙 1).
  *
  * UseCase 만 호출하고 Gateway 는 알지 못한다 (레이어 규칙 3). 원격 목록과 현재 브랜치는
@@ -59,11 +80,10 @@ enum class RemoteToolbarNotice {
  * 적용된 뒤에 취소가 감지될 수 있고, 그때 화면을 "취소됨" 으로 닫으면 적용 사실이 숨는다.
  */
 @Stable
+@Suppress("TooManyFunctions") // 툴바의 현재 브랜치 조작과 사이드바의 지목 조작이 한 홀더의 상태 전이다.
 class RemoteToolbarState(
     private val scope: CoroutineScope,
-    private val fetchRemote: FetchRemoteUseCase,
-    private val pullRemote: PullRemoteUseCase,
-    private val pushRemote: PushRemoteUseCase,
+    private val actions: RemoteActions,
     remotes: List<String> = emptyList(),
     branch: Branch? = null,
 ) {
@@ -92,8 +112,20 @@ class RemoteToolbarState(
         private set
 
     /**
-     * push 의 실행 이력 기록만 실패한 사유. null 이 아니면 **원격에는 올라갔고 이력 항목만 남지
-     * 않았다.** 여기서는 값을 **전달만** 한다 — 문구를 그리는 일은 화면별 과제로 남겨 둔다 (결정 G30 3).
+     * 확인을 기다리는 덮어쓰기. `null` 이면 확인 중인 것이 없다.
+     *
+     * 화면은 이 값 하나만 보고 확인 문장을 그린다 — 툴바에서 시작했든 사이드바의 거절에서
+     * 올라왔든 같은 경고·같은 확인을 지난다.
+     */
+    var forcePushPrompt: ForcePushPrompt? by mutableStateOf(null)
+        private set
+
+    /**
+     * 실행 이력 기록만 실패한 사유. null 이 아니면 **원격 작업은 끝났고 이력 항목만 남지 않았다** —
+     * push 는 원격에 올라갔고, 지목 받기는 브랜치가 이미 옮겨졌다.
+     *
+     * 결과 안내는 [remoteOperationMessage] 가 문장·톤으로 옮기므로 여기서는 값을 **전달만** 한다 —
+     * 이력 화면처럼 이 사실을 따로 쓰는 표면을 위해 남겨 둔다 (결정 G30 3).
      */
     var undoRecordFailure: UndineException? by mutableStateOf(null)
         private set
@@ -119,7 +151,7 @@ class RemoteToolbarState(
      *
      * 업스트림이 없거나 그 원격이 주입된 목록에 없으면 `null` 이다 — 대상을 확정할 수 없으면 올리지 않는다.
      */
-    val pushTargetRemote: String? get() = branch?.upstream?.let { remoteNameOf(it, remotes) }
+    val pushTargetRemote: String? get() = branch?.let { trackedRemoteOf(it, remotes) }
 
     /** 비활성 사유. 실행 가능하면 `null` 이다. */
     val notice: RemoteToolbarNotice?
@@ -135,6 +167,100 @@ class RemoteToolbarState(
         RemoteOperation.FETCH, RemoteOperation.PULL -> fetchTargetRemote != null
     }
 
+    /**
+     * 지목 조작의 가용성. **사이드바가 스스로 판정하지 않고 이 결과를 읽는다** (결정 D4) —
+     * 진입점이 조건을 다시 쓰면 그것이 두 번째 판정이 된다.
+     */
+    fun branchEntryOf(branch: Branch, operation: BranchRemoteOperation): BranchRemoteEntry =
+        BranchRemoteEntry(
+            operation = operation,
+            blockedReason = branchRemoteRefusalOf(branch, operation, remotes),
+            busy = runningOperation != null,
+        )
+
+    /**
+     * 지목한 브랜치를 올린다 — **새 push 경로를 만들지 않고** 툴바와 같은 push UseCase 에
+     * 그 브랜치의 참조를 넘긴다 (결정 D2).
+     *
+     * 처음 시도는 언제나 `force = false` 다. 원격이 non-fast-forward 로 거절하면 **툴바와 같은
+     * 확인 문장**([forcePushPrompt])을 띄우고 멈춘다 — 사용자가 그 확인을 누르기 전에는 아무것도
+     * 덮어쓰지 않는다 (결정 D11).
+     */
+    fun pushBranch(branch: Branch) {
+        if (!branchEntryOf(branch, BranchRemoteOperation.PUSH).enabled) return
+        // 가드와 같은 함수를 본다 — 각자 판정하면 여기서 조용히 끝나 버튼이 먹통이 된다.
+        val remote = pushRemoteOf(branch, remotes) ?: return
+        pushBranchRef(branch.name, remote, force = false)
+    }
+
+    /**
+     * 툴바의 더 보기에서 덮어쓰기를 요청한다 — 확인 문장을 띄울 뿐 **아직 아무것도 보내지 않는다**.
+     */
+    fun requestForcePush() {
+        val ref = branch?.name ?: return
+        val remote = pushTargetRemote ?: return
+        forcePushPrompt = ForcePushPrompt(ref, remote, ForcePushTarget.CURRENT)
+    }
+
+    /** 확인을 물린다. 아무것도 보내지 않는다. */
+    fun dismissForcePush() {
+        forcePushPrompt = null
+    }
+
+    /**
+     * 확인을 받은 덮어쓰기 — **확인 문장이 말한 그 대상에만** `force = true` 가 나간다.
+     *
+     * 툴바에서 시작했으면 현재 브랜치 경로를, 사이드바의 거절에서 올라왔으면 그 지목 브랜치
+     * 경로를 그대로 다시 탄다. 두 경우 모두 이 확인 하나를 지난 뒤에만 덮어쓴다.
+     */
+    fun confirmForcePush() {
+        val prompt = forcePushPrompt ?: return
+        forcePushPrompt = null
+        // 두 경로 모두 **확인 문장이 잡아 둔 ref·remote** 로 나간다 — 지금 상태를 다시 읽지 않는다.
+        when (prompt.target) {
+            ForcePushTarget.CURRENT -> pushCurrent(prompt.branch, prompt.remote, force = true)
+            ForcePushTarget.NAMED -> pushBranchRef(prompt.branch, prompt.remote, force = true)
+        }
+    }
+
+    /**
+     * 지목 push 한 번. [remote] 는 거절됐을 때 확인 문장이 적을 대상이라 함께 들고 다닌다 —
+     * 경고에 적힌 원격과 실제로 나가는 원격이 갈리면 확인이 근거를 잃는다.
+     */
+    private fun pushBranchRef(ref: RefName, remote: String, force: Boolean) {
+        start(RemoteOperation.PUSH, forcePush = force) { onProgress ->
+            val pushed = actions.pushRemote.execute(ref, remote, force, onProgress)
+            undoRecordFailure = pushed.undoRecordFailure
+            when (val result = pushed.result) {
+                PushResult.Accepted -> RemoteOperationOutcome.BranchPushed(ref, force)
+                is PushResult.Rejected -> {
+                    // 사이드바에는 툴바의 더 보기 메뉴가 없다. 덮어쓰기로 가는 길을 여기서도 **툴바와
+                    // 같은 경고·확인** 하나로 두고, 이미 force 로 나간 거절은 다시 묻지 않는다.
+                    if (!force && result.reason == PushResult.RejectReason.NON_FAST_FORWARD) {
+                        forcePushPrompt = ForcePushPrompt(ref, remote, ForcePushTarget.NAMED)
+                    }
+                    RemoteOperationOutcome.PushRejected(result.reason)
+                }
+            }
+        }
+    }
+
+    /**
+     * 지목한 브랜치를 원격 위치로 빨리 감는다 — 체크아웃도 병합도 하지 않는다 (결정 D1·D3).
+     *
+     * 툴바의 [pull] 로 몰래 위임하지 않는다. 메뉴가 다른 경로를 부르면 사용자는 무엇이 실행됐는지
+     * 모르고, 이 티켓이 지키려는 "대상이 명시적인 것" 과 어긋난다 (결정 D8).
+     */
+    fun pullBranch(branch: Branch) {
+        if (!branchEntryOf(branch, BranchRemoteOperation.PULL).enabled) return
+        val remote = trackedRemoteOf(branch, remotes) ?: return
+        start(RemoteOperation.PULL) { onProgress ->
+            val pulled = actions.fastForwardBranch.execute(branch, remote, onProgress)
+            // 옮겨 놓고 기록만 실패한 경우를 여기서 흘리면 화면은 되돌릴 수 있다고 말한다.
+            undoRecordFailure = (pulled as? FastForwardOutcome.FastForwarded)?.undoRecordFailure
+            RemoteOperationOutcome.BranchPulled(pulled)
+        }
+    }
 
     /** 배선(UND-26)이 아는 원격 목록·현재 브랜치를 넣는다. */
     fun updateContext(remotes: List<String>, branch: Branch?) {
@@ -145,14 +271,14 @@ class RemoteToolbarState(
     fun fetch() {
         val remote = fetchTargetRemote ?: return
         start(RemoteOperation.FETCH) { onProgress ->
-            RemoteOperationOutcome.Fetched(refCount = fetchRemote.execute(remote, onProgress).size)
+            RemoteOperationOutcome.Fetched(refCount = actions.fetchRemote.execute(remote, onProgress).size)
         }
     }
 
     fun pull() {
         val remote = fetchTargetRemote ?: return
         start(RemoteOperation.PULL) { onProgress ->
-            pullRemote.execute(remote, onProgress)
+            actions.pullRemote.execute(remote, onProgress)
             RemoteOperationOutcome.Pulled
         }
     }
@@ -164,11 +290,20 @@ class RemoteToolbarState(
      * 백업 ref 와 force-with-lease 는 Gateway 의 책임이라 여기서 중복 구현하지 않는다.
      */
     fun push(force: Boolean = false) {
-        // 실제 push 대상(업스트림)을 확정하지 못하면 시작하지 않는다 — 경고한 원격과 어긋날 수 있다.
-        if (pushTargetRemote == null) return
+        val remote = pushTargetRemote ?: return
         val ref = branch?.name ?: return
+        pushCurrent(ref, remote, force)
+    }
+
+    /**
+     * 현재 브랜치 push 한 번 — **대상을 인자로 받는다.**
+     *
+     * 확인을 거친 덮어쓰기는 확인 시점에 잡은 ref·remote 를 그대로 넘긴다. 실행 시점에 다시
+     * 읽으면 확인 뒤 브랜치를 바꾼 사용자가 **동의하지 않은 대상**을 덮어쓴다.
+     */
+    private fun pushCurrent(ref: RefName, remote: String, force: Boolean) {
         start(RemoteOperation.PUSH, forcePush = force) { onProgress ->
-            val pushed = pushRemote.execute(ref, force, onProgress)
+            val pushed = actions.pushRemote.execute(ref, remote, force, onProgress)
             undoRecordFailure = pushed.undoRecordFailure
             when (val result = pushed.result) {
                 PushResult.Accepted -> RemoteOperationOutcome.Pushed(force)
@@ -209,6 +344,9 @@ class RemoteToolbarState(
         progressFraction = 0f
         phase = ""
         outcome = null
+        // 새 작업이 시작되면 앞 작업이 띄운 확인은 근거를 잃는다 — 남겨 두면 다른 작업의 결과 위에
+        // 엉뚱한 대상의 덮어쓰기 버튼이 남는다.
+        forcePushPrompt = null
         runningJob = scope.launch {
             try {
                 // 취소를 요청했더라도 명령이 결과를 남겼다면 그 결과를 알린다 — 적용된 push 를
@@ -265,31 +403,14 @@ class RemoteToolbarState(
  */
 @Composable
 fun rememberRemoteToolbarState(
-    fetchRemote: FetchRemoteUseCase,
-    pullRemote: PullRemoteUseCase,
-    pushRemote: PushRemoteUseCase,
+    actions: RemoteActions,
     remotes: List<String>,
     branch: Branch?,
 ): RemoteToolbarState {
     val scope = rememberCoroutineScope()
-    val state = remember(scope) {
-        RemoteToolbarState(scope, fetchRemote, pullRemote, pushRemote, remotes, branch)
-    }
+    // actions 도 키다. 저장소가 바뀌면 실행 경로와 실행 이력 범위가 함께 바뀌므로, 이전 저장소의
+    // 묶음을 계속 쓰면 **B 를 조작하고 A 의 이력에 기록**한다 (결정 D10, UND-80 과 같은 종류).
+    val state = remember(scope, actions) { RemoteToolbarState(scope, actions, remotes, branch) }
     SideEffect { state.updateContext(remotes, branch) }
     return state
-}
-
-/**
- * 업스트림 추적 이름에서 원격 이름을 뽑는다.
- *
- * `RefGateway` 는 업스트림을 **짧은 이름**(`origin/main`)으로 준다. 전체 이름
- * (`refs/remotes/origin/main`)으로 들어오는 경우도 접두사를 떼고 같은 규칙으로 본다 —
- * 어느 형식이든 같은 원격으로 읽혀야 한다.
- *
- * 원격 이름에 `/` 가 들어갈 수 있어(`team/fork`) 첫 조각을 자르지 않고 **주어진 원격 목록과
- * 대조**한다 — 가장 긴 접두사가 실제 원격이다. 목록에 없는 원격을 가리키면 `null` 이다.
- */
-private fun remoteNameOf(upstream: RefName, remotes: List<String>): String? {
-    val tracking = upstream.value.removePrefix(REMOTE_REF_PREFIX)
-    return remotes.filter { tracking.startsWith("$it/") }.maxByOrNull(String::length)
 }

@@ -20,5 +20,12 @@ interface RemoteGateway {
 
     suspend fun pull(remote: String, onProgress: (Progress) -> Unit)
 
-    suspend fun push(ref: RefName, force: Boolean, onProgress: (Progress) -> Unit): PushResult
+    /**
+     * [ref] 를 [remote] 로 올린다.
+     *
+     * **원격을 게이트웨이가 추측하지 않는다.** 예전에는 현재 브랜치의 업스트림에서 풀었고,
+     * 미는 대상이 현재 브랜치가 아니면 **동의한 곳과 다른 원격**으로 나갔다 — force push 면
+     * 남의 이력을 덮어쓴다. 확인 문장이 말한 원격이 그대로 여기로 들어와야 그 확인이 근거를 갖는다.
+     */
+    suspend fun push(ref: RefName, remote: String, force: Boolean, onProgress: (Progress) -> Unit): PushResult
 }

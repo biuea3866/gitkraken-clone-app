@@ -4,6 +4,7 @@ package dev.undine.domain
  * 브랜치·태그 조회와 브랜치 조작. ref 이름 형식 검증([UndineException.InvalidRefName])은
  * 이 Gateway 를 구현하는 티켓이 소유한다.
  */
+@Suppress("TooManyFunctions") // 브랜치·태그 조회와 조작이 한 참조 계약에 모여 있다.
 interface RefGateway {
 
     suspend fun listBranches(): List<Branch>
@@ -33,6 +34,21 @@ interface RefGateway {
      * 놓친다 (UND-73). 실패는 결과가 아니라 예외이므로 이 약속의 대상이 아니다.
      */
     suspend fun checkout(ref: RefName, force: Boolean): CheckoutResult
+
+    /**
+     * [candidate] 가 [ancestor] 에서 이어지는가 — **fast-forward 가능 여부의 유일한 근거**다.
+     *
+     * 판정 자체를 계약에 두는 이유는, 호출부가 커밋 목록을 받아 스스로 세면 그것이 두 번째 판정이
+     * 되기 때문이다. 두 곳이 세면 한쪽이 곧 다른 답을 낸다 — 그때 사용자는 병합이 필요한 상황을
+     * 빨리 감기로 안내받는다.
+     *
+     * **같은 커밋이면 `true` 다.** 조상 관계에서 자기 자신은 포함이며, "옮길 것이 없다" 는 이동
+     * 여부의 질문이지 갈라졌는지의 질문이 아니다.
+     *
+     * @throws UndineException.NotFound 두 커밋 중 하나가 저장소에 없을 때 — `false` 로 접으면
+     *   "갈라졌다" 와 "읽지 못했다" 가 같은 답이 된다.
+     */
+    suspend fun isDescendantOf(candidate: CommitId, ancestor: CommitId): Boolean
 
     /**
      * [branch] 가 **[expected] 를 가리키고 있을 때만** [to] 로 옮긴다 (조건부 갱신).

@@ -44,6 +44,15 @@ enum class GitOperationKind(val label: String) {
     /** 그래프에서 태그를 끌어다 놓아 가리키는 커밋을 바꾼다. */
     TAG_MOVE("태그 이동"),
 
+    /**
+     * 체크아웃하지 않은 브랜치를 원격 위치로 빨리 감는다 (UND-95).
+     *
+     * [BRANCH_MOVE] 와 이름을 나누는 이유는 **잃는 것이 다르기** 때문이다. 그쪽은 hard reset 이라
+     * 워킹트리 변경이 사라지지만, 이쪽은 ref 포인터만 옮기고 워킹트리를 건드리지 않는다 — 같은
+     * 이름을 쓰면 이력이 사용자에게 없던 유실을 알린다.
+     */
+    BRANCH_FAST_FORWARD("브랜치 빨리 감기"),
+
     SUBMODULE_INIT("서브모듈 초기화"),
     SUBMODULE_UPDATE("서브모듈 업데이트"),
     WORKTREE_ADD("worktree 추가"),

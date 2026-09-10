@@ -38,11 +38,13 @@ import dev.undine.presentation.i18n.strings
  *   그 사실을 명시한다. 상시 갱신 경로 배선은 UND-26 소유이고 이 화면은 **받은 값을 표시**만 한다.
  * @param merge 병합 항목의 가용성과 실행 통로. **기본값을 두지 않는다** — 기본 no-op 이 쓰이던 동안
  *   사이드바의 병합은 눌러도 아무 일이 없었다 (결정 D9-1). 배선을 빼먹으면 컴파일이 막는다.
+ * @param remote 지목 받기·올리기의 가용성과 실행 통로. [merge] 와 같은 이유로 기본값을 두지 않는다.
  */
 @Composable
 fun SidebarTree(
     state: SidebarState,
     merge: SidebarMergeBinding,
+    remote: SidebarRemoteBinding,
     modifier: Modifier = Modifier,
     opened: OpenedRepository? = null,
 ) {
@@ -54,7 +56,7 @@ fun SidebarTree(
                 DetachedHeadNotice()
             }
             SidebarFilterField(filter = state.filter, onFilterChange = state::updateFilter)
-            SidebarBody(state = state, merge = merge)
+            SidebarBody(state = state, merge = merge, remote = remote)
         }
         state.confirmation?.let { pending ->
             SidebarConfirmationPanel(
@@ -85,7 +87,11 @@ fun SidebarTree(
  * 말하지 않는다.
  */
 @Composable
-private fun ColumnScope.SidebarBody(state: SidebarState, merge: SidebarMergeBinding) {
+private fun ColumnScope.SidebarBody(
+    state: SidebarState,
+    merge: SidebarMergeBinding,
+    remote: SidebarRemoteBinding,
+) {
     when (val status = state.status) {
         is SidebarStatus.Failed -> LoadFailureNotice(failure = status.cause)
 
@@ -96,6 +102,7 @@ private fun ColumnScope.SidebarBody(state: SidebarState, merge: SidebarMergeBind
             SidebarRefList(
                 state = state,
                 merge = merge,
+                remote = remote,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -108,6 +115,7 @@ private fun ColumnScope.SidebarBody(state: SidebarState, merge: SidebarMergeBind
 private fun SidebarRefList(
     state: SidebarState,
     merge: SidebarMergeBinding,
+    remote: SidebarRemoteBinding,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(modifier = modifier.fillMaxWidth().testTag(SidebarTags.LIST)) {
@@ -122,6 +130,7 @@ private fun SidebarRefList(
                     branch = node.branch,
                     state = state,
                     merge = merge,
+                    remote = remote,
                 )
 
                 is SidebarNode.TagRow -> SidebarTagRow(tag = node.tag)

@@ -1,5 +1,6 @@
 package dev.undine.application.toolbar
 
+import dev.undine.testsupport.ORIGIN_REMOTE
 import dev.undine.domain.CommitId
 import dev.undine.domain.Progress
 import dev.undine.domain.PushResult
@@ -101,21 +102,22 @@ class RemoteToolbarUseCaseSpec : BehaviorSpec({
         `when`("일반 push 를 실행하면") {
             then("force 없이 요청하고 수락 결과를 전달한다") {
                 val remoteGateway = mockk<RemoteGateway>()
-                coEvery { remoteGateway.push(BRANCH, false, any()) } returns PushResult.Accepted
+                coEvery { remoteGateway.push(BRANCH, any(), false, any()) } returns PushResult.Accepted
 
                 PushRemoteUseCase(remoteGateway, recorderOf(UndoStack()))
-                    .execute(BRANCH, force = false) { }.result shouldBe PushResult.Accepted
+                    .execute(BRANCH, ORIGIN_REMOTE, force = false) { }.result shouldBe PushResult.Accepted
             }
         }
 
         `when`("force push 를 실행하면") {
             then("force 플래그가 Gateway 까지 전달된다") {
                 val remoteGateway = mockk<RemoteGateway>()
-                coEvery { remoteGateway.push(BRANCH, true, any()) } returns PushResult.Accepted
+                coEvery { remoteGateway.push(BRANCH, any(), true, any()) } returns PushResult.Accepted
 
-                PushRemoteUseCase(remoteGateway, recorderOf(UndoStack())).execute(BRANCH, force = true) { }
+                PushRemoteUseCase(remoteGateway, recorderOf(UndoStack()))
+                    .execute(BRANCH, ORIGIN_REMOTE, force = true) { }
 
-                coVerify(exactly = 1) { remoteGateway.push(BRANCH, true, any()) }
+                coVerify(exactly = 1) { remoteGateway.push(BRANCH, any(), true, any()) }
             }
         }
 
@@ -123,10 +125,10 @@ class RemoteToolbarUseCaseSpec : BehaviorSpec({
             then("거절 결과를 예외로 바꾸지 않고 그대로 전달한다") {
                 val remoteGateway = mockk<RemoteGateway>()
                 val rejected = PushResult.Rejected(PushResult.RejectReason.NON_FAST_FORWARD)
-                coEvery { remoteGateway.push(BRANCH, false, any()) } returns rejected
+                coEvery { remoteGateway.push(BRANCH, any(), false, any()) } returns rejected
 
                 PushRemoteUseCase(remoteGateway, recorderOf(UndoStack()))
-                    .execute(BRANCH, force = false) { }.result shouldBe rejected
+                    .execute(BRANCH, ORIGIN_REMOTE, force = false) { }.result shouldBe rejected
             }
         }
     }

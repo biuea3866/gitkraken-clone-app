@@ -6,6 +6,7 @@ import dev.undine.domain.CommitId
 import dev.undine.domain.RefGateway
 import dev.undine.domain.RefName
 import dev.undine.domain.RepositoryBaseline
+import dev.undine.domain.RepositorySessionBinding
 import dev.undine.domain.undo.UndoStack
 import dev.undine.domain.undo.ChangeRecordingOrder
 import io.mockk.coEvery
@@ -35,6 +36,19 @@ val DETACHED_BASELINE: RepositoryBaseline = RepositoryBaseline(branch = null, he
  */
 object PassThroughChangeRecordingOrder : ChangeRecordingOrder {
     override suspend fun <T> withOrderedChange(block: suspend () -> T): T = block()
+}
+
+/**
+ * 블록을 그대로 실행하는 [RepositorySessionBinding] — **저장소가 하나뿐인** 테스트용이다.
+ *
+ * 세션 고정이 지키는 것은 "여러 호출 사이에 저장소가 바뀌어도 시작한 저장소만 만진다" 이므로,
+ * 바꿀 저장소가 없는 테스트에는 고정할 대상도 없다. 이 이름을 넘기는 것이 "고정을 빠뜨렸다" 가
+ * 아니라 "이 테스트는 전환을 보지 않는다" 를 코드에서 드러낸다
+ * ([PassThroughChangeRecordingOrder] 와 같은 이유). 전환 자체를 검증하는 테스트는 실제
+ * [dev.undine.infrastructure.git.repository.GitAccess] 를 넘긴다.
+ */
+object PassThroughSessionBinding : RepositorySessionBinding {
+    override suspend fun <T> withStartingSession(block: suspend () -> T): T = block()
 }
 
 /**

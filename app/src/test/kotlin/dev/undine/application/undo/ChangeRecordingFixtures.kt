@@ -86,7 +86,7 @@ internal fun refGatewayCheckingOut(
 
 internal fun remoteGatewayPushing(result: PushResult): RemoteGateway =
     mockk<RemoteGateway>().also {
-        coEvery { it.push(any(), any(), any()) } returns result
+        coEvery { it.push(any(), any(), any(), any()) } returns result
     }
 
 internal fun mergeGatewayReturning(

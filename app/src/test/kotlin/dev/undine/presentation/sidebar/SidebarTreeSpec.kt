@@ -7,6 +7,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -64,6 +67,7 @@ private fun SidebarHost(
     opened: OpenedRepository? = OpenedRepository(RepositoryState.NORMAL, RefName("main")),
     // 화면이 받은 `opened` 와 판정 입력이 어긋나지 않게 같은 값에서 뽑는다.
     merge: SidebarMergeBinding = mergeBinding(currentBranch = opened?.currentBranch),
+    remote: SidebarRemoteBinding = remoteBindingOn(remoteToolbarStateFor()),
 ) {
     UndineTheme(themeMode = ThemeMode.LIGHT) {
         CompositionLocalProvider(
@@ -72,6 +76,7 @@ private fun SidebarHost(
             SidebarTree(
                 state = state,
                 merge = merge,
+                remote = remote,
                 modifier = Modifier.size(SIDEBAR_WIDTH, SIDEBAR_HEIGHT),
                 opened = opened,
             )
@@ -316,6 +321,141 @@ class SidebarTreeSpec : FunSpec({
 
             onNodeWithTag(SidebarTags.MENU_RENAME).assertIsDisplayed()
             onNodeWithTag(SidebarTags.MENU_DELETE).assertIsDisplayed()
+        }
+    }
+
+    // 두 진입점이 같은 컴포저블을 열므로 항목도 같다 — 한쪽에만 조작이 있으면 사용자는 전부를 못 본다.
+    test("우클릭과 `...` 두 진입점 모두 받기·올리기 항목을 낸다") {
+        runComposeUiTest {
+            val state = SidebarStateHarness().loaded()
+            setContent { SidebarHost(state) }
+
+            onNodeWithTag(SidebarTags.menuButton(SAMPLE_FEATURE)).performClick()
+            waitForIdle()
+            onNodeWithTag(SidebarTags.MENU_PULL).assertIsDisplayed()
+            onNodeWithTag(SidebarTags.MENU_PUSH).assertIsDisplayed()
+        }
+        runComposeUiTest {
+            val state = SidebarStateHarness().loaded()
+            setContent { SidebarHost(state) }
+
+            onNodeWithTag(SidebarTags.branchRow(SAMPLE_FEATURE)).performMouseInput { rightClick() }
+            waitForIdle()
+            onNodeWithTag(SidebarTags.MENU_PULL).assertIsDisplayed()
+            onNodeWithTag(SidebarTags.MENU_PUSH).assertIsDisplayed()
+        }
+    }
+
+    test("추적 브랜치가 없으면 받기는 사유와 함께 막히고, 올리기는 원격이 하나라 열려 있다") {
+        runComposeUiTest {
+            val untracked = SAMPLE_FEATURE.copy(upstream = null)
+            val state = SidebarStateHarness().loaded(sampleRefs().copy(branches = listOf(untracked)))
+            setContent { SidebarHost(state) }
+
+            onNodeWithTag(SidebarTags.menuButton(untracked)).performClick()
+            waitForIdle()
+
+            // 사라지지 않는다 — 사라지면 그 조작이 없는 브랜치로 읽힌다 (결정 D5).
+            onNodeWithTag(SidebarTags.MENU_PULL).assertIsNotEnabled()
+                .assertTextContains(SIDEBAR_STRINGS.remoteBlockedNoUpstream, substring = true)
+            // 올리기는 막지 않는다 — 원격에 아직 없는 새 브랜치이고, 원격이 하나뿐이라 대상이 모호하지 않다.
+            onNodeWithTag(SidebarTags.MENU_PUSH).assertIsEnabled()
+        }
+    }
+
+    test("원격이 하나도 없으면 받기·올리기가 그 사유와 함께 비활성이다") {
+        runComposeUiTest {
+            val state = SidebarStateHarness().loaded()
+            setContent {
+                SidebarHost(state, remote = remoteBindingOn(remoteToolbarStateFor(remotes = emptyList())))
+            }
+
+            onNodeWithTag(SidebarTags.menuButton(SAMPLE_FEATURE)).performClick()
+            waitForIdle()
+
+            onNodeWithTag(SidebarTags.MENU_PULL).assertIsNotEnabled()
+                .assertTextContains(SIDEBAR_STRINGS.remoteBlockedNoRemote, substring = true)
+            onNodeWithTag(SidebarTags.MENU_PUSH).assertIsNotEnabled()
+                .assertTextContains(SIDEBAR_STRINGS.remoteBlockedNoRemote, substring = true)
+        }
+    }
+
+    // 포인터만 옮기면 워킹트리가 HEAD 와 어긋난다 — 툴바로 위임하지 않고 말해 준다 (결정 D8).
+    test("현재 체크아웃된 브랜치는 받기만 비활성이고 올리기는 누를 수 있다") {
+        runComposeUiTest {
+            val state = SidebarStateHarness().loaded()
+            setContent { SidebarHost(state) }
+
+            onNodeWithTag(SidebarTags.menuButton(SAMPLE_MAIN)).performClick()
+            waitForIdle()
+
+            onNodeWithTag(SidebarTags.MENU_PULL).assertIsNotEnabled()
+                .assertTextContains(SIDEBAR_STRINGS.remoteBlockedCurrentBranch, substring = true)
+            onNodeWithTag(SidebarTags.MENU_PUSH).assertIsEnabled()
+        }
+    }
+
+    test("받기·올리기는 고른 브랜치를 대상으로 실행 경로에 넘긴다") {
+        runComposeUiTest {
+            val state = SidebarStateHarness().loaded()
+            val pulled = mutableListOf<RefName>()
+            val pushed = mutableListOf<RefName>()
+            setContent {
+                SidebarHost(
+                    state,
+                    remote = remoteBindingOn(
+                        remoteToolbarStateFor(),
+                        onPull = { pulled += it.name },
+                        onPush = { pushed += it.name },
+                    ),
+                )
+            }
+
+            onNodeWithTag(SidebarTags.menuButton(SAMPLE_FEATURE)).performClick()
+            waitForIdle()
+            onNodeWithTag(SidebarTags.MENU_PULL).performClick()
+            waitForIdle()
+            onNodeWithTag(SidebarTags.menuButton(SAMPLE_FEATURE)).performClick()
+            waitForIdle()
+            onNodeWithTag(SidebarTags.MENU_PUSH).performClick()
+            waitForIdle()
+
+            pulled shouldBe listOf(SAMPLE_FEATURE.name)
+            pushed shouldBe listOf(SAMPLE_FEATURE.name)
+        }
+    }
+
+    test("막힌 받기는 눌러도 실행 경로에 닿지 않는다") {
+        runComposeUiTest {
+            val state = SidebarStateHarness().loaded()
+            val pulled = mutableListOf<RefName>()
+            setContent {
+                SidebarHost(
+                    state,
+                    remote = remoteBindingOn(remoteToolbarStateFor(), onPull = { pulled += it.name }),
+                )
+            }
+
+            onNodeWithTag(SidebarTags.menuButton(SAMPLE_MAIN)).performClick()
+            waitForIdle()
+            onNodeWithTag(SidebarTags.MENU_PULL).performClick()
+            waitForIdle()
+
+            pulled shouldBe emptyList()
+        }
+    }
+
+    test("원격 추적 브랜치 행에는 로컬 전용인 받기·올리기가 없다") {
+        runComposeUiTest {
+            val state = SidebarStateHarness().loaded()
+            setContent { SidebarHost(state) }
+
+            onNodeWithTag(SidebarTags.menuButton(SAMPLE_REMOTE_MAIN)).performClick()
+            waitForIdle()
+
+            // 두 조작은 refs/heads/ 를 대상으로 한다 — 원격 행에 내면 동명 로컬 브랜치를 건드린다.
+            onNodeWithTag(SidebarTags.MENU_PULL).assertDoesNotExist()
+            onNodeWithTag(SidebarTags.MENU_PUSH).assertDoesNotExist()
         }
     }
 

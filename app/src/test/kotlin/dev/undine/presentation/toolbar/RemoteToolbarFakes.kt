@@ -1,5 +1,6 @@
 package dev.undine.presentation.toolbar
 
+import dev.undine.application.toolbar.FastForwardBranchUseCase
 import dev.undine.application.toolbar.FetchRemoteUseCase
 import dev.undine.application.toolbar.PullRemoteUseCase
 import dev.undine.application.toolbar.PushRemoteUseCase
@@ -7,6 +8,7 @@ import dev.undine.application.undo.OperationRecorder
 import dev.undine.domain.Branch
 import dev.undine.domain.CommitId
 import dev.undine.domain.Progress
+import dev.undine.domain.RefGateway
 import dev.undine.domain.PushResult
 import dev.undine.domain.RefName
 import dev.undine.domain.RemoteGateway
@@ -14,7 +16,11 @@ import dev.undine.domain.RemoteRef
 import dev.undine.domain.RepositoryPath
 import dev.undine.domain.UndineException
 import dev.undine.domain.undo.UndoStack
+import dev.undine.testsupport.PassThroughSessionBinding
+import dev.undine.testsupport.baselineOf
 import dev.undine.testsupport.recorderOf
+import io.mockk.coEvery
+import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +29,43 @@ import kotlinx.coroutines.withContext
 
 internal const val REMOTE = "origin"
 internal val BRANCH_REF = RefName("refs/heads/main")
+
+/** 지목 조작의 대상 — 체크아웃돼 있지 않은 브랜치다. 여러 스펙이 같은 값을 본다. */
+internal val FEATURE = RefName("feature")
+internal val FEATURE_UPSTREAM = RefName("origin/feature")
+internal val LOCAL_TARGET = CommitId.of("1".repeat(40))
+internal val REMOTE_TARGET = CommitId.of("2".repeat(40))
+
+internal fun feature(
+    isCurrent: Boolean = false,
+    upstream: RefName? = FEATURE_UPSTREAM,
+): Branch = Branch(
+    name = FEATURE,
+    target = LOCAL_TARGET,
+    isCurrent = isCurrent,
+    isRemote = false,
+    upstream = upstream,
+    ahead = 0,
+    behind = 0,
+)
+
+/** fetch 뒤 [FEATURE] 가 빨리 감을 수 있는 상태를 만드는 참조 대역. */
+internal fun fastForwardableRefGateway(): RefGateway = mockk<RefGateway>().also { refGateway ->
+    coEvery { refGateway.listBranches() } returns listOf(
+        feature(),
+        Branch(
+            name = FEATURE_UPSTREAM,
+            target = REMOTE_TARGET,
+            isCurrent = false,
+            isRemote = true,
+            upstream = null,
+            ahead = 0,
+            behind = 0,
+        ),
+    )
+    coEvery { refGateway.isDescendantOf(REMOTE_TARGET, LOCAL_TARGET) } returns true
+    coEvery { refGateway.moveBranch(FEATURE, REMOTE_TARGET, LOCAL_TARGET) } returns baselineOf(LOCAL_TARGET)
+}
 
 internal fun branchWith(
     ahead: Int,
@@ -66,6 +109,10 @@ internal class FakeRemoteGateway(
         private set
     var pullCalls: Int = 0
         private set
+    /** 마지막 push 가 향한 원격. **확인 문장이 말한 대상이 그대로 왔는지** 를 단언할 수 있어야 한다. */
+    var lastPushRemote: String? = null
+        private set
+
     var pushCalls: Int = 0
         private set
     var lastRemote: String? = null
@@ -113,9 +160,15 @@ internal class FakeRemoteGateway(
         failure?.let { throw it }
     }
 
-    override suspend fun push(ref: RefName, force: Boolean, onProgress: (Progress) -> Unit): PushResult {
+    override suspend fun push(
+        ref: RefName,
+        remote: String,
+        force: Boolean,
+        onProgress: (Progress) -> Unit,
+    ): PushResult {
         pushCalls++
         lastPushRef = ref
+        lastPushRemote = remote
         lastPushForce = force
         lastProgressCallback = onProgress
         progressCallbackRegistered.complete(onProgress)
@@ -134,17 +187,45 @@ internal class FakeRemoteGateway(
  * 대역 Gateway 로 만든 툴바 상태. 코루틴은 [Dispatchers.Unconfined] 로 돌려 시작·취소가
  * 호출 스레드에서 즉시 이어지게 한다 — 테스트가 시간에 의존하지 않는다.
  */
+@Suppress("LongParameterList") // 대역 하나로 여러 스펙의 조립을 덮는 fixture 다.
 internal fun toolbarStateWith(
     remoteGateway: RemoteGateway,
     remotes: List<String> = listOf(REMOTE),
     branch: Branch? = branchWith(ahead = 0, behind = 0),
     scope: CoroutineScope = CoroutineScope(Dispatchers.Unconfined),
     recorder: OperationRecorder = recorderOf(UndoStack()),
+    refGateway: RefGateway = noRefsGateway(),
 ): RemoteToolbarState = RemoteToolbarState(
     scope = scope,
-    fetchRemote = FetchRemoteUseCase(remoteGateway),
-    pullRemote = PullRemoteUseCase(remoteGateway),
-    pushRemote = PushRemoteUseCase(remoteGateway, recorder),
+    actions = remoteActionsWith(remoteGateway, recorder, refGateway),
     remotes = remotes,
     branch = branch,
 )
+
+/**
+ * 한 저장소 범위의 동작 묶음. **저장소마다 다른 인스턴스**라 전환을 재현하는 테스트가 이것을 바꿔 넣는다.
+ */
+internal fun remoteActionsWith(
+    remoteGateway: RemoteGateway,
+    recorder: OperationRecorder = recorderOf(UndoStack()),
+    refGateway: RefGateway = noRefsGateway(),
+): RemoteActions = RemoteActions(
+    fetchRemote = FetchRemoteUseCase(remoteGateway),
+    pullRemote = PullRemoteUseCase(remoteGateway),
+    pushRemote = PushRemoteUseCase(remoteGateway, recorder),
+    fastForwardBranch = FastForwardBranchUseCase(
+        fetchRemote = FetchRemoteUseCase(remoteGateway),
+        refGateway = refGateway,
+        operationRecorder = recorder,
+        sessionBinding = PassThroughSessionBinding,
+    ),
+)
+
+/**
+ * 참조가 하나도 없는 대역. 지목 받기를 **보지 않는** 테스트가 기본으로 쓴다 —
+ * 빈 목록이면 UseCase 가 대상 브랜치를 찾지 못해 멈추므로, 실수로 이 경로를 지나면
+ * 조용히 성공하지 않고 드러난다.
+ */
+internal fun noRefsGateway(): RefGateway = mockk<RefGateway>().also {
+    coEvery { it.listBranches() } returns emptyList()
+}

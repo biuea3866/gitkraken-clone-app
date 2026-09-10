@@ -2,6 +2,10 @@ package dev.undine.presentation.toolbar
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -16,6 +20,7 @@ import androidx.compose.ui.test.runComposeUiTest
 import dev.undine.domain.PushResult
 import dev.undine.domain.ThemeMode
 import dev.undine.domain.UndineException
+import dev.undine.domain.undo.UndoStack
 import dev.undine.presentation.design.UndineTheme
 import dev.undine.presentation.i18n.DEFAULT_LOCALE
 import dev.undine.presentation.i18n.LocalStrings
@@ -23,6 +28,7 @@ import dev.undine.presentation.i18n.StringCatalog
 import dev.undine.presentation.i18n.commonTranslations
 import dev.undine.presentation.i18n.mergeTranslations
 import dev.undine.presentation.i18n.toolbarTranslations
+import dev.undine.testsupport.recorderOf
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
@@ -224,6 +230,69 @@ class RemoteToolbarSpec : FunSpec({
             onNodeWithTag(ToolbarTags.MORE_ACTIONS).performClick()
             waitForIdle()
             onNodeWithTag(ToolbarTags.FORCE_PUSH).assertDoesNotExist()
+        }
+    }
+
+    test("지목 올리기가 거절되면 툴바와 같은 확인 문장이 그 브랜치 이름으로 뜬다") {
+        runComposeUiTest {
+            val gateway = FakeRemoteGateway()
+            gateway.pushResult = PushResult.Rejected(PushResult.RejectReason.NON_FAST_FORWARD)
+            val state = toolbarStateWith(gateway)
+            setContent { ToolbarUnderTest(state) }
+
+            state.pushBranch(feature())
+            waitForIdle()
+
+            // 사이드바에서 시작했어도 확인은 툴바가 쓰던 그 경고·그 버튼이다 (결정 D11).
+            onNodeWithTag(ToolbarTags.FORCE_PUSH_WARNING).assertTextContains("feature", substring = true)
+            gateway.lastPushForce shouldBe false
+
+            gateway.pushResult = PushResult.Accepted
+            onNodeWithTag(ToolbarTags.FORCE_PUSH_CONFIRM).performClick()
+            waitForIdle()
+
+            gateway.lastPushRef shouldBe FEATURE
+            gateway.lastPushForce shouldBe true
+            onNodeWithTag(ToolbarTags.FORCE_PUSH_WARNING).assertDoesNotExist()
+        }
+    }
+
+    test("저장소를 바꾸면 지목 받기가 새 저장소의 경로로 나가고 그 저장소 이력에만 남는다") {
+        runComposeUiTest {
+            val leftGateway = FakeRemoteGateway()
+            val rightGateway = FakeRemoteGateway()
+            val leftStack = UndoStack()
+            val rightStack = UndoStack()
+            var openedRight by mutableStateOf(false)
+            lateinit var state: RemoteToolbarState
+            setContent {
+                // 배선이 저장소 범위마다 다른 묶음을 넘기는 모양 그대로다.
+                val actions = remember(openedRight) {
+                    if (openedRight) {
+                        remoteActionsWith(rightGateway, recorderOf(rightStack), fastForwardableRefGateway())
+                    } else {
+                        remoteActionsWith(leftGateway, recorderOf(leftStack), fastForwardableRefGateway())
+                    }
+                }
+                state = rememberRemoteToolbarState(
+                    actions = actions,
+                    remotes = listOf(REMOTE),
+                    branch = branchWith(ahead = 0, behind = 0),
+                )
+                ToolbarUnderTest(state)
+            }
+            waitForIdle()
+
+            openedRight = true
+            waitForIdle()
+            state.pullBranch(feature())
+            waitForIdle()
+
+            rightGateway.fetchCalls shouldBe 1
+            leftGateway.fetchCalls shouldBe 0
+            // 되돌리기를 눌렀을 때 엉뚱한 저장소를 건드리지 않는다 (결정 D10).
+            rightStack.size shouldBe 1
+            leftStack.size shouldBe 0
         }
     }
 

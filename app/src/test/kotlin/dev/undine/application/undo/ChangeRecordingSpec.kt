@@ -1,5 +1,6 @@
 package dev.undine.application.undo
 
+import dev.undine.testsupport.ORIGIN_REMOTE
 import dev.undine.application.staging.AmendOutcome
 import dev.undine.domain.CheckoutResult
 import dev.undine.domain.CommitResult
@@ -119,7 +120,7 @@ class ChangeRecordingSpec : BehaviorSpec({
     given("push") {
         `when`("원격이 수락하면") {
             val harness = RecordingHarness()
-            val outcome = harness.pushRemote.execute(RECORDED_BRANCH, force = false) { }
+            val outcome = harness.pushRemote.execute(RECORDED_BRANCH, ORIGIN_REMOTE, force = false) { }
 
             then("되돌릴 수 없다는 사유를 담은 PUSH 항목이 남는다") {
                 outcome.result shouldBe PushResult.Accepted
@@ -132,7 +133,7 @@ class ChangeRecordingSpec : BehaviorSpec({
         `when`("원격이 거절하면") {
             val rejected = PushResult.Rejected(PushResult.RejectReason.NON_FAST_FORWARD)
             val harness = RecordingHarness(remote = remoteGatewayPushing(rejected))
-            val outcome = harness.pushRemote.execute(RECORDED_BRANCH, force = false) { }
+            val outcome = harness.pushRemote.execute(RECORDED_BRANCH, ORIGIN_REMOTE, force = false) { }
 
             then("원격이 바뀌지 않았으므로 이력에 남길 사건이 없다") {
                 outcome.result shouldBe rejected
@@ -262,7 +263,7 @@ class ChangeRecordingSpec : BehaviorSpec({
             val harness = RecordingHarness()
             harness.commitStaged.execute("메시지")
             harness.checkoutBranch(RECORDED_TARGET)
-            harness.pushRemote.execute(RECORDED_BRANCH, force = false) { }
+            harness.pushRemote.execute(RECORDED_BRANCH, ORIGIN_REMOTE, force = false) { }
 
             then("세 항목이 모두 남는다 — 최신이 앞이다") {
                 harness.stack.history().map { it.operation } shouldContainExactly listOf(

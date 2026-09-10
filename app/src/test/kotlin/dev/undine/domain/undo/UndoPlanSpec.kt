@@ -173,7 +173,7 @@ class UndoPlanSpec : FunSpec({
             .shouldBeInstanceOf<UndoOutcome.Irreversible>()
     }
 
-    test("GitOperationKind 는 UND-38 의 열 연산과 UND-63 이 더한 여덟 연산으로 닫혀 있다") {
+    test("GitOperationKind 는 UND-38·UND-63 의 연산에 UND-95 의 빨리 감기까지로 닫혀 있다") {
         GitOperationKind.entries.map { it.name } shouldBe listOf(
             "COMMIT",
             "CHECKOUT",
@@ -187,6 +187,7 @@ class UndoPlanSpec : FunSpec({
             "STASH_DROP",
             "BRANCH_MOVE",
             "TAG_MOVE",
+            "BRANCH_FAST_FORWARD",
             "SUBMODULE_INIT",
             "SUBMODULE_UPDATE",
             "WORKTREE_ADD",

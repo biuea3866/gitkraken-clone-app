@@ -1,5 +1,6 @@
 package dev.undine.scenario
 
+import dev.undine.testsupport.ORIGIN_REMOTE
 import dev.undine.domain.PushResult
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.engine.spec.tempdir
@@ -33,7 +34,7 @@ class RemoteScenarioSpec : FunSpec({
         app.writeFile(NOTE, "원격으로 보낸다\n")
         app.stageAndCommit("메모를 올린다", NOTE)
 
-        val pushed = app.pushRemote.execute(mainRef(), force = false) { }
+        val pushed = app.pushRemote.execute(mainRef(), ORIGIN_REMOTE, force = false) { }
         pushed.result shouldBe PushResult.Accepted
 
         // 다른 클론이 같은 커밋을 받는다 — 베어 저장소를 통해서만 전달된다.
@@ -53,7 +54,7 @@ class RemoteScenarioSpec : FunSpec({
 
         val app = ScenarioApp(work)
         app.open()
-        app.pushRemote.execute(mainRef(), force = false) { }
+        app.pushRemote.execute(mainRef(), ORIGIN_REMOTE, force = false) { }
 
         // 다른 클론이 커밋을 하나 더 올린다.
         val other = File(root, "other").also(::mkdirsOrFail)

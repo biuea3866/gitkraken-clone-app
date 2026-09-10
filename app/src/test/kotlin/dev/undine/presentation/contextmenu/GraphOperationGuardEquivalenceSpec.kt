@@ -31,6 +31,8 @@ import dev.undine.presentation.i18n.graphDragDropTranslations
 import dev.undine.presentation.i18n.mergeTranslations
 import dev.undine.presentation.i18n.sidebarTranslations
 import dev.undine.presentation.sidebar.SidebarMergeBinding
+import dev.undine.presentation.sidebar.remoteBindingOn
+import dev.undine.presentation.sidebar.remoteToolbarStateFor
 import dev.undine.presentation.sidebar.SidebarStateHarness
 import dev.undine.presentation.sidebar.SidebarTags
 import dev.undine.presentation.sidebar.SidebarTree
@@ -179,6 +181,8 @@ private fun sidebarMergeRuns(selection: GraphContextSelection): List<GraphOperat
                 SidebarTree(
                     state = state,
                     merge = binding,
+                    // 이 스펙은 병합 항목만 본다 — 지목 조작은 배선만 채우고 누르지 않는다.
+                    remote = remoteBindingOn(remoteToolbarStateFor()),
                     modifier = Modifier.size(SURFACE_WIDTH, SURFACE_HEIGHT),
                 )
             }

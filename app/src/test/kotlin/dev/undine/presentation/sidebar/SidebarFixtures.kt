@@ -5,6 +5,10 @@ import dev.undine.application.sidebar.DeleteBranchUseCase
 import dev.undine.application.sidebar.LoadSidebarRefsUseCase
 import dev.undine.application.sidebar.RenameBranchUseCase
 import dev.undine.application.sidebar.SidebarRefs
+import dev.undine.application.toolbar.FastForwardBranchUseCase
+import dev.undine.application.toolbar.FetchRemoteUseCase
+import dev.undine.application.toolbar.PullRemoteUseCase
+import dev.undine.application.toolbar.PushRemoteUseCase
 import dev.undine.application.undo.OperationRecorder
 import dev.undine.domain.Branch
 import dev.undine.domain.CheckoutResult
@@ -22,6 +26,9 @@ import dev.undine.presentation.contextmenu.GraphContextSelection
 import dev.undine.presentation.contextmenu.GraphContextTarget
 import dev.undine.presentation.contextmenu.GraphOperationKind
 import dev.undine.presentation.contextmenu.graphMenuEntryOf
+import dev.undine.presentation.toolbar.RemoteActions
+import dev.undine.presentation.toolbar.RemoteToolbarState
+import dev.undine.testsupport.PassThroughSessionBinding
 import dev.undine.testsupport.baselineOf
 import dev.undine.testsupport.commitId
 import dev.undine.testsupport.recorderOf
@@ -68,6 +75,43 @@ internal fun mergeBinding(
         )
     },
     onRequest = onRequest,
+)
+
+/**
+ * 화면 배선과 **같은 방식**으로 만드는 지목 조작 통로 — 가용성을 스텁으로 흉내내지 않고
+ * 원격 작업 상태 홀더의 공용 판정([RemoteToolbarState.branchEntryOf])에 묻는다 (결정 D4).
+ * 스텁으로 대신하면 진입점이 판정을 우회해도 테스트가 초록불이 된다.
+ */
+internal fun remoteBindingOn(
+    toolbarState: RemoteToolbarState,
+    onPull: (Branch) -> Unit = toolbarState::pullBranch,
+    onPush: (Branch) -> Unit = toolbarState::pushBranch,
+): SidebarRemoteBinding = SidebarRemoteBinding(
+    entryOf = toolbarState::branchEntryOf,
+    onPull = onPull,
+    onPush = onPush,
+)
+
+/** 원격 목록·현재 브랜치만 정하면 되는 기본 홀더 — Gateway 는 호출되지 않는 대역이다. */
+internal fun remoteToolbarStateFor(
+    remotes: List<String> = listOf("origin"),
+    currentBranch: Branch? = SAMPLE_MAIN,
+    scope: CoroutineScope = CoroutineScope(Dispatchers.Unconfined),
+): RemoteToolbarState = RemoteToolbarState(
+    scope = scope,
+    actions = RemoteActions(
+        fetchRemote = FetchRemoteUseCase(mockk()),
+        pullRemote = PullRemoteUseCase(mockk()),
+        pushRemote = PushRemoteUseCase(mockk(), recorderOf(UndoStack())),
+        fastForwardBranch = FastForwardBranchUseCase(
+            fetchRemote = FetchRemoteUseCase(mockk()),
+            refGateway = mockk(),
+            operationRecorder = recorderOf(UndoStack()),
+            sessionBinding = PassThroughSessionBinding,
+        ),
+    ),
+    remotes = remotes,
+    branch = currentBranch,
 )
 
 internal fun tagOf(name: String): Tag = Tag(

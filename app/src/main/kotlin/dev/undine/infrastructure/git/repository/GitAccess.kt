@@ -1,16 +1,20 @@
 package dev.undine.infrastructure.git.repository
 
 import dev.undine.domain.RepositoryPath
+import dev.undine.domain.RepositorySessionBinding
 import dev.undine.domain.RepositorySessionKey
 import dev.undine.domain.RepositorySessions
 import dev.undine.domain.UndineException
 import dev.undine.domain.undo.ChangeRecordingOrder
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.eclipse.jgit.lib.Repository
 import java.nio.file.Path
+import kotlin.coroutines.AbstractCoroutineContextElement
+import kotlin.coroutines.CoroutineContext
 
 internal const val REPOSITORY_NOT_OPEN = "저장소가 열려 있지 않습니다"
 
@@ -35,7 +39,7 @@ internal const val REPOSITORY_SESSION_CLOSED = "작업을 시작한 저장소가
  */
 class GitAccess(
     private val holder: RepositoryHolder = RepositoryHolder(),
-) : ChangeRecordingOrder {
+) : ChangeRecordingOrder, RepositorySessionBinding {
 
     private val serialAccess = Mutex()
     private val changeRecordingAccess = Mutex()
@@ -50,6 +54,23 @@ class GitAccess(
      */
     override suspend fun <T> withOrderedChange(block: suspend () -> T): T =
         changeRecordingAccess.withLock { block() }
+
+    /**
+     * [block] 안의 저장소 접근 **전부**를 이 호출 시점의 세션에 고정한다.
+     *
+     * [withRepository]·[withSequence] 는 각자 자기 호출 시점의 세션을 잡는다. 그것으로 충분한 것은
+     * 호출 하나로 끝나는 작업뿐이고, 여러 호출로 이어지는 작업은 호출 **사이**에 저장소가 바뀌면
+     * 앞뒤가 다른 저장소에 적용된다. 그 창을 닫는 것이 이 구역의 유일한 목적이다.
+     *
+     * 여기서 잡은 키는 코루틴 컨텍스트로만 흐른다 — Gateway·UseCase 시그니처에 세션이 나타나지
+     * 않게 하려는 것이다. 안쪽 접근은 이미 잡힌 키가 있으면 그것을 쓰고 없을 때만 새로 잡으므로,
+     * 이 구역 밖의 호출 동작은 달라지지 않는다.
+     */
+    override suspend fun <T> withStartingSession(block: suspend () -> T): T {
+        val pinned = currentCoroutineContext()[StartingSession]
+        if (pinned != null) return block()
+        return withContext(StartingSession(requireOpenSession())) { block() }
+    }
 
     /**
      * [path] 의 저장소를 열고(이미 열려 있으면 전환하고) 그 핸들로 [block] 을 수행한다.
@@ -115,10 +136,12 @@ class GitAccess(
      * 캡처한 세션이 대기 중 닫혔으면 `current()` 로 갈아타지 않고 거부한다 — 닫힌 핸들로 실행할
      * 수도, 다른 저장소를 조용히 바꿀 수도 없다. 세션 결속은 여기서 끝나고 Gateway·UseCase
      * 시그니처로 새지 않는다.
+     *
+     * [withStartingSession] 이 **바깥에서 이미 잡아 둔 세션**이 있으면 그것을 쓴다. 여러 호출로
+     * 이어지는 작업은 호출마다 다시 잡으면 그 사이의 전환이 앞뒤를 갈라놓기 때문이다.
      */
     private suspend fun <T> onStartingSession(block: (Repository) -> T): T {
-        val startingSession = holder.activeSessionKey()
-            ?: throw UndineException.StateViolation(REPOSITORY_NOT_OPEN)
+        val startingSession = currentCoroutineContext()[StartingSession]?.sessionKey ?: requireOpenSession()
         return onGitThread {
             val repository = holder.sessionAt(startingSession)
                 ?: throw UndineException.StateViolation(REPOSITORY_SESSION_CLOSED)
@@ -126,8 +149,22 @@ class GitAccess(
         }
     }
 
+    private fun requireOpenSession(): Path =
+        holder.activeSessionKey() ?: throw UndineException.StateViolation(REPOSITORY_NOT_OPEN)
+
     private suspend fun <T> onGitThread(block: () -> T): T =
         withContext(Dispatchers.IO) { serialAccess.withLock { block() } }
+}
+
+/**
+ * [GitAccess.withStartingSession] 이 잡아 둔 세션 키를 코루틴 컨텍스트로 나른다.
+ *
+ * 인자로 나르지 않는 이유는 그러면 세션이 Gateway·UseCase 시그니처에 나타나기 때문이다 —
+ * 이 앱에서 "어느 저장소인가" 는 호출부가 고르는 값이 아니라 세션이 정하는 값이다.
+ */
+private class StartingSession(val sessionKey: Path) : AbstractCoroutineContextElement(StartingSession) {
+
+    companion object Key : CoroutineContext.Key<StartingSession>
 }
 
 /**

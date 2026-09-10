@@ -1,5 +1,6 @@
 package dev.undine.scenario2
 
+import dev.undine.testsupport.ORIGIN_REMOTE
 import dev.undine.application.undo.UndoExecution
 import dev.undine.application.undo.UndoTarget
 import dev.undine.domain.PushResult
@@ -61,7 +62,7 @@ class UndoBoundaryScenario2Spec : FunSpec({
             app.writeFile(NOTE, "원격으로 보낸다\n")
             app.stageAndCommit("메모를 올린다", NOTE)
 
-            val pushed = app.pushRemote.execute(mainRef(), force = false) { }
+            val pushed = app.pushRemote.execute(mainRef(), ORIGIN_REMOTE, force = false) { }
 
             pushed.result shouldBe PushResult.Accepted
             pushed.undoRecordFailure shouldBe null
